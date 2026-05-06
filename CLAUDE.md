@@ -18,6 +18,7 @@ js/inbound.js       — Receiving + New PO modal.
 js/intake.js        — AI intake pipeline (upload, review, approve).
 js/billing.js       — Billing page: per-client meter, events drill-down,
                       rate card editor.
+js/reports.js       — Reports page: Lot Recall (9.16) + future reports.
 js/app.js           — API base, auth (T, U, apiGet, doLogin), navigation,
                       boot(), DOMContentLoaded wiring. Loads LAST.
 ```

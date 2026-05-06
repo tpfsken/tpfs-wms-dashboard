@@ -66,6 +66,7 @@ const loaders = {
   intake:    loadIntake,
   clients:   loadClients,
   billing:   loadBilling,
+  reports:   loadReports,
 };
 
 function navigateTo(p){
