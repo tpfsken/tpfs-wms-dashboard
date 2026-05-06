@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TPFS Warehouse Management System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="shell" id="shell">
+<nav class="sidebar">
+  <div class="side-header">
+    <div class="side-logo">T</div>
+    <div class="side-brand">TPFS WMS<small>Warehouse Management</small></div>
+  </div>
+  <div class="side-nav">
+    <div class="nav-section">Operations</div>
+    <div class="nav-item active" data-page="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="nav-label">Dashboard</span></div>
+    <div class="nav-item" data-page="inbound"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg><span class="nav-label">Receiving</span></div>
+    <div class="nav-item" data-page="intake"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13l2 2 4-4"/></svg><span class="nav-label">Intake</span></div>
+    <div class="nav-item" data-page="inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8l-9-5L3 8l9 5 9-5z"/><path d="M3 16l9 5 9-5M3 12l9 5 9-5"/></svg><span class="nav-label">Inventory</span></div>
+    <div class="nav-item" data-page="orders"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg><span class="nav-label">Orders</span></div>
+    <div class="nav-section">Management</div>
+    <div class="nav-item" data-page="clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg><span class="nav-label">Clients</span></div>
+    <div class="nav-item" data-page="billing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg><span class="nav-label">Billing</span></div>
+    <div class="nav-item" data-page="reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 20V10M12 20V4M6 20v-6"/></svg><span class="nav-label">Reports</span></div>
+  </div>
+  <div class="side-footer">
+    <button class="collapse-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 18l-6-6 6-6"/></svg><span class="nav-label">Collapse</span></button>
+    <div class="nav-item js-signout" style="margin-top:4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="nav-label">Sign Out</span></div>
+  </div>
+</nav>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="pageTitle">Dashboard</div>
+    <div class="topbar-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input placeholder="Search orders, SKUs, lots..."></div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-wh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21V12h6v9"/></svg><span>ONT-01</span></div>
+    <div class="topbar-time" id="clock"></div>
+    <div class="topbar-user js-signout" title="Sign Out"><div class="topbar-avatar" id="userAvatar">?</div><div class="topbar-user-info"><div class="name" id="userName">—</div><div class="role">Operations</div></div></div>
+  </div>
+
+  <div class="page active" id="page-dashboard">
+    <div class="kpi-row" id="kpiRow"></div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head"><div class="card-title">Order Queue</div><div style="flex:1"></div><div class="chip chip-active" style="font-size:11px;">● Live</div><div class="card-badge" style="background:var(--blue-bg);color:var(--blue);" id="orderCountBadge">0</div></div>
+        <div class="scroll-area" id="orderQueue" style="max-height:340px;"></div>
+        <div style="border-top:1px solid var(--border);padding:20px;"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:10px;"><span>Shipped — 7 days</span><span style="color:var(--blue);font-weight:600;" id="throughputTotal"></span></div><div class="bar-chart" id="throughputChart"></div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card"><div class="card-head"><div class="card-title">Alerts</div><div class="card-badge" style="background:var(--red-bg);color:var(--red);" id="alertBadge">0</div></div><div class="scroll-area" id="alertList" style="max-height:240px;"></div></div>
+        <div class="card"><div class="card-head"><div class="card-title">Pick Waves</div><div class="card-badge" style="background:var(--blue-bg);color:var(--blue);" id="waveBadge">0</div></div><div id="waveList" style="padding:16px;"></div></div>
+      </div>
+    </div>
+    <div class="grid-3">
+      <div class="card"><div class="card-head"><div class="card-title">Dock Schedule</div><div class="card-badge" style="background:var(--blue-bg);color:var(--blue);" id="dockBadge">0</div></div><div id="dockList"></div></div>
+      <div class="card"><div class="card-head"><div class="card-title">Inventory</div></div><div class="scroll-area" id="inventoryList"></div></div>
+      <div class="card"><div class="card-head"><div class="card-title">Performance</div></div><div id="carrierList"></div>
+        <div style="border-top:1px solid var(--border);padding:16px;"><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Labor</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div style="background:var(--bg);border-radius:8px;padding:12px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Units/hr</div><div style="font-size:24px;font-weight:700;color:var(--blue);" id="laborUnitsHr">—</div></div><div style="background:var(--bg);border-radius:8px;padding:12px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Workers</div><div style="font-size:24px;font-weight:700;color:var(--green);" id="laborWorkers">—</div></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page" id="page-inventory">
+    <div class="page-header"><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location</div></div><div style="flex:1"></div><input type="text" class="form-input" id="invSearch" placeholder="Search SKU or lot..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadInventory()">Refresh</button><button class="btn btn-primary" onclick="showCaseBreakModal()">⊞ Case Break</button></div>
+    <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;"><div style="flex:1;overflow:auto;"><table class="data-table"><thead><tr><th>SKU</th><th>Description</th><th>Client</th><th>Type</th><th>Lot</th><th>Location</th><th>LP</th><th class="right">Qty</th><th>Status</th><th style="width:70px;"></th></tr></thead><tbody id="invBody"></tbody></table></div></div>
+  </div>
+
+  <div class="page" id="page-orders">
+    <div class="page-header"><div><div class="page-title">Orders</div><div class="page-subtitle">Outbound order management</div></div><div style="flex:1"></div><input type="text" class="form-input" id="ordSearch" placeholder="Search order #..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="ordStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadOrders()">Refresh</button><button class="btn btn-primary" onclick="showNewOrderModal()">+ New Order</button></div>
+    <div id="ordListView"><div class="card"><div style="overflow:auto;"><table class="data-table"><thead><tr><th>Order #</th><th>Client</th><th>Channel</th><th>Type</th><th>Customer</th><th>Ship To</th><th>Carrier</th><th class="right">Lines</th><th class="right">Units</th><th>Ship By</th><th>Status</th></tr></thead><tbody id="ordBody"></tbody></table></div></div></div>
+    <div id="ordDetailView" style="display:none;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;"><button class="btn btn-ghost" onclick="closeOrderDetail()">← Back</button><div><div style="font-size:18px;font-weight:700;" id="ordDetailTitle"></div><div style="font-size:13px;color:var(--text2);" id="ordDetailSub"></div></div><div style="flex:1"></div><span class="chip" id="ordDetailStatus"></span></div>
+      <div style="display:grid;grid-template-columns:1fr 360px;gap:20px;">
+        <div>
+          <div class="detail-panel" style="margin-bottom:16px;"><div class="detail-grid" id="ordInfoGrid"></div></div>
+          <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Order Lines</div></div><div><table class="data-table"><thead><tr><th>Line</th><th>SKU</th><th>Description</th><th>Type</th><th class="right">Ordered</th><th class="right">Allocated</th><th class="right">Picked</th><th class="right">Shipped</th></tr></thead><tbody id="ordLinesBody"></tbody></table></div></div>
+          <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Shipments</div></div><div id="ordShipments"></div></div>
+          <div id="allocPanel" class="card" style="margin-bottom:16px;display:none;"><div class="card-head"><div class="card-title">Allocate Inventory</div><div class="card-badge" style="background:var(--blue-bg);color:var(--blue);" id="allocModeBadge">FEFO</div></div><div style="padding:20px;"><div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Select lots and quantities. Override the recommendation as needed.</div><div id="allocLinesList"></div><div style="display:flex;gap:8px;margin-top:16px;"><button class="btn btn-primary" onclick="submitAllocation()">Confirm Allocation</button><button class="btn btn-ghost" onclick="document.getElementById('allocPanel').style.display='none'">Cancel</button></div><div id="allocError" style="color:var(--red);font-size:13px;margin-top:8px;"></div><div id="allocSuccess" style="color:var(--green);font-size:13px;margin-top:8px;"></div></div></div>
+          <div id="allocHistPanel" class="card" style="display:none;"><div class="card-head"><div class="card-title">Allocations</div><div class="card-badge" style="background:var(--green-bg);color:var(--green);" id="allocHistBadge">0</div></div><div><table class="data-table"><thead><tr><th>SKU</th><th>Lot</th><th>LP</th><th>Location</th><th class="right">Qty</th><th>Status</th></tr></thead><tbody id="allocHistBody"></tbody></table></div></div>
+        </div>
+        <div>
+          <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Workflow</div></div><div style="padding:16px;" id="ordWorkflowSteps"></div><div style="padding:0 16px 16px;" id="ordTransitionBtns"></div><div style="padding:0 16px 8px;"><div id="ordTransError" style="color:var(--red);font-size:13px;"></div><div id="ordTransSuccess" style="color:var(--green);font-size:13px;"></div></div></div>
+          <div class="card"><div class="card-head"><div class="card-title">Ship To</div></div><div style="padding:16px;" id="ordShipTo"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page" id="page-inbound">
+    <div id="inbListView">
+      <div class="page-header"><div><div class="page-title">Receiving</div><div class="page-subtitle">Purchase orders and inbound</div></div><div style="flex:1"></div><button class="btn btn-ghost" onclick="loadInbound()">Refresh</button><button class="btn btn-primary" onclick="showNewPoModal()">+ New PO</button></div>
+      <div class="card"><div style="overflow:auto;"><table class="data-table"><thead><tr><th>PO #</th><th>Client</th><th>Supplier</th><th class="right">Lines</th><th class="right">Expected</th><th class="right">Received</th><th>Date</th><th>Status</th></tr></thead><tbody id="inbBody"></tbody></table></div></div>
+    </div>
+    <div id="inbDetailView" style="display:none;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;"><button class="btn btn-ghost" onclick="closePoDetail()">← Back</button><div><div style="font-size:18px;font-weight:700;" id="poDetailTitle"></div><div style="font-size:13px;color:var(--text2);" id="poDetailSub"></div></div><div style="flex:1"></div><span class="chip" id="poDetailStatus"></span></div>
+      <div class="detail-panel" style="margin-bottom:16px;"><div class="detail-grid" id="poInfoGrid"></div></div>
+      <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">PO Lines</div></div><div><table class="data-table"><thead><tr><th>Line</th><th>SKU</th><th>Description</th><th>UOM</th><th>Lot</th><th class="right">Expected</th><th class="right">Received</th><th class="right">Remaining</th></tr></thead><tbody id="poLinesBody"></tbody></table></div></div>
+      <div id="receivingFormSection" class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Receive Items</div><div class="card-badge" style="background:var(--blue-bg);color:var(--blue);">Assign LP + Location</div></div><div style="padding:20px;"><div id="receiveLinesList"></div><div style="display:flex;gap:8px;margin-top:16px;"><button class="btn btn-primary" id="submitReceiveBtn" onclick="submitReceive()">Receive &amp; Create LPs</button><button class="btn btn-success" id="completePoBtn" onclick="completePo()" style="display:none;">Complete PO</button></div><div id="receiveError" style="color:var(--red);font-size:13px;margin-top:8px;"></div><div id="receiveSuccess" style="color:var(--green);font-size:13px;margin-top:8px;"></div></div></div>
+      <div class="card"><div class="card-head"><div class="card-title">Receiving History</div><div class="card-badge" style="background:var(--green-bg);color:var(--green);" id="recHistBadge">0</div></div><div><table class="data-table"><thead><tr><th>SKU</th><th>Lot</th><th>LP #</th><th>Type</th><th>Location</th><th class="right">Qty</th><th>Condition</th><th>By</th><th>Time</th></tr></thead><tbody id="recHistBody"></tbody></table></div></div>
+    </div>
+  </div>
+
+  <div class="page" id="page-intake">
+    <div id="intakeListView">
+      <div class="page-header">
+        <div><div class="page-title">Intake</div><div class="page-subtitle">AI-powered document extraction · upload PO, ASN, Order, BOL</div></div>
+        <div style="flex:1"></div>
+        <div class="cb-wrap" style="max-width:160px;" id="intakeStatusFilterWrap"></div>
+        <button class="btn btn-ghost" onclick="loadIntake()">Refresh</button>
+        <button class="btn btn-primary" onclick="document.getElementById('intakeUploadInput').click()">⬆ Upload PDF</button>
+        <input type="file" id="intakeUploadInput" accept="application/pdf,.pdf" multiple style="display:none;">
+      </div>
+
+      <div id="intakeDropZone" class="card" style="padding:32px;margin-bottom:16px;border:2px dashed var(--border);text-align:center;cursor:pointer;transition:all .15s;" onclick="document.getElementById('intakeUploadInput').click()">
+        <div style="font-size:32px;margin-bottom:8px;opacity:.5;">⬆</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:4px;">Drop PDFs here or click to browse</div>
+        <div style="font-size:13px;color:var(--text2);">PO, ASN, Sales Order, BOL · 25MB max · Claude will classify and extract</div>
+        <div id="intakeUploadStatus" style="margin-top:12px;font-size:13px;"></div>
+      </div>
+
+      <div class="card">
+        <div style="overflow:auto;">
+          <table class="data-table">
+            <thead><tr><th>Uploaded</th><th>File</th><th>Type</th><th>Client</th><th class="right">Size</th><th class="right">Cost</th><th>Status</th><th>Linked</th><th style="width:90px;"></th></tr></thead>
+            <tbody id="intakeBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="intakeReviewView" style="display:none;height:calc(100vh - 110px);flex-direction:column;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-shrink:0;">
+        <button class="btn btn-ghost" onclick="closeIntakeReview()">← Back</button>
+        <div>
+          <div style="font-size:18px;font-weight:700;" id="intakeRevTitle"></div>
+          <div style="font-size:13px;color:var(--text2);" id="intakeRevSub"></div>
+        </div>
+        <div style="flex:1"></div>
+        <span class="chip" id="intakeRevStatus"></span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:1;min-height:0;">
+        <div class="card" style="display:flex;flex-direction:column;overflow:hidden;">
+          <div class="card-head"><div class="card-title">Source Document</div><div style="flex:1"></div><a id="intakePdfDownload" target="_blank" style="font-size:12px;color:var(--blue);text-decoration:none;">Open ↗</a></div>
+          <div style="flex:1;background:#000;">
+            <iframe id="intakePdfFrame" style="width:100%;height:100%;border:0;background:#fff;"></iframe>
+          </div>
+        </div>
+
+        <div class="card" style="display:flex;flex-direction:column;overflow:hidden;">
+          <div class="card-head">
+            <div class="card-title">Extracted Data</div>
+            <div class="card-badge" style="background:var(--blue-bg);color:var(--blue);" id="intakeRevDocType">—</div>
+            <div style="flex:1"></div>
+            <div id="intakeRevConfLegend" style="display:flex;gap:8px;font-size:11px;color:var(--text2);">
+              <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:4px;"></span>High</span>
+              <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--amber);margin-right:4px;"></span>Med</span>
+              <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:4px;"></span>Low</span>
+            </div>
+          </div>
+          <div id="intakeRevForm" style="padding:16px;overflow-y:auto;flex:1;"></div>
+          <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;">
+            <button class="btn btn-ghost" onclick="runIntakeExtract(true)" id="intakeReextractBtn">Re-extract</button>
+            <button class="btn btn-ghost" onclick="saveIntakeEdits()" id="intakeSaveBtn">Save Edits</button>
+            <div style="flex:1"></div>
+            <button class="btn btn-danger" onclick="rejectIntakeDoc()">Reject</button>
+            <button class="btn btn-success" onclick="approveIntakeDoc()" id="intakeApproveBtn">Approve &amp; Create</button>
+          </div>
+          <div id="intakeRevError" style="color:var(--red);font-size:13px;padding:0 16px 8px;"></div>
+          <div id="intakeRevSuccess" style="color:var(--green);font-size:13px;padding:0 16px 8px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page" id="page-clients"><div class="page-header"><div><div class="page-title">Clients</div><div class="page-subtitle">3PL client management</div></div><div style="flex:1"></div><button class="btn btn-ghost" onclick="loadClients()">Refresh</button></div><div class="card"><div style="overflow:auto;"><table class="data-table"><thead><tr><th>Code</th><th>Name</th><th>Contact</th><th>Type</th><th>Onboarded</th><th>Status</th></tr></thead><tbody id="clientBody"></tbody></table></div></div></div>
+  <div class="page" id="page-billing"><div class="empty-state" style="padding:80px;font-size:16px;">Billing — coming soon</div></div>
+  <div class="page" id="page-reports"><div class="empty-state" style="padding:80px;font-size:16px;">Reports — coming soon</div></div>
+</div>
+</div>
+
+<!-- INLINE SKU CREATE MODAL (used from Intake review when SKU code unknown) -->
+<div id="intakeSkuModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10001;align-items:center;justify-content:center;">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-head"><div class="modal-title">Create SKU</div><div style="flex:1"></div><button class="btn btn-ghost" onclick="closeModal('intakeSkuModal')" style="padding:6px 12px;">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">SKU not found for this client. Create it now to continue.</div>
+      <div class="form-row form-row-2">
+        <div class="form-group"><label class="form-label">SKU Code *</label><input class="form-input" id="iskCode"></div>
+        <div class="form-group"><label class="form-label">UOM *</label><input class="form-input" id="iskUom" value="EA"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Description *</label><input class="form-input" id="iskName"></div>
+      <div class="form-row form-row-2">
+        <div class="form-group"><label class="form-label">UPC</label><input class="form-input" id="iskUpc"></div>
+        <div class="form-group"><label class="form-label">Units / Case</label><input class="form-input" type="number" id="iskUnitsPerCase"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn btn-primary" onclick="submitIntakeSku()">Create SKU</button>
+        <button class="btn btn-ghost" onclick="closeModal('intakeSkuModal')">Cancel</button>
+      </div>
+      <div id="iskError" style="color:var(--red);font-size:13px;margin-top:8px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN OVERLAY -->
+<div id="loginOverlay" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:48px;width:420px;">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:32px;"><div style="width:44px;height:44px;background:var(--blue);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#fff;">T</div><div><div style="font-weight:700;font-size:18px;">TPFS WMS</div><div style="font-size:12px;color:var(--muted);">Warehouse Management System</div></div></div>
+    <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="loginEmail" type="email" placeholder="name@company.com"></div>
+    <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="loginPassword" type="password" placeholder="••••••••"></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;font-size:15px;margin-top:8px;" id="loginBtn">Sign In</button>
+    <div id="loginError" style="color:var(--red);font-size:13px;margin-top:12px;"></div>
+  </div>
+</div>
+
+<!-- NEW ORDER MODAL -->
+<div id="newOrderModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div class="modal" style="max-width:800px;">
+    <div class="modal-head"><div class="modal-title">New Outbound Order</div><div style="flex:1"></div><button class="btn btn-ghost" onclick="closeModal('newOrderModal')" style="padding:6px 12px;">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row form-row-2">
+        <div class="form-group"><label class="form-label">Client *</label><div class="cb-wrap" id="noClientWrap"></div></div>
+        <div class="form-group"><label class="form-label">Order Number *</label><input class="form-input" id="noOrderNum" placeholder="ORD-2025-XXXX"></div>
+      </div>
+      <div class="form-row form-row-3">
+        <div class="form-group"><label class="form-label">Channel</label><div class="cb-wrap" id="noChannelWrap"></div></div>
+        <div class="form-group"><label class="form-label">Order Type</label><div class="cb-wrap" id="noTypeWrap"></div></div>
+        <div class="form-group"><label class="form-label">Priority</label><div class="cb-wrap" id="noPriorityWrap"></div></div>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:16px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div style="font-size:14px;font-weight:600;">Ship To</div>
+          <div class="cb-wrap" style="max-width:300px;" id="noPriorAddrWrap"></div>
+        </div>
+        <div class="form-row form-row-2">
+          <div class="form-group"><label class="form-label">Customer Name *</label><input class="form-input" id="noCustName"></div>
+          <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="noCustEmail" type="email"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Address Line 1 *</label><input class="form-input" id="noAddr1"></div>
+        <div class="form-group"><label class="form-label">Address Line 2</label><input class="form-input" id="noAddr2"></div>
+        <div class="form-row form-row-4">
+          <div class="form-group"><label class="form-label">City *</label><input class="form-input" id="noCity"></div>
+          <div class="form-group"><label class="form-label">State *</label><input class="form-input" id="noState"></div>
+          <div class="form-group"><label class="form-label">Postal *</label><input class="form-input" id="noPostal"></div>
+          <div class="form-group"><label class="form-label">Country</label><input class="form-input" id="noCountry" value="US"></div>
+        </div>
+      </div>
+      <div class="form-row form-row-3">
+        <div class="form-group"><label class="form-label">Carrier</label><div class="cb-wrap" id="noCarrierWrap"></div></div>
+        <div class="form-group"><label class="form-label">Ship Method</label><input class="form-input" id="noShipMethod" placeholder="GROUND, EXPRESS, LTL..."></div>
+        <div class="form-group"><label class="form-label">Ship By Date</label><input class="form-input" id="noShipDate" type="date"></div>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:16px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div style="font-size:14px;font-weight:600;">Order Lines</div>
+          <div style="flex:1"></div>
+          <input type="text" class="form-input" id="noSkuSearch" placeholder="Click to browse SKUs..." style="max-width:240px;">
+        </div>
+        <div id="noSkuResults" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:12px;max-height:340px;overflow-y:auto;"></div>
+        <table class="data-table" style="margin-bottom:8px;"><thead><tr><th>SKU</th><th>Description</th><th>Lot</th><th>Expiry</th><th>LP</th><th>Location</th><th class="right">Avail</th><th style="width:90px;">Qty</th><th style="width:40px;"></th></tr></thead><tbody id="noLinesBody"></tbody></table>
+        <div id="noLinesEmpty" class="empty-state" style="padding:20px;">Click the search box above to browse SKUs</div>
+      </div>
+      <div id="noError" style="color:var(--red);font-size:13px;margin-top:8px;"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('newOrderModal')">Cancel</button><button class="btn btn-primary" onclick="submitNewOrder()">Create Order</button></div>
+  </div>
+</div>
+
+<!-- NEW PO MODAL -->
+<div id="newPoModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div class="modal" style="max-width:800px;">
+    <div class="modal-head"><div class="modal-title">New Purchase Order</div><div style="flex:1"></div><button class="btn btn-ghost" onclick="closeModal('newPoModal')" style="padding:6px 12px;">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row form-row-2">
+        <div class="form-group"><label class="form-label">Client *</label><div class="cb-wrap" id="npClientWrap"></div></div>
+        <div class="form-group"><label class="form-label">PO Number *</label><input class="form-input" id="npPoNum" placeholder="PO-2025-XXX"></div>
+      </div>
+      <div class="form-row form-row-3">
+        <div class="form-group"><label class="form-label">Supplier</label><div class="cb-wrap" id="npSupplierWrap"></div></div>
+        <div class="form-group"><label class="form-label">Expected Arrival</label><input class="form-input" id="npArrival" type="date"></div>
+        <div class="form-group"><label class="form-label">External PO #</label><input class="form-input" id="npExtPo" placeholder="Vendor reference"></div>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:16px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div style="font-size:14px;font-weight:600;">PO Lines</div>
+          <div style="flex:1"></div>
+          <input type="text" class="form-input" id="npSkuSearch" placeholder="Click to browse SKUs..." style="max-width:240px;">
+        </div>
+        <div id="npSkuResults" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:12px;max-height:200px;overflow-y:auto;"></div>
+        <table class="data-table" style="margin-bottom:8px;"><thead><tr><th>SKU</th><th>Description</th><th>UOM</th><th style="width:100px;">Qty</th><th>Lot #</th><th>Expiry</th><th style="width:50px;"></th></tr></thead><tbody id="npLinesBody"></tbody></table>
+        <div id="npLinesEmpty" class="empty-state" style="padding:20px;">Search and add SKUs above</div>
+      </div>
+      <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="npNotes" placeholder="Special instructions..."></div>
+      <div id="npError" style="color:var(--red);font-size:13px;margin-top:8px;"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('newPoModal')">Cancel</button><button class="btn btn-primary" onclick="submitNewPo()">Create PO</button></div>
+  </div>
+</div>
+
+<!-- CASE BREAK MODAL -->
+<div id="caseBreakModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-head"><div class="modal-title">⊞ Case Break</div><div style="flex:1"></div><button class="btn btn-ghost" onclick="closeModal('caseBreakModal')" style="padding:6px 12px;">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Break cases into eaches. Select a case LP, enter number of cases to break, and choose the target pick face location.</div>
+
+      <div class="form-group">
+        <label class="form-label">Search License Plate</label>
+        <input type="text" class="form-input" id="cbLpSearch" placeholder="Type LP number to search...">
+      </div>
+      <div id="cbLpResults" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:16px;max-height:200px;overflow-y:auto;"></div>
+
+      <div id="cbLpDetail" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <span class="lp-badge lp-original" style="font-size:14px;font-weight:600;" id="cbLpNum"></span>
+          <span style="font-size:13px;color:var(--text2);" id="cbLpSku"></span>
+          <span style="margin-left:auto;font-weight:600;color:var(--blue);" id="cbLpQty"></span>
+        </div>
+        <div class="detail-grid" style="grid-template-columns:1fr 1fr 1fr 1fr;">
+          <div><div class="detail-label">Lot</div><div class="detail-value" id="cbLpLot">—</div></div>
+          <div><div class="detail-label">Location</div><div class="detail-value" id="cbLpLoc">—</div></div>
+          <div><div class="detail-label">SKU Type</div><div class="detail-value" id="cbLpType">—</div></div>
+          <div><div class="detail-label">Each SKU</div><div class="detail-value" id="cbEachSku">—</div></div>
+        </div>
+        <div style="margin-top:4px;font-size:12px;color:var(--muted);" id="cbConversion"></div>
+      </div>
+
+      <div id="cbForm" style="display:none;">
+        <div class="form-row form-row-2">
+          <div class="form-group">
+            <label class="form-label">Cases to Break</label>
+            <input type="number" class="form-input" id="cbQty" min="1" value="1">
+            <div style="font-size:12px;color:var(--text2);margin-top:4px;" id="cbPreview"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Target Location (pick face)</label>
+            <div class="cb-wrap" id="cbLocationWrap"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="cbError" style="color:var(--red);font-size:13px;margin-top:8px;"></div>
+      <div id="cbSuccess" style="display:none;background:var(--green-bg);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:16px;margin-top:12px;">
+        <div style="font-weight:600;color:var(--green);margin-bottom:4px;">✓ Case Break Complete</div>
+        <div style="font-size:13px;color:var(--text2);" id="cbSuccessDetail"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('caseBreakModal')">Cancel</button>
+      <button class="btn btn-primary" id="cbSubmitBtn" onclick="submitCaseBreak()" style="display:none;">Break Cases</button>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts: load order matters. util/combo first, then domain modules, then app.js boots. -->
+<script src="js/util.js"></script>
+<script src="js/combo.js"></script>
+<script src="js/clients.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/inventory.js"></script>
+<script src="js/orders.js"></script>
+<script src="js/inbound.js"></script>
+<script src="js/intake.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
