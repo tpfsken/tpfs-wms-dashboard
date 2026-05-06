@@ -138,15 +138,22 @@ async function openOrderDetail(id){
     : '<div class="empty-state">No shipments</div>';
 
   document.getElementById('allocPanel').style.display = 'none';
+
+  // Pick List takes over from Allocations history when order is actively pickable.
+  const isPickable = ['ALLOCATED', 'PICKING'].includes(d.status);
+  renderPickList(d, isPickable);
+
   const ah = document.getElementById('allocHistPanel');
-  if(d.allocations?.length){
+  if(d.allocations?.length && !isPickable){
     ah.style.display = 'block';
     document.getElementById('allocHistBadge').textContent = d.allocations.length;
     document.getElementById('allocHistBody').innerHTML = d.allocations.map(a => {
       const lp = a.lp_number
         ? `<span class="lp-badge ${a.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(a.lp_number)}</span>`
         : '—';
-      const stChip = a.status === 'ALLOCATED' ? 'chip-active' : 'chip-success';
+      const stChip = a.status === 'PICKED' ? 'chip-success'
+                   : a.status === 'CANCELLED' ? 'chip-danger'
+                   : 'chip-active';
       return `
         <tr>
           <td style="color:var(--blue);">${esc(a.sku_code || '')}</td>
@@ -154,11 +161,120 @@ async function openOrderDetail(id){
           <td>${lp}</td>
           <td>${esc(a.location_code || '')}</td>
           <td class="right" style="font-weight:600;">${esc(a.quantity || 0)}</td>
-          <td><span class="chip ${stChip}">${esc(a.status)}</span></td>
+          <td><span class="chip ${stChip}">${esc(a.status || 'PENDING')}</span></td>
         </tr>`;
     }).join('');
   } else {
     ah.style.display = 'none';
+  }
+}
+
+// =============================================================================
+// PICK LIST (Phase 1C.2 — single-order picking)
+// =============================================================================
+
+function renderPickList(d, isPickable){
+  const panel = document.getElementById('pickListPanel');
+  if(!panel) return;
+  if(!isPickable || !d.allocations?.length){
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+
+  const allocs = d.allocations;
+  const picked = allocs.filter(a => a.status === 'PICKED').length;
+  const total  = allocs.length;
+  const allDone = picked === total;
+  const pct = total ? Math.round((picked / total) * 100) : 0;
+
+  document.getElementById('pickListBadge').textContent = `${picked} of ${total} picked`;
+  document.getElementById('pickListBar').style.width = pct + '%';
+  document.getElementById('pickListError').textContent = '';
+  document.getElementById('pickListSuccess').textContent = '';
+
+  const tbody = document.getElementById('pickListBody');
+  tbody.innerHTML = allocs.map((a, i) => {
+    const lpCell = a.lp_number
+      ? `<span class="lp-badge ${a.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(a.lp_number)}</span>`
+      : '—';
+
+    if(a.status === 'PICKED'){
+      const ts = a.picked_at
+        ? new Date(a.picked_at).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})
+        : '';
+      const meta = a.picked_by_name || ts
+        ? `<span style="font-size:11px;color:var(--muted);margin-left:6px;">${esc(a.picked_by_name || '')}${a.picked_by_name && ts ? ' · ' : ''}${esc(ts)}</span>`
+        : '';
+      return `
+        <tr style="opacity:.7;">
+          <td>${esc(i + 1)}</td>
+          <td>${lpCell}</td>
+          <td>${esc(a.location_code || '—')}</td>
+          <td style="color:var(--blue);">${esc(a.lot_number || '—')}</td>
+          <td style="color:var(--blue);font-weight:600;">${esc(a.sku_code || '')}</td>
+          <td style="color:var(--text2);">${esc(a.sku_name || '')}</td>
+          <td class="right">${esc(a.picked_qty || a.quantity)}</td>
+          <td><span class="chip chip-success">✓ Picked</span>${meta}</td>
+        </tr>`;
+    }
+
+    // PENDING (default)
+    return `
+      <tr>
+        <td>${esc(i + 1)}</td>
+        <td>${lpCell}</td>
+        <td style="font-weight:600;">${esc(a.location_code || '—')}</td>
+        <td style="color:var(--blue);">${esc(a.lot_number || '—')}</td>
+        <td style="color:var(--blue);font-weight:600;">${esc(a.sku_code || '')}</td>
+        <td style="color:var(--text2);">${esc(a.sku_name || '')}</td>
+        <td class="right" style="font-weight:600;">${esc(a.quantity)}</td>
+        <td>
+          <input type="number" class="form-input js-pick-qty" data-id="${esc(a.id)}"
+                 value="${esc(a.quantity)}" min="1" max="${esc(a.quantity)}"
+                 style="width:64px;padding:4px 8px;font-size:12px;display:inline-block;margin-right:4px;">
+          <button class="btn btn-primary js-pick-confirm" data-id="${esc(a.id)}"
+                  style="padding:4px 12px;font-size:12px;">Confirm</button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.js-pick-confirm').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const allocId = btn.dataset.id;
+      const qtyInput = tbody.querySelector(`.js-pick-qty[data-id="${allocId}"]`);
+      const qty = parseInt(qtyInput?.value) || 0;
+      confirmPickAllocation(d.id, allocId, qty, btn);
+    });
+  });
+
+  const completeBtn = document.getElementById('pickListComplete');
+  completeBtn.style.display = allDone ? 'inline-flex' : 'none';
+  completeBtn.onclick = () => transitionOrder(d.id, 'PICKED');
+}
+
+async function confirmPickAllocation(orderId, allocationId, quantity, btn){
+  const err = document.getElementById('pickListError');
+  const suc = document.getElementById('pickListSuccess');
+  err.textContent = ''; suc.textContent = '';
+  if(!quantity || quantity <= 0){ err.textContent = 'Quantity must be > 0'; return; }
+  if(btn) btn.disabled = true;
+  try {
+    const r = await fetch(`${API}/orders/${orderId}/picks/${allocationId}/confirm`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+      body: JSON.stringify({quantity}),
+    });
+    const d = await r.json();
+    if(!r.ok){ err.textContent = d.error || 'Pick failed'; return; }
+    suc.textContent = d.allPicked
+      ? 'All picks complete — click Complete Picking when ready.'
+      : `Picked. ${d.pendingPicks} remaining.`;
+    setTimeout(() => openOrderDetail(orderId), 400);
+  } catch(e){
+    err.textContent = 'Network error';
+  } finally {
+    if(btn) btn.disabled = false;
   }
 }
 
