@@ -32,6 +32,14 @@ function fmtCost(c){
   return '$' + Number(c).toFixed(4);
 }
 
+// Integer cents → '$X.XX'. For billing display.
+function fmtCents(cents){
+  if(cents == null) return '—';
+  const n = Number(cents);
+  if(!Number.isFinite(n)) return '—';
+  return '$' + (n / 100).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
 function fmtTimeShort(t){
   if(!t) return '—';
   const d = new Date(t);

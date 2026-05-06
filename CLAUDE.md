@@ -16,6 +16,8 @@ js/inventory.js     — Inventory page + Case Break modal.
 js/orders.js        — Orders list/detail/allocation + New Order modal.
 js/inbound.js       — Receiving + New PO modal.
 js/intake.js        — AI intake pipeline (upload, review, approve).
+js/billing.js       — Billing page: per-client meter, events drill-down,
+                      rate card editor.
 js/app.js           — API base, auth (T, U, apiGet, doLogin), navigation,
                       boot(), DOMContentLoaded wiring. Loads LAST.
 ```

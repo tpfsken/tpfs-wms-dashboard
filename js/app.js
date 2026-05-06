@@ -65,6 +65,7 @@ const loaders = {
   inbound:   loadInbound,
   intake:    loadIntake,
   clients:   loadClients,
+  billing:   loadBilling,
 };
 
 function navigateTo(p){
