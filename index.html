@@ -65,7 +65,7 @@
   </div>
 
   <div class="page" id="page-inventory">
-    <div class="page-header"><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location</div></div><div style="flex:1"></div><input type="text" class="form-input" id="invSearch" placeholder="Search SKU or lot..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadInventory()">Refresh</button><button class="btn btn-primary" onclick="showCaseBreakModal()">⊞ Case Break</button></div>
+    <div class="page-header"><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location</div></div><div style="flex:1"></div><div class="cb-wrap" style="max-width:200px;" id="invClientFilterWrap"></div><input type="text" class="form-input" id="invSearch" placeholder="Search SKU or lot..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadInventory()">Refresh</button><button class="btn btn-primary" onclick="showCaseBreakModal()">⊞ Case Break</button></div>
     <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;"><div style="flex:1;overflow:auto;"><table class="data-table"><thead><tr><th>SKU</th><th>Description</th><th>Client</th><th>Type</th><th>Lot</th><th>Location</th><th>LP</th><th class="right">Qty</th><th>Status</th><th style="width:70px;"></th></tr></thead><tbody id="invBody"></tbody></table></div></div>
   </div>
 
@@ -206,6 +206,7 @@
       <div class="page-header">
         <div><div class="page-title">Billing</div><div class="page-subtitle">Per-client charges by month</div></div>
         <div style="flex:1"></div>
+        <div class="cb-wrap" style="max-width:240px;" id="billClientFilterWrap"></div>
         <button class="btn btn-ghost" onclick="shiftBillingPeriod(-1)">‹ Prev</button>
         <div style="font-weight:600;font-size:15px;min-width:80px;text-align:center;" id="billPeriodLabel">—</div>
         <button class="btn btn-ghost" onclick="shiftBillingPeriod(1)">Next ›</button>

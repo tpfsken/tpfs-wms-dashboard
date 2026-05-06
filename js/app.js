@@ -94,6 +94,17 @@ function boot(){
     {value:'damaged',label:'Damaged'},
   ], {placeholder:'All statuses', onChange:() => loadInventory()});
 
+  // Inventory Client filter — populates after clientsCache loads on first
+  // visit to a client-aware page; load it now so the combo is ready.
+  loadCC().then(() => {
+    initCombo('invClientFilterWrap',
+      [{value:'', label:'All clients'}].concat(
+        clientsCache.map(c => ({value:String(c.id), label:`${c.code} — ${c.name}`}))
+      ),
+      {placeholder:'All clients', onChange:() => loadInventory()}
+    );
+  });
+
   initCombo('ordStatusFilterWrap', [
     {value:'',label:'All statuses'},
     {value:'NEW',label:'New'},{value:'ALLOCATED',label:'Allocated'},

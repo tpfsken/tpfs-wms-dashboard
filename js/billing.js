@@ -47,10 +47,24 @@ async function loadBilling(){
   if(!billingPeriod) billingPeriod = defaultPeriod();
   document.getElementById('billListView').style.display = 'block';
   document.getElementById('billDetailView').style.display = 'none';
-
   document.getElementById('billPeriodLabel').textContent = billingPeriod;
 
-  const data = await apiGet(`/billing/meter?period=${encodeURIComponent(billingPeriod)}`);
+  // Init the Client filter combo (once) — populated from clientsCache.
+  if(!_cbState['billClientFilterWrap']){
+    await loadCC();
+    initCombo('billClientFilterWrap',
+      [{value:'', label:'All clients'}].concat(
+        clientsCache.map(c => ({value:String(c.id), label:`${c.code} — ${c.name}`}))
+      ),
+      {placeholder:'All clients', onChange:() => loadBilling()}
+    );
+  }
+
+  const cl = cbVal('billClientFilterWrap');
+  let url = `/billing/meter?period=${encodeURIComponent(billingPeriod)}`;
+  if(cl) url += `&clientId=${encodeURIComponent(cl)}`;
+
+  const data = await apiGet(url);
   if(!data){ return; }
   billingMeter = data;
   renderMeter();

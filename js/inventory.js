@@ -5,9 +5,11 @@
 async function loadInventory(){
   const s  = document.getElementById('invSearch')?.value || '';
   const st = (_cbState['invStatusFilterWrap']?.selected?.value) || '';
+  const cl = (_cbState['invClientFilterWrap']?.selected?.value) || '';
   let u = '/inventory?limit=200';
   if(st) u += `&status=${encodeURIComponent(st)}`;
   if(s)  u += `&skuCode=${encodeURIComponent('%' + s + '%')}`;
+  if(cl) u += `&clientId=${encodeURIComponent(cl)}`;
   const d = await apiGet(u);
   if(!d) return;
 
