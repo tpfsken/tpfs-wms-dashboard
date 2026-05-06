@@ -1,69 +1,192 @@
 // =============================================================================
-// REPORTS (Phase 9)
+// REPORTS (Phase 9) — drill-down: Item History → LP Trace
 // =============================================================================
-// First report: Trace — follow an LP from start to finish.
-// Search supports either an LP # or a lot # (auto-detected by the API
-// based on which field you fill).
+// Level 1: search by SKU or Lot → item-level summary table
+// Level 2: click a row → full LP trace for that (SKU, lot) — family,
+//          receiving, allocations, timeline.
 // =============================================================================
 
-let _traceData = null;     // last trace query result
+let _itemHistory = null;       // last item-history query result
+let _traceData   = null;       // last trace query result
+let _traceContext = null;      // {sku, lot} we drilled into
+
+// =============================================================================
+// LEVEL 1 — ITEM HISTORY
+// =============================================================================
 
 function loadReports(){
-  document.getElementById('traceResults').style.display = 'none';
-  document.getElementById('traceEmptyState').style.display = 'block';
-  document.getElementById('traceError').textContent = '';
-  document.getElementById('traceSearch').focus?.();
+  document.getElementById('itemHistoryView').style.display = 'block';
+  document.getElementById('traceView').style.display = 'none';
+  document.getElementById('itemHistoryError').textContent = '';
+  // Auto-load recent activity on first open
+  if(!_itemHistory) runItemHistory();
+  document.getElementById('reportSkuInput').focus?.();
 }
 
-async function runTrace(modeOverride){
-  const raw = document.getElementById('traceSearch').value.trim();
-  const mode = modeOverride || (document.querySelector('input[name="traceMode"]:checked')?.value) || 'auto';
-  const err = document.getElementById('traceError');
+async function runItemHistory(){
+  const sku = document.getElementById('reportSkuInput').value.trim();
+  const lot = document.getElementById('reportLotInput').value.trim();
+  const err = document.getElementById('itemHistoryError');
   err.textContent = '';
 
-  if(!raw){
-    err.textContent = 'Enter a lot number or LP number';
+  let url = '/reports/item-history?';
+  const qs = [];
+  if(sku) qs.push(`skuCode=${encodeURIComponent(sku)}`);
+  if(lot) qs.push(`lotNumber=${encodeURIComponent(lot)}`);
+  url += qs.join('&');
+
+  document.getElementById('itemHistoryEmpty').style.display = 'block';
+  document.getElementById('itemHistoryEmpty').textContent = 'Loading…';
+  document.getElementById('itemHistoryCard').style.display = 'none';
+
+  const data = await apiGet(url);
+  if(!data){ err.textContent = 'Search failed (network or auth error)'; return; }
+  _itemHistory = data;
+  renderItemHistory();
+}
+
+function renderItemHistory(){
+  const rows = _itemHistory?.rows || [];
+  const card  = document.getElementById('itemHistoryCard');
+  const empty = document.getElementById('itemHistoryEmpty');
+  const tbody = document.getElementById('itemHistoryBody');
+
+  if(!rows.length){
+    card.style.display = 'none';
+    empty.style.display = 'block';
+    empty.textContent = 'No activity matches your search.';
     return;
   }
+  card.style.display = 'block';
+  empty.style.display = 'none';
+
+  // Top-level totals
+  const total = {
+    received: 0, picked: 0, shipped: 0, onHand: 0, lps: 0, items: rows.length,
+  };
+  rows.forEach(r => {
+    total.received += Number(r.total_received || 0);
+    total.picked   += Number(r.total_picked   || 0);
+    total.shipped  += Number(r.total_shipped  || 0);
+    total.onHand   += Number(r.on_hand        || 0);
+    total.lps      += Number(r.lp_count       || 0);
+  });
+  document.getElementById('ihSumItems').textContent    = String(total.items);
+  document.getElementById('ihSumReceived').textContent = String(total.received);
+  document.getElementById('ihSumPicked').textContent   = String(total.picked);
+  document.getElementById('ihSumShipped').textContent  = String(total.shipped);
+  document.getElementById('ihSumOnHand').textContent   = String(total.onHand);
+  document.getElementById('ihSumLps').textContent      = String(total.lps);
+
+  tbody.innerHTML = rows.map(r => {
+    const lastAct = r.last_activity_at
+      ? new Date(r.last_activity_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
+      : '—';
+    const expiringSoon = r.expiry_date && new Date(r.expiry_date) < new Date(Date.now() + 30 * 864e5);
+    const lotCell = r.lot_number
+      ? `<span style="color:${expiringSoon ? 'var(--red)' : 'var(--blue)'};font-weight:600;">${esc(r.lot_number)}</span>`
+      : '<span style="color:var(--muted);">—</span>';
+    const expiry = r.expiry_date
+      ? new Date(r.expiry_date).toLocaleDateString('en-US', {month:'short', year:'2-digit'})
+      : '—';
+    const lpBreakdown = `<span title="${esc(r.lp_original_count)} original / ${esc(r.lp_child_count)} child · ${esc(r.lp_active_count)} active / ${esc(r.lp_empty_count)} empty / ${esc(r.lp_shipped_count)} shipped">${esc(r.lp_count)}</span>`;
+
+    return `
+      <tr class="js-item-row"
+          data-sku-id="${esc(r.sku_id)}"
+          data-sku-code="${esc(r.sku_code)}"
+          data-sku-name="${esc(r.sku_name || '')}"
+          data-lot-id="${esc(r.lot_id || '')}"
+          data-lot-number="${esc(r.lot_number || '')}"
+          data-client-name="${esc(r.client_name || '')}"
+          style="cursor:pointer;">
+        <td><div style="font-weight:600;color:var(--blue);">${esc(r.sku_code)}</div><div style="font-size:11px;color:var(--text2);">${esc(r.sku_name || '')}</div></td>
+        <td>${esc(r.client_code || '—')}</td>
+        <td>${lotCell}</td>
+        <td style="font-size:12px;color:var(--text2);">${esc(expiry)}</td>
+        <td class="right" style="color:var(--text2);">${esc(r.total_received)}</td>
+        <td class="right" style="color:var(--amber);">${esc(r.total_picked)}</td>
+        <td class="right" style="color:var(--green);">${esc(r.total_shipped)}</td>
+        <td class="right" style="font-weight:600;">${esc(r.on_hand)}</td>
+        <td class="right" style="color:var(--text2);">${esc(r.allocated_qty)}</td>
+        <td class="right">${lpBreakdown}</td>
+        <td style="font-size:12px;color:var(--text2);">${esc(lastAct)}</td>
+        <td><span style="color:var(--blue);font-size:11px;font-weight:600;">Trace ▸</span></td>
+      </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.js-item-row').forEach(row => {
+    row.addEventListener('click', () => openTraceFromItem({
+      skuId: row.dataset.skuId,
+      skuCode: row.dataset.skuCode,
+      skuName: row.dataset.skuName,
+      lotId: row.dataset.lotId || null,
+      lotNumber: row.dataset.lotNumber || null,
+      clientName: row.dataset.clientName,
+    }));
+  });
+}
+
+// =============================================================================
+// LEVEL 2 — LP TRACE for a chosen item
+// =============================================================================
+
+async function openTraceFromItem(ctx){
+  _traceContext = ctx;
+
+  document.getElementById('itemHistoryView').style.display = 'none';
+  document.getElementById('traceView').style.display = 'block';
+  document.getElementById('traceContextLabel').innerHTML =
+    `<span style="color:var(--blue);font-weight:600;">${esc(ctx.skuCode)}</span>` +
+    `<span style="color:var(--text2);"> · ${esc(ctx.skuName || '')}</span>` +
+    (ctx.lotNumber ? ` <span style="color:var(--text2);"> · Lot </span><span style="color:var(--blue);">${esc(ctx.lotNumber)}</span>` : '');
 
   document.getElementById('traceResults').style.display = 'none';
   document.getElementById('traceEmptyState').style.display = 'block';
-  document.getElementById('traceEmptyState').textContent = 'Searching…';
+  document.getElementById('traceEmptyState').textContent = 'Loading LP trace…';
+  document.getElementById('traceError').textContent = '';
 
-  // Build query — auto mode tries LP first, falls through to lot if no match.
+  // If we have a specific lot, use it. Otherwise fall back to LP search by SKU
+  // (less precise, but at least returns LPs for that SKU).
   let url;
-  if(mode === 'lp'){
-    url = `/reports/trace?lpNumber=${encodeURIComponent(raw)}`;
-  } else if(mode === 'lot'){
-    url = `/reports/trace?lotNumber=${encodeURIComponent(raw)}`;
+  if(ctx.lotNumber){
+    url = `/reports/trace?lotNumber=${encodeURIComponent(ctx.lotNumber)}`;
   } else {
-    // auto — heuristic: starts with LP or contains LP-, treat as LP
-    const looksLikeLp = /^(LP|LPN|PALLET)/i.test(raw) || /^[A-Z0-9]+-\d{4}-/i.test(raw);
-    url = looksLikeLp
-      ? `/reports/trace?lpNumber=${encodeURIComponent(raw)}`
-      : `/reports/trace?lotNumber=${encodeURIComponent(raw)}`;
+    // No lot — show all LPs whose number contains the SKU code (heuristic)
+    url = `/reports/trace?lpNumber=${encodeURIComponent(ctx.skuCode)}`;
   }
 
-  let data = await apiGet(url);
-
-  // If auto and the heuristic guessed wrong (no results), try the other mode.
-  if(mode === 'auto' && data && (!data.lpFamily?.length && !data.allocations?.length)){
-    const other = url.includes('lpNumber')
-      ? `/reports/trace?lotNumber=${encodeURIComponent(raw)}`
-      : `/reports/trace?lpNumber=${encodeURIComponent(raw)}`;
-    const fallback = await apiGet(other);
-    if(fallback && (fallback.lpFamily?.length || fallback.allocations?.length)){
-      data = fallback;
-    }
-  }
-
+  const data = await apiGet(url);
   if(!data){
-    err.textContent = 'Search failed (network or auth error)';
+    document.getElementById('traceError').textContent = 'Trace failed (network or auth error)';
     document.getElementById('traceEmptyState').textContent = 'No results';
     return;
   }
-
   _traceData = data;
+  renderTrace();
+}
+
+function backToItemHistory(){
+  document.getElementById('traceView').style.display = 'none';
+  document.getElementById('itemHistoryView').style.display = 'block';
+}
+
+// Manual LP search inside the trace view (when user wants to look up a specific LP).
+async function runManualTrace(){
+  const lp = document.getElementById('manualLpInput').value.trim();
+  const err = document.getElementById('traceError');
+  err.textContent = '';
+  if(!lp){ err.textContent = 'Enter an LP number'; return; }
+
+  document.getElementById('traceResults').style.display = 'none';
+  document.getElementById('traceEmptyState').style.display = 'block';
+  document.getElementById('traceEmptyState').textContent = 'Loading…';
+
+  const data = await apiGet(`/reports/trace?lpNumber=${encodeURIComponent(lp)}`);
+  if(!data){ err.textContent = 'Trace failed'; return; }
+  _traceData = data;
+  _traceContext = { skuCode: 'Manual LP search', skuName: '', lotNumber: '' };
+  document.getElementById('traceContextLabel').textContent = `Manual LP search: ${lp}`;
   renderTrace();
 }
 
@@ -77,7 +200,7 @@ function renderTrace(){
   if(!hasFamily && !hasAllocs){
     results.style.display = 'none';
     empty.style.display = 'block';
-    empty.textContent = 'No matching license plates or allocations found.';
+    empty.textContent = 'No LPs or allocations found.';
     return;
   }
 
@@ -100,14 +223,13 @@ function renderTrace(){
   renderTimeline(data.timeline || []);
 }
 
-// -------- LP family list (parent → children, indented)
+// -------- LP family tree (parent → children, indented)
 function renderLpFamily(family){
   const card = document.getElementById('lpFamilyCard');
   const tbody = document.getElementById('lpFamilyBody');
   if(!family.length){ card.style.display = 'none'; return; }
   card.style.display = 'block';
 
-  // Build a parent → children map for indentation
   const byParent = {};
   family.forEach(lp => {
     const k = lp.parent_lp_id || 'ROOT';
@@ -115,14 +237,12 @@ function renderLpFamily(family){
     byParent[k].push(lp);
   });
 
-  // Render in tree order: roots first, then their children, recursively
   const rendered = [];
   function emit(lp, depth){
     rendered.push({lp, depth});
     (byParent[lp.id] || []).forEach(child => emit(child, depth + 1));
   }
   (byParent['ROOT'] || []).forEach(root => emit(root, 0));
-  // Catch any orphans (parent in family but somehow not picked up)
   family.forEach(lp => {
     if(!rendered.find(r => r.lp.id === lp.id)){
       rendered.push({lp, depth: 0});
@@ -152,7 +272,6 @@ function renderLpFamily(family){
   }).join('');
 }
 
-// -------- Receiving info — where it came from
 function renderReceiving(rows){
   const card = document.getElementById('traceReceivingCard');
   const tbody = document.getElementById('traceReceivingBody');
@@ -175,7 +294,6 @@ function renderReceiving(rows){
   }).join('');
 }
 
-// -------- Allocations — where pieces went (orders + customers + shipments)
 function renderTraceAllocations(rows){
   const card = document.getElementById('traceAllocCard');
   const tbody = document.getElementById('traceAllocBody');
@@ -227,7 +345,6 @@ function renderTraceAllocations(rows){
   });
 }
 
-// -------- Timeline — every inventory_transactions event for the family
 function renderTimeline(rows){
   const card = document.getElementById('traceTimelineCard');
   const list = document.getElementById('traceTimelineList');
@@ -272,7 +389,7 @@ function renderTimeline(rows){
   }).join('');
 }
 
-// -------- CSV export of allocations slice
+// CSV export of allocations slice (the "where it went" rows)
 function exportRecallCsv(){
   if(!_traceData || !_traceData.allocations?.length) return;
   const cols = [
@@ -308,10 +425,10 @@ function exportRecallCsv(){
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const search = document.getElementById('traceSearch').value.trim().replace(/[^A-Za-z0-9_-]/g, '_');
   const stamp = new Date().toISOString().slice(0, 10);
+  const tag = (_traceContext?.lotNumber || _traceContext?.skuCode || 'trace').replace(/[^A-Za-z0-9_-]/g, '_');
   a.href = url;
-  a.download = `trace_${search || 'lp_or_lot'}_${stamp}.csv`;
+  a.download = `trace_${tag}_${stamp}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
