@@ -60,12 +60,14 @@ function _cbToggle(id){
   wrap.appendChild(drop);
 
   // Delegate option clicks via the list container so we don't have to escape
-  // values into inline onclick handlers.
+  // values into inline onclick handlers. Note: data-value="" is a VALID value
+  // (used by "All clients", "All statuses", etc. reset options) — only skip
+  // the empty-list placeholder.
   document.getElementById(id + '_list').addEventListener('click', e => {
     const opt = e.target.closest('.cb-opt');
-    if(!opt || !opt.dataset.value && !opt.classList.contains('cb-opt-custom')) return;
+    if(!opt) return;
     if(opt.classList.contains('cb-opt-empty')) return;
-    _cbSelect(id, opt.dataset.value || '', opt.dataset.label || '');
+    _cbSelect(id, opt.dataset.value ?? '', opt.dataset.label || '');
   });
 
   _cbRender(id, '');
