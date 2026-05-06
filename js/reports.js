@@ -20,19 +20,15 @@ async function loadReports(){
   document.getElementById('traceView').style.display = 'none';
   document.getElementById('itemHistoryError').textContent = '';
 
-  // Make sure clientsCache is populated before initing the combo —
-  // even if loadCC was called earlier, force a fresh fetch on first
-  // visit to this page so we never init with an empty list.
-  await loadCC();
-  if(!clientsCache.length){
-    // Network or auth issue — try once more, this time bypassing the cache
-    const d = await apiGet('/clients');
-    if(Array.isArray(d) && d.length) clientsCache = d;
-  }
+  // Always fetch fresh — bypass any cache state that might be empty
+  // from a previous failure. /clients is cheap.
+  const clientsList = await apiGet('/clients');
+  const clients = Array.isArray(clientsList) ? clientsList : [];
+  console.log('[reports] clients loaded:', clients.length);
 
   initCombo('reportsClientWrap',
     [{value:'', label:'All clients'}].concat(
-      clientsCache.map(c => ({value:String(c.id), label:`${c.code} — ${c.name}`}))
+      clients.map(c => ({value:String(c.id), label:`${c.code} — ${c.name}`}))
     ),
     {
       placeholder: 'All clients',
