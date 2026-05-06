@@ -9,15 +9,37 @@
 let _itemHistory = null;       // last item-history query result
 let _traceData   = null;       // last trace query result
 let _traceContext = null;      // {sku, lot} we drilled into
+let _reportsClient = '';       // selected client id, '' = all clients
 
 // =============================================================================
 // LEVEL 1 — ITEM HISTORY
 // =============================================================================
 
-function loadReports(){
+async function loadReports(){
   document.getElementById('itemHistoryView').style.display = 'block';
   document.getElementById('traceView').style.display = 'none';
   document.getElementById('itemHistoryError').textContent = '';
+
+  // Init the client picker (once) — uses the shared clientsCache from clients.js
+  await loadCC();
+  initCombo('reportsClientWrap',
+    [{value:'', label:'All clients'}].concat(
+      clientsCache.map(c => ({value:String(c.id), label:`${c.code} — ${c.name}`}))
+    ),
+    {
+      placeholder: 'All clients',
+      value: _reportsClient || '',
+      onChange: (v) => {
+        _reportsClient = v || '';
+        // If we're on the trace view, jump back; if on item history, refresh.
+        if(document.getElementById('traceView').style.display !== 'none'){
+          backToItemHistory();
+        }
+        runItemHistory();
+      },
+    }
+  );
+
   // Auto-load recent activity on first open
   if(!_itemHistory) runItemHistory();
   document.getElementById('reportSkuInput').focus?.();
@@ -33,6 +55,7 @@ async function runItemHistory(){
   const qs = [];
   if(sku) qs.push(`skuCode=${encodeURIComponent(sku)}`);
   if(lot) qs.push(`lotNumber=${encodeURIComponent(lot)}`);
+  if(_reportsClient) qs.push(`clientId=${encodeURIComponent(_reportsClient)}`);
   url += qs.join('&');
 
   document.getElementById('itemHistoryEmpty').style.display = 'block';
@@ -155,6 +178,7 @@ async function openTraceFromItem(ctx){
     // No lot — show all LPs whose number contains the SKU code (heuristic)
     url = `/reports/trace?lpNumber=${encodeURIComponent(ctx.skuCode)}`;
   }
+  if(_reportsClient) url += `&clientId=${encodeURIComponent(_reportsClient)}`;
 
   const data = await apiGet(url);
   if(!data){
@@ -182,7 +206,9 @@ async function runManualTrace(){
   document.getElementById('traceEmptyState').style.display = 'block';
   document.getElementById('traceEmptyState').textContent = 'Loading…';
 
-  const data = await apiGet(`/reports/trace?lpNumber=${encodeURIComponent(lp)}`);
+  let url = `/reports/trace?lpNumber=${encodeURIComponent(lp)}`;
+  if(_reportsClient) url += `&clientId=${encodeURIComponent(_reportsClient)}`;
+  const data = await apiGet(url);
   if(!data){ err.textContent = 'Trace failed'; return; }
   _traceData = data;
   _traceContext = { skuCode: 'Manual LP search', skuName: '', lotNumber: '' };
