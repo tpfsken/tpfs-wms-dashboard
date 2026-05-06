@@ -146,8 +146,10 @@ function renderClientCharges(){
   tbody.innerHTML = billingCharges.map(c => {
     const stChip = c.is_invoiced ? 'chip-active' : 'chip-success';
     const stLabel = c.is_invoiced ? 'INVOICED' : 'OPEN';
+    // charge_date can come back as 'YYYY-MM-DD' or a full ISO timestamp
+    // depending on driver. Just hand it to Date() directly.
     const ts = c.charge_date
-      ? new Date(c.charge_date + 'T00:00:00Z').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
+      ? new Date(c.charge_date).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
       : '—';
     const refShort = c.reference_id ? String(c.reference_id).slice(0, 8) : '';
     const ref = c.reference_type
