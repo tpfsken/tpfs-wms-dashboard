@@ -32,12 +32,20 @@ function fmtCost(c){
   return '$' + Number(c).toFixed(4);
 }
 
-// Integer cents → '$X.XX'. For billing display.
+// Integer cents → '$X.XX'. (legacy helper, kept for back-compat)
 function fmtCents(cents){
   if(cents == null) return '—';
   const n = Number(cents);
   if(!Number.isFinite(n)) return '—';
   return '$' + (n / 100).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+// Numeric dollars (e.g. 12.5) → '$12.50'. For billing display.
+function fmtDollars(amount){
+  if(amount == null) return '—';
+  const n = Number(amount);
+  if(!Number.isFinite(n)) return '—';
+  return '$' + n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 
 function fmtTimeShort(t){

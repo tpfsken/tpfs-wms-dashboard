@@ -1,27 +1,28 @@
 // =============================================================================
-// BILLING (Phase 2)
+// BILLING (Phase 2) — talks to existing billing_rates / billing_charges /
+// billing_periods schema. Money is NUMERIC dollars throughout.
 // =============================================================================
 
-let billingPeriod = null;        // 'YYYY-MM' currently shown
-let billingMeter  = null;        // {period, rows: [{client_id, total_cents, ...}]}
-let billingClient = null;        // currently drilled-down client {id, name, code}
-let billingEvents = [];          // events for drilled client
-let billingRateCard = null;      // rate card for drilled client
+let billingPeriod  = null;        // 'YYYY-MM' currently shown
+let billingMeter   = null;        // {period, rows: [...]}
+let billingClient  = null;        // currently drilled-down client {id, name, code}
+let billingCharges = [];          // charges for drilled client/period
+let billingRates   = [];          // active rates for drilled client
 
-const CHARGE_TYPE_OPTIONS = [
-  {value:'PICK_EACH',         label:'Pick — Each',           unit:'pick'},
-  {value:'PICK_CASE',         label:'Pick — Case',           unit:'pick'},
-  {value:'PICK_PALLET',       label:'Pick — Pallet',         unit:'pick'},
-  {value:'PALLET_SHIPPED',    label:'Pallet Shipped',        unit:'pallet'},
-  {value:'STORAGE_PALLET_DAY',label:'Storage — Pallet/Day',  unit:'day'},
-  {value:'STORAGE_BIN_DAY',   label:'Storage — Bin/Day',     unit:'day'},
-  {value:'INBOUND_PALLET',    label:'Inbound — Pallet',      unit:'pallet'},
-  {value:'INBOUND_CASE',      label:'Inbound — Case',        unit:'case'},
-  {value:'INBOUND_CONTAINER', label:'Inbound — Container',   unit:'container'},
-  {value:'HAZMAT',            label:'Hazmat Surcharge',      unit:'unit'},
-  {value:'FRAGILE',           label:'Fragile Handling',      unit:'unit'},
-  {value:'OVERSIZE',          label:'Oversize Surcharge',    unit:'unit'},
-  {value:'EXPEDITE',          label:'Expedited Handling',    unit:'unit'},
+const RATE_TYPE_OPTIONS = [
+  {value:'PICK_EACH',         label:'Pick — Each',           uom:'pick'},
+  {value:'PICK_CASE',         label:'Pick — Case',           uom:'pick'},
+  {value:'PICK_PALLET',       label:'Pick — Pallet',         uom:'pick'},
+  {value:'PALLET_SHIPPED',    label:'Pallet Shipped',        uom:'pallet'},
+  {value:'STORAGE_PALLET_DAY',label:'Storage — Pallet/Day',  uom:'day'},
+  {value:'STORAGE_BIN_DAY',   label:'Storage — Bin/Day',     uom:'day'},
+  {value:'INBOUND_PALLET',    label:'Inbound — Pallet',      uom:'pallet'},
+  {value:'INBOUND_CASE',      label:'Inbound — Case',        uom:'case'},
+  {value:'INBOUND_CONTAINER', label:'Inbound — Container',   uom:'container'},
+  {value:'HAZMAT',            label:'Hazmat Surcharge',      uom:'unit'},
+  {value:'FRAGILE',           label:'Fragile Handling',      uom:'unit'},
+  {value:'OVERSIZE',          label:'Oversize Surcharge',    uom:'unit'},
+  {value:'EXPEDITE',          label:'Expedited Handling',    uom:'unit'},
 ];
 
 function defaultPeriod(){
@@ -57,26 +58,26 @@ function renderMeter(){
   const tbody = document.getElementById('billMeterBody');
   if(!rows.length){
     tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No billable activity in ${esc(billingPeriod)}</td></tr>`;
-    document.getElementById('billGrandTotal').textContent = fmtCents(0);
+    document.getElementById('billGrandTotal').textContent = fmtDollars(0);
     document.getElementById('billGrandEvents').textContent = '0';
     return;
   }
 
-  let grandCents = 0, grandEvents = 0;
+  let grandTotal = 0, grandCount = 0;
   tbody.innerHTML = rows.map(r => {
-    grandCents  += Number(r.total_cents) || 0;
-    grandEvents += Number(r.event_count) || 0;
+    grandTotal += Number(r.total_amount) || 0;
+    grandCount += Number(r.charge_count) || 0;
     return `
-      <tr class="js-bill-client" data-id="${esc(r.client_id)}" data-name="${esc(r.client_name)}" data-code="${esc(r.client_code)}" style="cursor:pointer;">
+      <tr class="js-bill-client" data-id="${esc(r.client_id)}" data-name="${esc(r.client_name || '')}" data-code="${esc(r.client_code || '')}" style="cursor:pointer;">
         <td style="font-weight:600;color:var(--blue);">${esc(r.client_code || '')}</td>
         <td style="font-weight:600;">${esc(r.client_name || '')}</td>
-        <td class="right">${esc(r.event_count || 0)}</td>
+        <td class="right">${esc(r.charge_count || 0)}</td>
         <td class="right" style="color:var(--text2);">${esc(r.charge_type_count || 0)}</td>
-        <td class="right" style="font-weight:700;color:var(--green);">${fmtCents(r.total_cents)}</td>
+        <td class="right" style="font-weight:700;color:var(--green);">${fmtDollars(r.total_amount)}</td>
       </tr>`;
   }).join('');
-  document.getElementById('billGrandTotal').textContent = fmtCents(grandCents);
-  document.getElementById('billGrandEvents').textContent = String(grandEvents);
+  document.getElementById('billGrandTotal').textContent  = fmtDollars(grandTotal);
+  document.getElementById('billGrandEvents').textContent = String(grandCount);
 
   tbody.querySelectorAll('.js-bill-client').forEach(row =>
     row.addEventListener('click', () => openClientBilling({
@@ -103,66 +104,67 @@ async function openClientBilling(client){
   document.getElementById('billDetailTitle').textContent = `${client.code} — ${client.name}`;
   document.getElementById('billDetailPeriod').textContent = billingPeriod;
 
-  // Fire both fetches in parallel
-  const [evRes, cardRes] = await Promise.all([
-    apiGet(`/billing/events?clientId=${encodeURIComponent(client.id)}&period=${encodeURIComponent(billingPeriod)}&limit=500`),
-    apiGet(`/clients/${encodeURIComponent(client.id)}/rate-card`),
+  const [chRes, rRes] = await Promise.all([
+    apiGet(`/billing/charges?clientId=${encodeURIComponent(client.id)}&period=${encodeURIComponent(billingPeriod)}&limit=500`),
+    apiGet(`/clients/${encodeURIComponent(client.id)}/rates`),
   ]);
 
-  billingEvents   = evRes || [];
-  billingRateCard = cardRes;
+  billingCharges = chRes || [];
+  billingRates   = rRes  || [];
 
-  renderClientEvents();
+  renderClientCharges();
   renderClientHeaderTotals();
 }
 
 function closeClientBilling(){
-  billingClient = null;
-  billingEvents = [];
-  billingRateCard = null;
+  billingClient  = null;
+  billingCharges = [];
+  billingRates   = [];
   document.getElementById('billDetailView').style.display = 'none';
   document.getElementById('billListView').style.display = 'block';
   loadBilling();
 }
 
 function renderClientHeaderTotals(){
-  const events = billingEvents;
-  const total = events.reduce((sum, e) => sum + (Number(e.amount_cents) || 0), 0);
-  const types = new Set(events.map(e => e.charge_type)).size;
-  document.getElementById('billClientTotal').textContent  = fmtCents(total);
-  document.getElementById('billClientEvents').textContent = String(events.length);
+  const charges = billingCharges;
+  const total = charges.reduce((sum, e) => sum + (Number(e.total_amount) || 0), 0);
+  const types = new Set(charges.map(e => e.charge_type)).size;
+  document.getElementById('billClientTotal').textContent  = fmtDollars(total);
+  document.getElementById('billClientEvents').textContent = String(charges.length);
   document.getElementById('billClientTypes').textContent  = String(types);
 }
 
-function renderClientEvents(){
+function renderClientCharges(){
   const tbody = document.getElementById('billEventsBody');
-  if(!billingEvents.length){
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No events for ${esc(billingClient.name)} in ${esc(billingPeriod)}</td></tr>`;
+  if(!billingCharges.length){
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No charges for ${esc(billingClient.name)} in ${esc(billingPeriod)}</td></tr>`;
     return;
   }
-  tbody.innerHTML = billingEvents.map(e => {
-    const stChip = e.status === 'INVOICED' ? 'chip-active'
-                 : e.status === 'DISPUTED' ? 'chip-warning'
-                 : e.status === 'VOID'     ? 'chip-danger'
-                 : 'chip-success';
-    const ts = e.occurred_at
-      ? new Date(e.occurred_at).toLocaleString('en-US', {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})
+  tbody.innerHTML = billingCharges.map(c => {
+    const stChip = c.is_invoiced ? 'chip-active' : 'chip-success';
+    const stLabel = c.is_invoiced ? 'INVOICED' : 'OPEN';
+    const ts = c.charge_date
+      ? new Date(c.charge_date + 'T00:00:00Z').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
+      : '—';
+    const refShort = c.reference_id ? String(c.reference_id).slice(0, 8) : '';
+    const ref = c.reference_type
+      ? `${esc(c.reference_type)} <span style="color:var(--muted);font-size:11px;">${esc(refShort)}</span>`
       : '—';
     return `
       <tr>
         <td style="color:var(--text2);font-size:12px;">${esc(ts)}</td>
-        <td><span class="chip chip-new" style="font-size:11px;">${esc(e.charge_type)}</span></td>
-        <td style="color:var(--text2);">${esc(e.reference_type || '—')} ${e.reference_id ? `<span style="color:var(--muted);font-size:11px;">${esc(String(e.reference_id).slice(0,8))}</span>` : ''}</td>
-        <td class="right">${esc(Number(e.quantity).toString())}</td>
-        <td class="right" style="color:var(--text2);">${fmtCents(e.unit_cents)}</td>
-        <td class="right" style="font-weight:700;color:var(--green);">${fmtCents(e.amount_cents)}</td>
-        <td><span class="chip ${stChip}" style="font-size:11px;">${esc(e.status)}</span></td>
+        <td><span class="chip chip-new" style="font-size:11px;">${esc(c.charge_type)}</span></td>
+        <td style="color:var(--text2);">${ref}</td>
+        <td class="right">${esc(Number(c.quantity).toString())}</td>
+        <td class="right" style="color:var(--text2);">${fmtDollars(c.unit_rate)}</td>
+        <td class="right" style="font-weight:700;color:var(--green);">${fmtDollars(c.total_amount)}</td>
+        <td><span class="chip ${stChip}" style="font-size:11px;">${esc(stLabel)}</span></td>
       </tr>`;
   }).join('');
 }
 
 // =============================================================================
-// RATE CARD MODAL
+// RATES MODAL — bulk edit a client's active rates
 // =============================================================================
 
 function showRateCardModal(){
@@ -171,28 +173,12 @@ function showRateCardModal(){
   modal.style.display = 'flex';
   modal.style.zIndex = '10000';
 
-  document.getElementById('rcModalTitle').textContent = `Rate Card — ${billingClient.code} ${billingClient.name}`;
+  document.getElementById('rcModalTitle').textContent = `Rates — ${billingClient.code} ${billingClient.name}`;
   document.getElementById('rcModalError').textContent = '';
 
-  const card = billingRateCard || {};
-  initCombo('rcPickModeWrap', [
-    {value:'TOUCH_MOVES_ONLY', label:'Touch Moves Only — only physically-picked units charge'},
-    {value:'ALL_PICKS',        label:'All Picks — every unit on a child LP charges'},
-  ], {
-    placeholder:'Select pick billing mode...',
-    value: card.pick_billing_mode || 'TOUCH_MOVES_ONLY',
-  });
-
-  document.getElementById('rcMinDollars').value = card.monthly_minimum_cents
-    ? (Number(card.monthly_minimum_cents) / 100).toFixed(2)
-    : '0.00';
-  document.getElementById('rcNotes').value = card.notes || '';
-
-  // Render existing rates
-  const rates = (card.rates || []).slice();
-  // Make sure PICK_EACH always exists as a row even if not configured yet
-  if(!rates.find(r => r.charge_type === 'PICK_EACH')){
-    rates.push({charge_type:'PICK_EACH', unit_cents:0, unit_label:'pick'});
+  const rates = (billingRates || []).slice();
+  if(!rates.find(r => r.rate_type === 'PICK_EACH')){
+    rates.push({rate_name:'Standard Each Pick', rate_type:'PICK_EACH', rate_amount:0.50, uom:'pick'});
   }
   renderRateRows(rates);
 }
@@ -200,22 +186,27 @@ function showRateCardModal(){
 function renderRateRows(rates){
   const tbody = document.getElementById('rcRatesBody');
   tbody.innerHTML = rates.map((r, i) => {
-    const opt = CHARGE_TYPE_OPTIONS.find(o => o.value === r.charge_type);
     return `
       <tr data-i="${i}">
         <td>
+          <input type="text" class="form-input js-rc-name" data-i="${i}"
+                 value="${esc(r.rate_name || '')}"
+                 placeholder="e.g. Standard Each Pick"
+                 style="padding:6px 8px;font-size:12px;">
+        </td>
+        <td>
           <select class="form-input js-rc-type" data-i="${i}" style="padding:6px 8px;font-size:12px;">
-            ${CHARGE_TYPE_OPTIONS.map(o => `<option value="${esc(o.value)}" ${o.value === r.charge_type ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
+            ${RATE_TYPE_OPTIONS.map(o => `<option value="${esc(o.value)}" ${o.value === r.rate_type ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
           </select>
         </td>
         <td>
-          <input type="number" step="0.01" min="0" class="form-input js-rc-dollars" data-i="${i}"
-                 value="${esc((Number(r.unit_cents || 0) / 100).toFixed(2))}"
+          <input type="number" step="0.01" min="0" class="form-input js-rc-amount" data-i="${i}"
+                 value="${esc(Number(r.rate_amount || 0).toFixed(2))}"
                  style="width:100px;padding:6px 8px;font-size:12px;">
         </td>
         <td>
-          <input type="text" class="form-input js-rc-unit" data-i="${i}"
-                 value="${esc(r.unit_label || (opt ? opt.unit : ''))}"
+          <input type="text" class="form-input js-rc-uom" data-i="${i}"
+                 value="${esc(r.uom || '')}"
                  placeholder="unit" style="width:90px;padding:6px 8px;font-size:12px;">
         </td>
         <td>
@@ -227,7 +218,6 @@ function renderRateRows(rates){
       </tr>`;
   }).join('');
 
-  // Wire row removals
   tbody.querySelectorAll('.js-rc-remove').forEach(btn => {
     btn.addEventListener('click', () => {
       const cur = collectRateRows();
@@ -241,16 +231,17 @@ function collectRateRows(){
   const rows = document.querySelectorAll('#rcRatesBody tr');
   const out = [];
   rows.forEach(tr => {
-    const i = tr.dataset.i;
-    const charge_type = tr.querySelector('.js-rc-type')?.value;
-    const dollars = parseFloat(tr.querySelector('.js-rc-dollars')?.value);
-    const unit_label = tr.querySelector('.js-rc-unit')?.value || null;
-    const notes = tr.querySelector('.js-rc-notes')?.value || null;
-    if(!charge_type) return;
+    const rate_name   = tr.querySelector('.js-rc-name')?.value?.trim();
+    const rate_type   = tr.querySelector('.js-rc-type')?.value;
+    const rate_amount = parseFloat(tr.querySelector('.js-rc-amount')?.value);
+    const uom         = tr.querySelector('.js-rc-uom')?.value?.trim() || null;
+    const notes       = tr.querySelector('.js-rc-notes')?.value?.trim() || null;
+    if(!rate_type || !rate_name) return;
     out.push({
-      charge_type,
-      unit_cents: Number.isFinite(dollars) ? Math.round(dollars * 100) : 0,
-      unit_label,
+      rate_name,
+      rate_type,
+      rate_amount: Number.isFinite(rate_amount) ? rate_amount : 0,
+      uom,
       notes,
     });
   });
@@ -259,7 +250,7 @@ function collectRateRows(){
 
 function addRateRow(){
   const cur = collectRateRows();
-  cur.push({charge_type:'PICK_EACH', unit_cents:0, unit_label:'pick'});
+  cur.push({rate_name:'', rate_type:'PICK_EACH', rate_amount:0, uom:'pick'});
   renderRateRows(cur);
 }
 
@@ -268,43 +259,37 @@ async function saveRateCard(){
   const err = document.getElementById('rcModalError');
   err.textContent = '';
 
-  const pickMode = cbVal('rcPickModeWrap') || 'TOUCH_MOVES_ONLY';
-  const minDollars = parseFloat(document.getElementById('rcMinDollars').value);
-  const monthlyMinimumCents = Number.isFinite(minDollars) ? Math.round(minDollars * 100) : 0;
-  const notes = document.getElementById('rcNotes').value || null;
   const rateRows = collectRateRows();
 
-  // Reject duplicate charge types
+  // Reject duplicate (rate_type + rate_name) pairs
   const seen = new Set();
   for(const r of rateRows){
-    if(seen.has(r.charge_type)){
-      err.textContent = `Duplicate charge type: ${r.charge_type}`;
+    const key = `${r.rate_type}|${r.rate_name}`;
+    if(seen.has(key)){
+      err.textContent = `Duplicate rate: ${r.rate_type} / ${r.rate_name}`;
       return;
     }
-    seen.add(r.charge_type);
+    seen.add(key);
   }
 
   try {
-    const r = await fetch(`${API}/clients/${encodeURIComponent(billingClient.id)}/rate-card`, {
+    const r = await fetch(`${API}/clients/${encodeURIComponent(billingClient.id)}/rates`, {
       method:'PUT',
       headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
       body: JSON.stringify({
-        pickBillingMode: pickMode,
-        monthlyMinimumCents,
-        notes,
         rates: rateRows.map(r => ({
-          chargeType: r.charge_type,
-          unitCents:  r.unit_cents,
-          unitLabel:  r.unit_label,
+          rateName:   r.rate_name,
+          rateType:   r.rate_type,
+          rateAmount: r.rate_amount,
+          uom:        r.uom,
           notes:      r.notes,
         })),
       }),
     });
     const d = await r.json();
     if(!r.ok){ err.textContent = d.error || 'Save failed'; return; }
-    billingRateCard = d;
+    billingRates = d;
     closeModal('rateCardModal');
-    // Refresh detail (header doesn't change but new rates may inform future picks)
     renderClientHeaderTotals();
   } catch(e){
     err.textContent = 'Network error';
