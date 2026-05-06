@@ -10,6 +10,7 @@ let _itemHistory = null;       // last item-history query result
 let _traceData   = null;       // last trace query result
 let _traceContext = null;      // {sku, lot} we drilled into
 let _reportsClient = '';       // selected client id, '' = all clients
+let _reportsCustomer = '';     // selected customer name, '' = all customers
 
 // =============================================================================
 // LEVEL 1 — ITEM HISTORY
@@ -31,7 +32,8 @@ async function loadReports(){
       value: _reportsClient || '',
       onChange: (v) => {
         _reportsClient = v || '';
-        // If we're on the trace view, jump back; if on item history, refresh.
+        // Customer list is client-scoped — refresh when client changes
+        loadReportsCustomers();
         if(document.getElementById('traceView').style.display !== 'none'){
           backToItemHistory();
         }
@@ -40,9 +42,39 @@ async function loadReports(){
     }
   );
 
+  // Customer picker — populated from /reports/customers, scoped to client.
+  await loadReportsCustomers();
+
   // Auto-load recent activity on first open
   if(!_itemHistory) runItemHistory();
   document.getElementById('reportSkuInput').focus?.();
+}
+
+async function loadReportsCustomers(){
+  let url = '/reports/customers';
+  if(_reportsClient) url += `?clientId=${encodeURIComponent(_reportsClient)}`;
+  const customers = await apiGet(url);
+  const opts = [{value:'', label:'All customers'}];
+  (customers || []).forEach(c => {
+    if(!c.customer_name) return;
+    const loc = [c.ship_to_city, c.ship_to_state].filter(Boolean).join(', ');
+    opts.push({
+      value: c.customer_name,
+      label: c.customer_name,
+      sub:   loc || `${c.order_count || 0} orders`,
+    });
+  });
+  initCombo('reportsCustomerWrap', opts, {
+    placeholder: 'All customers',
+    value: _reportsCustomer || '',
+    onChange: (v) => {
+      _reportsCustomer = v || '';
+      if(document.getElementById('traceView').style.display !== 'none'){
+        backToItemHistory();
+      }
+      runItemHistory();
+    },
+  });
 }
 
 async function runItemHistory(){
@@ -56,6 +88,7 @@ async function runItemHistory(){
   if(sku) qs.push(`skuCode=${encodeURIComponent(sku)}`);
   if(lot) qs.push(`lotNumber=${encodeURIComponent(lot)}`);
   if(_reportsClient) qs.push(`clientId=${encodeURIComponent(_reportsClient)}`);
+  if(_reportsCustomer) qs.push(`customerName=${encodeURIComponent(_reportsCustomer)}`);
   url += qs.join('&');
 
   document.getElementById('itemHistoryEmpty').style.display = 'block';
@@ -178,7 +211,8 @@ async function openTraceFromItem(ctx){
     // No lot — show all LPs whose number contains the SKU code (heuristic)
     url = `/reports/trace?lpNumber=${encodeURIComponent(ctx.skuCode)}`;
   }
-  if(_reportsClient) url += `&clientId=${encodeURIComponent(_reportsClient)}`;
+  if(_reportsClient)   url += `&clientId=${encodeURIComponent(_reportsClient)}`;
+  if(_reportsCustomer) url += `&customerName=${encodeURIComponent(_reportsCustomer)}`;
 
   const data = await apiGet(url);
   if(!data){
@@ -207,7 +241,8 @@ async function runManualTrace(){
   document.getElementById('traceEmptyState').textContent = 'Loading…';
 
   let url = `/reports/trace?lpNumber=${encodeURIComponent(lp)}`;
-  if(_reportsClient) url += `&clientId=${encodeURIComponent(_reportsClient)}`;
+  if(_reportsClient)   url += `&clientId=${encodeURIComponent(_reportsClient)}`;
+  if(_reportsCustomer) url += `&customerName=${encodeURIComponent(_reportsCustomer)}`;
   const data = await apiGet(url);
   if(!data){ err.textContent = 'Trace failed'; return; }
   _traceData = data;
