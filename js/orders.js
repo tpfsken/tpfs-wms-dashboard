@@ -106,17 +106,29 @@ async function openOrderDetail(id){
 
   const tr = await apiGet(`/orders/${id}/valid-transitions`);
   const transBtns = document.getElementById('ordTransitionBtns');
+  // Ship Order is its own action — collapses PACKING/PACKED → SHIPPED in one
+  // step. Show it prominently when the order is ready to ship.
+  const canShip = ['PICKED', 'PACKED'].includes(d.status);
+  let html = '';
+  if(canShip){
+    html += `<button class="btn btn-success js-ship-btn" style="margin:0 8px 8px 0;">📦 Ship Order</button>`;
+  }
   if(tr?.allowed?.length){
-    transBtns.innerHTML = tr.allowed.map(t =>
+    html += tr.allowed.map(t =>
       `<button class="btn ${t === 'CANCELLED' ? 'btn-danger' : 'btn-primary'} js-trans-btn"
                data-target="${esc(t)}" style="margin:0 8px 8px 0;">${t === 'CANCELLED' ? 'Cancel' : '→ ' + esc(t)}</button>`
     ).join('');
-    transBtns.querySelectorAll('.js-trans-btn').forEach(btn =>
-      btn.addEventListener('click', () => transitionOrder(id, btn.dataset.target))
-    );
-  } else {
-    transBtns.innerHTML = '<div style="color:var(--muted);font-size:13px;">Terminal state</div>';
   }
+  if(!html){
+    html = '<div style="color:var(--muted);font-size:13px;">Terminal state</div>';
+  }
+  transBtns.innerHTML = html;
+  transBtns.querySelectorAll('.js-trans-btn').forEach(btn =>
+    btn.addEventListener('click', () => transitionOrder(id, btn.dataset.target))
+  );
+  transBtns.querySelectorAll('.js-ship-btn').forEach(btn =>
+    btn.addEventListener('click', () => showShipOrderModal())
+  );
 
   const shipTo = `
     <div style="font-weight:600;font-size:15px;margin-bottom:6px;">${esc(d.ship_to_name || d.customer_name || '—')}</div>
@@ -251,6 +263,91 @@ function renderPickList(d, isPickable){
   const completeBtn = document.getElementById('pickListComplete');
   completeBtn.style.display = allDone ? 'inline-flex' : 'none';
   completeBtn.onclick = () => transitionOrder(d.id, 'PICKED');
+}
+
+// =============================================================================
+// SHIP ORDER (Phase 1E.basic)
+// =============================================================================
+
+function showShipOrderModal(){
+  if(!COI || !COD) return;
+  const m = document.getElementById('shipOrderModal');
+  m.style.display = 'flex'; m.style.zIndex = '10000';
+
+  // Reset fields
+  document.getElementById('shipServiceLevel').value = '';
+  document.getElementById('shipTracking').value = '';
+  document.getElementById('shipWeight').value = '';
+  document.getElementById('shipLength').value = '';
+  document.getElementById('shipWidth').value = '';
+  document.getElementById('shipHeight').value = '';
+  document.getElementById('shipCost').value = '';
+  document.getElementById('shipNotes').value = '';
+  document.getElementById('shipOrderError').textContent = '';
+  document.getElementById('shipOrderSuccess').textContent = '';
+  document.getElementById('shipOrderSubmitBtn').disabled = false;
+
+  // Carrier combo — defaults from existing carrier_code on the order if any.
+  initCombo('shipCarrierWrap', [
+    {value:'UPS',   label:'UPS'},
+    {value:'FEDEX', label:'FedEx'},
+    {value:'USPS',  label:'USPS'},
+    {value:'DHL',   label:'DHL'},
+    {value:'LTL',   label:'LTL Carrier'},
+    {value:'OTHER', label:'Other'},
+  ], {
+    placeholder: 'Select carrier...',
+    value:       COD.carrier_code || '',
+    allowCustom: true,
+  });
+
+  // Pre-fill fields from order if known
+  if(COD.ship_method){
+    document.getElementById('shipServiceLevel').value = COD.ship_method;
+  }
+  document.getElementById('shipOrderSub').textContent =
+    `Ship order ${COD.order_number || ''} (${COD.client_name || ''}) — confirms physical shipment, decrements inventory, fires billing charge.`;
+}
+
+async function submitShipOrder(){
+  if(!COI) return;
+  const err = document.getElementById('shipOrderError');
+  const suc = document.getElementById('shipOrderSuccess');
+  err.textContent = ''; suc.textContent = '';
+  const btn = document.getElementById('shipOrderSubmitBtn');
+
+  const carrierCode = cbVal('shipCarrierWrap');
+  if(!carrierCode){ err.textContent = 'Select a carrier'; return; }
+
+  btn.disabled = true;
+  try {
+    const r = await fetch(`${API}/orders/${COI}/ship`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+      body: JSON.stringify({
+        carrierCode,
+        serviceLevel:   document.getElementById('shipServiceLevel').value || null,
+        trackingNumber: document.getElementById('shipTracking').value     || null,
+        weightLbs:      parseFloat(document.getElementById('shipWeight').value) || null,
+        lengthIn:       parseFloat(document.getElementById('shipLength').value) || null,
+        widthIn:        parseFloat(document.getElementById('shipWidth').value)  || null,
+        heightIn:       parseFloat(document.getElementById('shipHeight').value) || null,
+        shipCost:       parseFloat(document.getElementById('shipCost').value)   || null,
+        notes:          document.getElementById('shipNotes').value || null,
+      }),
+    });
+    const d = await r.json();
+    if(!r.ok){ err.textContent = d.error || 'Ship failed'; btn.disabled = false; return; }
+
+    suc.textContent = `Shipped — ${d.shipmentNumber}${d.billingCharge ? ` · billing ${fmtDollars(d.billingCharge.totalAmount)}` : ''}`;
+    setTimeout(() => {
+      closeModal('shipOrderModal');
+      openOrderDetail(COI);
+    }, 1200);
+  } catch(e){
+    err.textContent = 'Network error';
+    btn.disabled = false;
+  }
 }
 
 async function confirmPickAllocation(orderId, allocationId, quantity, btn){
