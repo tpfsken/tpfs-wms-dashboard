@@ -252,57 +252,98 @@
   </div>
   <div class="page" id="page-reports">
     <div class="page-header">
-      <div><div class="page-title">Reports</div><div class="page-subtitle">Lot recall &amp; traceability</div></div>
+      <div><div class="page-title">Reports</div><div class="page-subtitle">LP traceability &amp; recall</div></div>
     </div>
 
     <div class="card">
       <div class="card-head">
-        <div class="card-title">🔎 Lot Recall</div>
+        <div class="card-title">🔎 Trace — Follow an LP from start to finish</div>
         <div style="flex:1"></div>
-        <div style="font-size:12px;color:var(--muted);">Phase 9.16 · query a lot # → every customer that received it</div>
+        <div style="font-size:12px;color:var(--muted);">Phase 9.16/9.17 · LP family + receiving + ship-to + timeline</div>
       </div>
       <div style="padding:20px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;">
-        <div class="form-group" style="margin-bottom:0;flex:1;min-width:240px;max-width:480px;">
-          <label class="form-label">Lot Number</label>
-          <input type="text" class="form-input" id="recallSearch" placeholder="Type a lot # (partial OK — e.g. L2024)" onkeydown="if(event.key==='Enter')runRecallReport()">
+        <div class="form-group" style="margin-bottom:0;flex:1;min-width:260px;max-width:520px;">
+          <label class="form-label">License Plate # or Lot #</label>
+          <input type="text" class="form-input" id="traceSearch" placeholder="LP-2026-00012 or L2024-04 (partial OK)" onkeydown="if(event.key==='Enter')runTrace()">
         </div>
-        <button class="btn btn-primary" onclick="runRecallReport()">Run Recall Search</button>
+        <div class="form-group" style="margin-bottom:0;display:flex;gap:12px;align-items:center;font-size:13px;color:var(--text2);">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="traceMode" value="auto" checked> auto</label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="traceMode" value="lp"> LP</label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="traceMode" value="lot"> Lot</label>
+        </div>
+        <button class="btn btn-primary" onclick="runTrace()">Run Trace</button>
         <div style="flex:1"></div>
         <button class="btn btn-ghost" onclick="exportRecallCsv()">⬇ Export CSV</button>
       </div>
-      <div id="recallError" style="color:var(--red);font-size:13px;padding:0 20px 12px;"></div>
+      <div id="traceError" style="color:var(--red);font-size:13px;padding:0 20px 12px;"></div>
     </div>
 
-    <div id="recallEmptyState" class="card" style="padding:40px;text-align:center;color:var(--muted);font-size:14px;">
-      Enter a lot number above and run a recall search to see every order, customer, and shipment that received it.
+    <div id="traceEmptyState" class="card" style="padding:40px;text-align:center;color:var(--muted);font-size:14px;">
+      Enter an LP or lot number above and run a trace to see the full chain — receiving, case breaks, picks, and shipments.
     </div>
 
-    <div id="recallResultsCard" class="card" style="display:none;">
-      <div class="card-head"><div class="card-title">Recall Results</div></div>
-      <div class="grid-3" style="grid-template-columns:repeat(6, 1fr);gap:0;border-bottom:1px solid var(--border);">
-        <div style="padding:16px 20px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Allocations</div><div style="font-size:22px;font-weight:700;color:var(--blue);" id="recallSumAllocations">0</div></div>
-        <div style="padding:16px 20px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Total Qty</div><div style="font-size:22px;font-weight:700;" id="recallSumQty">0</div></div>
-        <div style="padding:16px 20px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Orders</div><div style="font-size:22px;font-weight:700;color:var(--green);" id="recallSumOrders">0</div></div>
-        <div style="padding:16px 20px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Customers</div><div style="font-size:22px;font-weight:700;color:var(--amber);" id="recallSumCustomers">0</div></div>
-        <div style="padding:16px 20px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Clients</div><div style="font-size:22px;font-weight:700;color:var(--purple);" id="recallSumClients">0</div></div>
-        <div style="padding:16px 20px;"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Lots Matched</div><div style="font-size:22px;font-weight:700;" id="recallSumLots">0</div></div>
+    <div id="traceResults" style="display:none;">
+      <!-- Summary tiles -->
+      <div class="card">
+        <div class="grid-3" style="grid-template-columns:repeat(6, 1fr);gap:0;">
+          <div style="padding:16px 20px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">LP Family</div><div style="font-size:22px;font-weight:700;color:var(--blue);" id="traceSumFamily">0</div><div style="font-size:11px;color:var(--text2);" id="traceSumOrigCh">0 orig · 0 child</div></div>
+          <div style="padding:16px 20px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Total Qty</div><div style="font-size:22px;font-weight:700;" id="traceSumQty">0</div></div>
+          <div style="padding:16px 20px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Orders</div><div style="font-size:22px;font-weight:700;color:var(--green);" id="traceSumOrders">0</div></div>
+          <div style="padding:16px 20px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Customers</div><div style="font-size:22px;font-weight:700;color:var(--amber);" id="traceSumCustomers">0</div></div>
+          <div style="padding:16px 20px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Receipts</div><div style="font-size:22px;font-weight:700;color:var(--purple);" id="traceSumReceiving">0</div></div>
+          <div style="padding:16px 20px;"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Events</div><div style="font-size:22px;font-weight:700;" id="traceSumEvents">0</div></div>
+        </div>
       </div>
-      <div style="overflow:auto;">
-        <table class="data-table">
-          <thead><tr>
-            <th>Order #</th>
-            <th>Client</th>
-            <th>Customer</th>
-            <th>Ship To</th>
-            <th>SKU</th>
-            <th>Lot</th>
-            <th class="right">Qty</th>
-            <th>Shipped</th>
-            <th>Shipment / Tracking</th>
-            <th>Status</th>
-          </tr></thead>
-          <tbody id="recallBody"></tbody>
-        </table>
+
+      <!-- LP family -->
+      <div id="lpFamilyCard" class="card" style="margin-top:16px;">
+        <div class="card-head"><div class="card-title">📦 LP Family</div><div style="flex:1"></div><div style="font-size:11px;color:var(--muted);">parent → children, indented by case-break lineage</div></div>
+        <div style="overflow:auto;">
+          <table class="data-table">
+            <thead><tr><th>LP</th><th>SKU</th><th>Lot</th><th>Location</th><th class="right">Qty</th><th>Status</th><th>Received</th></tr></thead>
+            <tbody id="lpFamilyBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Receiving — where it came from -->
+      <div id="traceReceivingCard" class="card" style="margin-top:16px;">
+        <div class="card-head"><div class="card-title">📥 Where It Came From</div><div style="flex:1"></div><div style="font-size:11px;color:var(--muted);">PO / receipt for every original LP in the family</div></div>
+        <div style="overflow:auto;">
+          <table class="data-table">
+            <thead><tr><th>PO #</th><th>Supplier</th><th class="right">Received Qty</th><th>Condition</th><th>Received By</th><th>When</th></tr></thead>
+            <tbody id="traceReceivingBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Allocations — where pieces went -->
+      <div id="traceAllocCard" class="card" style="margin-top:16px;">
+        <div class="card-head"><div class="card-title">📤 Where It Went</div><div style="flex:1"></div><div style="font-size:11px;color:var(--muted);">every allocation → customer / order / shipment</div></div>
+        <div style="overflow:auto;">
+          <table class="data-table">
+            <thead><tr>
+              <th>LP</th>
+              <th>Order #</th>
+              <th>Client</th>
+              <th>Customer</th>
+              <th>Ship To</th>
+              <th>SKU</th>
+              <th>Lot</th>
+              <th class="right">Qty</th>
+              <th>Shipped</th>
+              <th>Shipment / Tracking</th>
+              <th>Status</th>
+            </tr></thead>
+            <tbody id="traceAllocBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Timeline — chronological events -->
+      <div id="traceTimelineCard" class="card" style="margin-top:16px;">
+        <div class="card-head"><div class="card-title">⏱ Timeline</div><div style="flex:1"></div><div style="font-size:11px;color:var(--muted);">every receive / case_break / pick / ship event for the LP family</div></div>
+        <div id="traceTimelineList" style="max-height:520px;overflow-y:auto;"></div>
       </div>
     </div>
   </div>
