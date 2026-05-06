@@ -9,20 +9,23 @@ let billingClient  = null;        // currently drilled-down client {id, name, co
 let billingCharges = [];          // charges for drilled client/period
 let billingRates   = [];          // active rates for drilled client
 
+// These match the billing_rates_rate_type_check constraint in the DB.
 const RATE_TYPE_OPTIONS = [
-  {value:'PICK_EACH',         label:'Pick — Each',           uom:'pick'},
-  {value:'PICK_CASE',         label:'Pick — Case',           uom:'pick'},
-  {value:'PICK_PALLET',       label:'Pick — Pallet',         uom:'pick'},
-  {value:'PALLET_SHIPPED',    label:'Pallet Shipped',        uom:'pallet'},
-  {value:'STORAGE_PALLET_DAY',label:'Storage — Pallet/Day',  uom:'day'},
-  {value:'STORAGE_BIN_DAY',   label:'Storage — Bin/Day',     uom:'day'},
-  {value:'INBOUND_PALLET',    label:'Inbound — Pallet',      uom:'pallet'},
-  {value:'INBOUND_CASE',      label:'Inbound — Case',        uom:'case'},
-  {value:'INBOUND_CONTAINER', label:'Inbound — Container',   uom:'container'},
-  {value:'HAZMAT',            label:'Hazmat Surcharge',      uom:'unit'},
-  {value:'FRAGILE',           label:'Fragile Handling',      uom:'unit'},
-  {value:'OVERSIZE',          label:'Oversize Surcharge',    uom:'unit'},
-  {value:'EXPEDITE',          label:'Expedited Handling',    uom:'unit'},
+  {value:'PICK_FEE',          label:'Pick Fee — Each',       uom:'pick'},
+  {value:'CASE_PICK_FEE',     label:'Pick Fee — Case',       uom:'pick'},
+  {value:'PALLET_OUT',        label:'Pallet Out (whole)',    uom:'pallet'},
+  {value:'PALLET_IN',         label:'Pallet In (receive)',   uom:'pallet'},
+  {value:'HANDLING_INBOUND',  label:'Handling — Inbound',    uom:'unit'},
+  {value:'HANDLING_OUTBOUND', label:'Handling — Outbound',   uom:'unit'},
+  {value:'STORAGE_PALLET',    label:'Storage — Pallet',      uom:'pallet/day'},
+  {value:'STORAGE_BIN',       label:'Storage — Bin',         uom:'bin/day'},
+  {value:'STORAGE_SQFT',      label:'Storage — SqFt',        uom:'sqft/day'},
+  {value:'LABEL_FEE',         label:'Label Fee',             uom:'label'},
+  {value:'KITTING',           label:'Kitting',               uom:'kit'},
+  {value:'VALUE_ADDED',       label:'Value-Added Service',   uom:'unit'},
+  {value:'SPECIAL_PROJECT',   label:'Special Project',       uom:'hour'},
+  {value:'MINIMUM_MONTHLY',   label:'Minimum Monthly',       uom:'month'},
+  {value:'OTHER',             label:'Other',                 uom:'unit'},
 ];
 
 function defaultPeriod(){
@@ -177,8 +180,8 @@ function showRateCardModal(){
   document.getElementById('rcModalError').textContent = '';
 
   const rates = (billingRates || []).slice();
-  if(!rates.find(r => r.rate_type === 'PICK_EACH')){
-    rates.push({rate_name:'Standard Each Pick', rate_type:'PICK_EACH', rate_amount:0.50, uom:'pick'});
+  if(!rates.find(r => r.rate_type === 'PICK_FEE')){
+    rates.push({rate_name:'Standard Pick Fee', rate_type:'PICK_FEE', rate_amount:0.50, uom:'pick'});
   }
   renderRateRows(rates);
 }
@@ -250,7 +253,7 @@ function collectRateRows(){
 
 function addRateRow(){
   const cur = collectRateRows();
-  cur.push({rate_name:'', rate_type:'PICK_EACH', rate_amount:0, uom:'pick'});
+  cur.push({rate_name:'', rate_type:'PICK_FEE', rate_amount:0, uom:'pick'});
   renderRateRows(cur);
 }
 
