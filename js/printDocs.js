@@ -141,10 +141,53 @@ function _openDocWindow(html) {
 // =============================================================================
 
 function renderPickSlip(order) {
+  // Prefer allocations (post-allocate, with location + LP + lot detail).
+  // Fall back to order lines (pre-allocate "pre-pick" list — picker
+  // still sees what to pull, just without specific location/LP).
   const allocs = (order.allocations || []).filter(a => a.status !== 'CANCELLED');
-  const totalUnits = allocs.reduce((s, a) => s + (Number(a.quantity) || 0), 0);
+  const lines  = order.lines || [];
+  const usingAllocs = allocs.length > 0;
+  const rows = usingAllocs
+    ? allocs.map(a => ({
+        location:    a.location_code,
+        lp:          a.lp_number,
+        sku_code:    a.sku_code,
+        sku_name:    a.sku_name,
+        lot_number:  a.lot_number,
+        expiry_date: a.expiry_date,
+        quantity:    a.quantity,
+        uom:         a.uom || 'EA',
+        is_hazmat:   a.is_hazmat,
+        un_number:   a.un_number,
+        special_handling_instructions: a.special_handling_instructions,
+      }))
+    : lines.map(l => ({
+        location:    null,
+        lp:          null,
+        sku_code:    l.sku_code,
+        sku_name:    l.sku_name,
+        // order line may carry the customer's requested lot if portal
+        // captured one; otherwise blank — TBD by allocation.
+        lot_number:  l.lot_number || null,
+        expiry_date: null,
+        quantity:    l.ordered_qty,
+        uom:         l.sku_uom || l.uom || 'EA',
+        is_hazmat:   l.is_hazmat,
+        un_number:   l.un_number,
+        special_handling_instructions: l.special_handling_instructions,
+      }));
+  const totalUnits = rows.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
 
-  const linesHtml = allocs.length
+  // Sub-banner explaining the pick slip's state — picker should know if
+  // they're getting a pre-pick (no locations yet) vs the real one.
+  const stateBanner = !usingAllocs && rows.length
+    ? `<div style="background:#fff3cd;border-left:4px solid #ec5;padding:8px 12px;margin:8px 0;font-size:11px;color:#6b3a05;">
+         <strong>PRE-PICK LIST (not yet allocated).</strong>
+         Locations, license plates, and final lots will be assigned when this order is allocated.
+       </div>`
+    : '';
+
+  const linesHtml = rows.length
     ? `<table>
         <thead>
           <tr>
@@ -161,38 +204,41 @@ function renderPickSlip(order) {
           </tr>
         </thead>
         <tbody>
-          ${allocs.map((a, i) => {
-            const hazBadge = a.is_hazmat
-              ? `<span class="hazmat-badge">⚠ HAZMAT${a.un_number ? ' ' + _esc(a.un_number) : ''}</span> `
+          ${rows.map((r, i) => {
+            const hazBadge = r.is_hazmat
+              ? `<span class="hazmat-badge">⚠ HAZMAT${r.un_number ? ' ' + _esc(r.un_number) : ''}</span> `
               : '';
-            const handling = a.special_handling_instructions
-              ? `<div class="handling-note">📋 ${_esc(a.special_handling_instructions)}</div>`
+            const handling = r.special_handling_instructions
+              ? `<div class="handling-note">📋 ${_esc(r.special_handling_instructions)}</div>`
               : '';
-            const exp = a.expiry_date
-              ? new Date(a.expiry_date).toLocaleDateString()
+            const exp = r.expiry_date
+              ? new Date(r.expiry_date).toLocaleDateString()
               : '—';
             return `
               <tr>
                 <td class="center">☐</td>
                 <td class="center mono">${i + 1}</td>
-                <td class="mono"><strong>${_esc(a.location_code || '—')}</strong></td>
-                <td class="mono">${_esc(a.lp_number || '—')}</td>
-                <td class="mono">${_esc(a.sku_code || '')}</td>
-                <td>${hazBadge}${_esc(a.sku_name || '')}${handling}</td>
-                <td class="mono">${_esc(a.lot_number || '—')}</td>
+                <td class="mono"><strong>${r.location ? _esc(r.location) : '<span style="color:#999;">TBD</span>'}</strong></td>
+                <td class="mono">${r.lp ? _esc(r.lp) : '<span style="color:#999;">TBD</span>'}</td>
+                <td class="mono">${_esc(r.sku_code || '')}</td>
+                <td>${hazBadge}${_esc(r.sku_name || '')}${handling}</td>
+                <td class="mono">${_esc(r.lot_number || '—')}</td>
                 <td>${_esc(exp)}</td>
-                <td class="right mono"><strong>${_esc(a.quantity || 0)}</strong></td>
-                <td>${_esc(a.uom || 'EA')}</td>
+                <td class="right mono"><strong>${_esc(r.quantity || 0)}</strong></td>
+                <td>${_esc(r.uom || 'EA')}</td>
               </tr>`;
           }).join('')}
         </tbody>
       </table>`
-    : '<p><em>No allocations on this order yet.</em></p>';
+    : '<p><em>No items on this order.</em></p>';
 
-  const hazAny = allocs.some(a => a.is_hazmat);
+  const hazAny = rows.some(r => r.is_hazmat);
   const hazBanner = hazAny
     ? `<div class="hazmat-banner">⚠ This order contains HAZARDOUS MATERIALS. Follow all special handling instructions below. Verify outer packaging meets DOT requirements before staging.</div>`
     : '';
+
+  const itemsLabel = usingAllocs ? 'pick' : 'line';
+  const itemsCount = rows.length;
 
   const body = `
     <h1>Pick Slip — ${_esc(order.order_number || '')}</h1>
@@ -201,6 +247,7 @@ function renderPickSlip(order) {
       Created ${_esc(new Date(order.created_at).toLocaleString())} ·
       Status <strong>${_esc(order.status || '')}</strong>
     </div>
+    ${stateBanner}
     ${hazBanner}
     <div class="meta-grid">
       <div class="meta-block">
@@ -214,7 +261,7 @@ function renderPickSlip(order) {
         <div><strong>Channel:</strong> ${_esc(order.channel || '—')}</div>
         <div><strong>Carrier:</strong> ${_esc(order.carrier_code || '—')} / ${_esc(order.ship_method || '—')}</div>
         <div><strong>Required Ship Date:</strong> ${order.required_ship_date ? _esc(new Date(order.required_ship_date).toLocaleDateString()) : '—'}</div>
-        <div><strong>Total Units:</strong> ${_esc(totalUnits.toLocaleString())} across ${_esc(allocs.length)} pick${allocs.length === 1 ? '' : 's'}</div>
+        <div><strong>Total Units:</strong> ${_esc(totalUnits.toLocaleString())} across ${_esc(itemsCount)} ${_esc(itemsLabel)}${itemsCount === 1 ? '' : 's'}</div>
       </div>
     </div>
     ${linesHtml}
