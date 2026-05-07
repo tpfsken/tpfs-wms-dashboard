@@ -1055,20 +1055,16 @@
           <span style="font-size:12px;color:var(--text2);">Items under this client will require UN #, packing group, and hazard class</span>
         </div>
         <div id="cfHazmatBlock" style="display:none;margin-top:14px;padding:14px;background:var(--bg);border-radius:8px;border:1px solid var(--amber);">
-          <div style="font-size:12px;color:var(--amber);font-weight:600;margin-bottom:10px;">⚠ HAZMAT DEFAULTS</div>
-          <div class="form-row form-row-2">
-            <div class="form-group"><label class="form-label">Default Hazard Class</label><input class="form-input" id="cfHazClass" placeholder="e.g. 1.4G, 9, 3"></div>
-            <div class="form-group"><label class="form-label">Default Packing Group</label><input class="form-input" id="cfHazPackingGroup" placeholder="I, II, or III"></div>
+          <div style="font-size:12px;color:var(--amber);font-weight:600;margin-bottom:6px;">⚠ HAZMAT — CLIENT-LEVEL CONTACT</div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Hazard class, packing group, and UN # vary by item — they're set per SKU. Only the emergency contact + notes belong to the client.</div>
+          <div class="form-group">
+            <label class="form-label">Emergency Contact (24-hour phone) *</label>
+            <input class="form-input" id="cfHazEmergency" placeholder="e.g. CHEMTREC 1-800-424-9300, or in-house 24-hr line">
           </div>
-          <div class="form-row form-row-2">
-            <div class="form-group"><label class="form-label">Shipper ID (DOT #)</label><input class="form-input" id="cfHazShipperId"></div>
-            <div class="form-group"><label class="form-label">Emergency Contact</label><input class="form-input" id="cfHazEmergency" placeholder="24-hour phone"></div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">Hazmat Notes</label>
+            <textarea class="form-input" id="cfHazNotes" rows="3" placeholder="Anything the floor needs to know — contract, broker, special handling..."></textarea>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;font-size:13px;">
-            <input type="checkbox" id="cfHazGround" style="width:16px;height:16px;">
-            <label for="cfHazGround">Ground-only — no air shipments</label>
-          </div>
-          <div class="form-group" style="margin-top:10px;margin-bottom:0;"><label class="form-label">Notes</label><textarea class="form-input" id="cfHazNotes" rows="2"></textarea></div>
         </div>
       </div>
 

@@ -144,25 +144,25 @@ function renderClientProfileTab(){
     row('Onboarded',      c.onboarded_at ? new Date(c.onboarded_at).toLocaleDateString() : null) +
     row('Status',         c.is_active ? 'Active' : 'Inactive');
 
-  // Hazmat panel — show when toggled on, render whatever's saved in
-  // hazmat_config (any keys we recognise).
+  // Hazmat panel — show when toggled on. Per-item info (UN #, hazard
+  // class, packing group) lives on the SKU; only the emergency
+  // contact + notes are stored at the client level.
   const hazPanel = document.getElementById('cliHazmatPanel');
   if(c.hazmat_enabled){
     hazPanel.style.display = 'block';
     const hc = c.hazmat_config || {};
     const fields = [
-      ['Default Hazard Class', hc.hazard_class],
-      ['Default Packing Group', hc.packing_group],
-      ['Shipper ID (DOT #)',    hc.shipper_id],
-      ['Emergency Contact',     hc.emergency_contact],
-      ['Ground-Only',           hc.ground_only ? 'Yes — no air shipments' : 'No'],
-      ['Notes',                 hc.notes],
+      ['Emergency Contact', hc.emergency_contact],
+      ['Notes',             hc.notes],
     ];
     document.getElementById('cliHazmatBody').innerHTML = fields.map(([l, v]) => `
       <div style="display:grid;grid-template-columns:200px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
         <div style="color:var(--text2);font-weight:600;">${esc(l)}</div>
         <div>${esc(v ?? '—')}</div>
-      </div>`).join('');
+      </div>`).join('') + `
+      <div style="margin-top:14px;padding:10px 14px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text2);">
+        Per-item hazmat fields (UN #, hazard class, packing group, ground-only flag) are set on each SKU. Items added under this client require those fields.
+      </div>`;
   } else {
     hazPanel.style.display = 'none';
   }
@@ -198,12 +198,8 @@ function openClientFormModal(client){
   document.getElementById('cfHazmat').checked     = !!client?.hazmat_enabled;
 
   const hc = client?.hazmat_config || {};
-  document.getElementById('cfHazClass').value         = hc.hazard_class       || '';
-  document.getElementById('cfHazPackingGroup').value  = hc.packing_group      || '';
-  document.getElementById('cfHazShipperId').value     = hc.shipper_id         || '';
-  document.getElementById('cfHazEmergency').value     = hc.emergency_contact  || '';
-  document.getElementById('cfHazGround').checked      = !!hc.ground_only;
-  document.getElementById('cfHazNotes').value         = hc.notes              || '';
+  document.getElementById('cfHazEmergency').value = hc.emergency_contact || '';
+  document.getElementById('cfHazNotes').value     = hc.notes             || '';
 
   // Set the type toggle
   setClientFormType(client?.client_type || 'B2B');
@@ -255,14 +251,12 @@ async function submitClientForm(){
   if(!body.code) { err.textContent = 'Client code is required'; return; }
   if(!body.name) { err.textContent = 'Client name is required'; return; }
 
-  // Build hazmat_config only when hazmat is on
+  // Build hazmat_config only when hazmat is on. Per-item info (UN #,
+  // hazard class, packing group) is set on the SKU, not here — only
+  // the emergency contact + notes belong on the client record.
   if(body.hazmat_enabled){
     body.hazmat_config = {
-      hazard_class:      document.getElementById('cfHazClass').value.trim() || null,
-      packing_group:     document.getElementById('cfHazPackingGroup').value.trim() || null,
-      shipper_id:        document.getElementById('cfHazShipperId').value.trim() || null,
       emergency_contact: document.getElementById('cfHazEmergency').value.trim() || null,
-      ground_only:       document.getElementById('cfHazGround').checked,
       notes:             document.getElementById('cfHazNotes').value.trim() || null,
     };
   } else {
