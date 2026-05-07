@@ -471,14 +471,15 @@ async function loadClientPerformanceTab(){
   const body = document.getElementById('cliPerformanceBody');
   body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px;">Loading…</div>';
 
-  const d = await apiGet(`/clients/${_currentClient.id}/performance`);
+  // Two parallel fetches — performance metrics + SLA rules — so the
+  // Current Performance tab shows both sides of the SLA at once
+  // (measurable targets above, rule-based fees below).
+  const [d, rules] = await Promise.all([
+    apiGet(`/clients/${_currentClient.id}/performance`),
+    apiGet(`/clients/${_currentClient.id}/sla-rules`),
+  ]);
   if(!d){
     body.innerHTML = '<div style="color:var(--red);padding:20px;">Could not load performance data</div>';
-    return;
-  }
-
-  if(!d.items?.length){
-    body.innerHTML = '<div class="empty-state" style="padding:24px;">No metrics enabled — enable some on the KPI / SLA Settings tab</div>';
     return;
   }
 
@@ -490,8 +491,10 @@ async function loadClientPerformanceTab(){
                           : '<span class="chip chip-new">Info</span>';
   const valColor = (s) => s === 'good' ? 'var(--green)' : s === 'warn' ? 'var(--amber)' : s === 'breach' ? 'var(--red)' : 'var(--text)';
 
-  body.innerHTML = `
-    <table class="data-table" style="margin:0;">
+  // Top section — measurable targets
+  const targetsHtml = d.items?.length ? `
+    <div style="font-size:12px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;color:var(--text2);margin-bottom:8px;">Measured KPIs</div>
+    <table class="data-table" style="margin:0 0 24px 0;">
       <thead>
         <tr>
           <th>Metric</th>
@@ -511,7 +514,42 @@ async function loadClientPerformanceTab(){
             <td>${statusChip(it.status)}</td>
           </tr>`).join('')}
       </tbody>
-    </table>`;
+    </table>` : '<div class="empty-state" style="padding:14px 0;">No metrics enabled — enable some on the KPI / SLA Targets tab</div>';
+
+  // Bottom section — operational rules + exception fees
+  const rulesHtml = rules?.length ? `
+    <div style="font-size:12px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;color:var(--text2);margin-bottom:8px;">SLA Rules &amp; Exception Fees</div>
+    <table class="data-table" style="margin:0;">
+      <thead>
+        <tr>
+          <th>Rule</th>
+          <th>Value</th>
+          <th>Exception</th>
+          <th class="right">Fee</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rules.map(r => {
+          const value = r.rule_value
+            ? `${esc(r.rule_value)}${r.unit ? ' ' + esc(r.unit) : ''}`
+            : '<span style="color:var(--muted);">—</span>';
+          const fee = r.exception_charge_amount != null
+            ? `$${Number(r.exception_charge_amount).toFixed(2)}`
+            : '<span style="color:var(--muted);">—</span>';
+          return `
+            <tr>
+              <td style="font-weight:600;">${esc(r.rule_label || '')}</td>
+              <td style="color:var(--blue);font-weight:600;">${value}</td>
+              <td style="color:var(--text2);">${esc(r.exception_charge_label || '—')}</td>
+              <td class="right" style="font-weight:700;color:${r.exception_charge_amount != null ? 'var(--amber)' : 'var(--muted)'};">${fee}</td>
+              <td style="color:var(--text2);font-size:12px;">${esc(r.notes || '')}</td>
+            </tr>`;
+        }).join('')}
+      </tbody>
+    </table>` : '';
+
+  body.innerHTML = targetsHtml + rulesHtml;
 }
 
 // =============================================================================
@@ -575,6 +613,9 @@ function renderSlaRulePresets(){
         id: null, rule_key: preset.key, rule_label: preset.label,
         rule_value: '', unit: preset.unit, notes: '', _draft: true,
         _placeholder: preset.placeholder,
+        // Pre-fill the exception charge label so ops just types the dollar amount.
+        exception_charge_label: preset.default_charge_label || '',
+        exception_charge_amount: null,
       });
       renderSlaRulePresets();
       renderSlaRulesBody();
@@ -588,6 +629,7 @@ function addCustomSlaRule(){
   _slaRules.push({
     id: null, rule_key: key, rule_label: '', rule_value: '',
     unit: '', notes: '', _draft: true, _custom: true,
+    exception_charge_label: '', exception_charge_amount: null,
   });
   renderSlaRulesBody();
 }
@@ -600,14 +642,19 @@ function renderSlaRulesBody(){
   }
 
   body.innerHTML = `
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">
+      Charges are billed when an order falls outside the SLA. They become billing_charges automatically (next phase) — for now they're recorded so the SLA doc shows the rate.
+    </div>
     <table class="data-table" style="margin:0;">
       <thead>
         <tr>
-          <th style="width:30%;">Rule</th>
-          <th style="width:25%;">Value</th>
-          <th style="width:15%;">Unit</th>
+          <th style="width:22%;">Rule</th>
+          <th style="width:14%;">Value</th>
+          <th style="width:10%;">Unit</th>
+          <th style="width:18%;">Exception Charge</th>
+          <th style="width:14%;" class="right">Charge $</th>
           <th>Notes</th>
-          <th style="width:160px;text-align:right;">Actions</th>
+          <th style="width:140px;text-align:right;">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -631,11 +678,23 @@ function renderSlaRulesBody(){
                        style="width:100%;padding:6px 8px;font-size:13px;">
               </td>
               <td>
+                <input class="form-input js-sla-charge-label" data-idx="${esc(i)}"
+                       value="${esc(r.exception_charge_label || '')}"
+                       placeholder="e.g. Rush Fee"
+                       style="width:100%;padding:6px 8px;font-size:13px;">
+              </td>
+              <td>
+                <input type="number" step="0.01" min="0" class="form-input js-sla-charge-amount" data-idx="${esc(i)}"
+                       value="${r.exception_charge_amount == null ? '' : esc(r.exception_charge_amount)}"
+                       placeholder="0.00"
+                       style="width:100%;padding:6px 8px;font-size:13px;text-align:right;">
+              </td>
+              <td>
                 <input class="form-input js-sla-notes" data-idx="${esc(i)}"
                        value="${esc(r.notes || '')}"
                        style="width:100%;padding:6px 8px;font-size:13px;">
               </td>
-              <td style="text-align:right;">
+              <td style="text-align:right;white-space:nowrap;">
                 <button class="btn btn-primary js-sla-save" data-idx="${esc(i)}"
                         style="padding:4px 12px;font-size:12px;">${draft ? 'Save' : 'Update'}</button>
                 <button class="btn btn-ghost js-sla-rm" data-idx="${esc(i)}"
@@ -655,6 +714,12 @@ function renderSlaRulesBody(){
     _slaRules[parseInt(e.target.dataset.idx)].unit = e.target.value));
   body.querySelectorAll('.js-sla-notes').forEach(inp => inp.addEventListener('input', e =>
     _slaRules[parseInt(e.target.dataset.idx)].notes = e.target.value));
+  body.querySelectorAll('.js-sla-charge-label').forEach(inp => inp.addEventListener('input', e =>
+    _slaRules[parseInt(e.target.dataset.idx)].exception_charge_label = e.target.value));
+  body.querySelectorAll('.js-sla-charge-amount').forEach(inp => inp.addEventListener('input', e => {
+    const v = e.target.value.trim();
+    _slaRules[parseInt(e.target.dataset.idx)].exception_charge_amount = v === '' ? null : Number(v);
+  }));
 
   body.querySelectorAll('.js-sla-save').forEach(btn => btn.addEventListener('click', () =>
     saveSlaRule(parseInt(btn.dataset.idx))));
@@ -677,12 +742,14 @@ async function saveSlaRule(idx){
     const res = await fetch(`${API}/clients/${_currentClient.id}/sla-rules`, {
       method:'POST', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
       body: JSON.stringify({
-        rule_key:       r.rule_key,
-        rule_label:     r.rule_label,
-        rule_value:     r.rule_value,
-        unit:           r.unit,
-        notes:          r.notes,
-        display_order:  idx,
+        rule_key:                r.rule_key,
+        rule_label:              r.rule_label,
+        rule_value:              r.rule_value,
+        unit:                    r.unit,
+        notes:                   r.notes,
+        display_order:           idx,
+        exception_charge_label:  r.exception_charge_label || null,
+        exception_charge_amount: r.exception_charge_amount,
       }),
     });
     const d = await res.json();

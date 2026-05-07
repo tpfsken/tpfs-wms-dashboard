@@ -142,7 +142,57 @@ async function loadPortalHome(){
   if(U && U.clientId){
     const perf = await apiGet(`/clients/${U.clientId}/performance`);
     if(perf?.items) renderPortalMetrics(perf.items, perf.raw || {});
+
+    // SLA terms — operational rules + exception fees. The two-sided
+    // SLA: top of the page shows the score, this card shows the rules
+    // and what gets billed when an order falls outside them.
+    const rules = await apiGet(`/clients/${U.clientId}/sla-rules`);
+    if(rules) renderPortalSlaTerms(rules);
   }
+}
+
+function renderPortalSlaTerms(rules){
+  const card = document.getElementById('portalSlaTermsCard');
+  const body = document.getElementById('portalSlaTermsBody');
+  if(!card || !body) return;
+
+  if(!rules.length){
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+
+  body.innerHTML = `
+    <table class="data-table" style="margin:0;">
+      <thead>
+        <tr>
+          <th>Rule</th>
+          <th>Value</th>
+          <th>Exception</th>
+          <th class="right">Fee</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rules.map(r => {
+          const value = r.rule_value
+            ? `${esc(r.rule_value)}${r.unit ? ' ' + esc(r.unit) : ''}`
+            : '<span style="color:var(--muted);">—</span>';
+          const fee = r.exception_charge_amount != null
+            ? `$${Number(r.exception_charge_amount).toFixed(2)}`
+            : '<span style="color:var(--muted);">—</span>';
+          return `
+            <tr>
+              <td>
+                <div style="font-weight:600;">${esc(r.rule_label || '')}</div>
+                ${r.notes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;">${esc(r.notes)}</div>` : ''}
+              </td>
+              <td style="font-weight:600;color:var(--blue);">${value}</td>
+              <td style="color:var(--text2);">${esc(r.exception_charge_label || '—')}</td>
+              <td class="right" style="font-weight:700;color:${r.exception_charge_amount != null ? 'var(--amber)' : 'var(--muted)'};">${fee}</td>
+            </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
 }
 
 // Format a metric value with its unit suffix (% / hrs / min / count).
