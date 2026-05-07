@@ -6,6 +6,7 @@ async function loadDashboard(){
   const d = await apiGet('/dashboard/summary');
   if(!d) return;
   if(d.kpis)         renderKPIs(d.kpis);
+  if(d.sla)          renderSLA(d.sla);
   if(d.liveOrders)   renderQ(d.liveOrders);
   if(d.alerts)       renderAlerts(d.alerts);
   if(d.waves)        renderWaves(d.waves);
@@ -17,6 +18,36 @@ async function loadDashboard(){
     document.getElementById('laborUnitsHr').textContent = d.labor.summary?.avg_units_per_hour || '—';
     document.getElementById('laborWorkers').textContent = d.labor.summary?.active_workers || '0';
   }
+}
+
+function renderSLA(s){
+  const wrap = document.getElementById('slaRow');
+  if(!wrap) return;
+  // Color the on-time % by tier: green ≥95, amber 85-94, red <85
+  const pct = s.onTimePct;
+  const pctColor = pct == null ? 'var(--muted)'
+                 : pct >= 95   ? 'var(--green)'
+                 : pct >= 85   ? 'var(--amber)'
+                                : 'var(--red)';
+  const pastColor = s.pastDue > 0 ? 'var(--red)' : 'var(--green)';
+
+  wrap.innerHTML = `
+    <div class="kpi"><div class="kpi-label">On-Time Ship</div>
+      <div class="kpi-val" style="color:${pctColor}">${pct == null ? '—' : pct + '%'}</div>
+      <div class="kpi-delta">${esc(s.onTimeShipped || 0)} of ${esc(s.totalWithSla || 0)} shipped on-time</div>
+    </div>
+    <div class="kpi"><div class="kpi-label">Past-Due Open</div>
+      <div class="kpi-val" style="color:${pastColor}">${esc(s.pastDue ?? 0)}</div>
+      <div class="kpi-delta">orders past required ship date</div>
+    </div>
+    <div class="kpi"><div class="kpi-label">Avg Turnaround</div>
+      <div class="kpi-val" style="color:var(--blue)">${s.avgTurnaroundHours == null ? '—' : esc(s.avgTurnaroundHours) + 'h'}</div>
+      <div class="kpi-delta">received → shipped (last 30d)</div>
+    </div>
+    <div class="kpi"><div class="kpi-label">Avg Pick Time</div>
+      <div class="kpi-val" style="color:var(--amber)">${s.avgPickMinutes == null ? '—' : esc(s.avgPickMinutes) + 'm'}</div>
+      <div class="kpi-delta">${esc(s.picksCount || 0)} picks in last 30d</div>
+    </div>`;
 }
 
 function renderKPIs(k){
