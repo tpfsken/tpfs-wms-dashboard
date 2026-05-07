@@ -275,12 +275,14 @@ async function buildItemUomOptions(){
   return ITEM_UOM_BASELINE.concat(extras);
 }
 
+// SKU types — must match the skus_sku_type_check CHECK constraint.
+// (PALLET, CASE, INNER_PACK, EACH). Adjust here AND on the DB if you
+// want to add new types.
 const ITEM_TYPES = [
-  {value:'STANDARD', label:'Standard'},
-  {value:'EACH',     label:'Each (case-break child)'},
-  {value:'CASE',     label:'Case'},
-  {value:'KIT',      label:'Kit'},
-  {value:'BUNDLE',   label:'Bundle'},
+  {value:'EACH',       label:'Each — single sellable unit'},
+  {value:'INNER_PACK', label:'Inner Pack — retail multi-unit'},
+  {value:'CASE',       label:'Case — shipping carton'},
+  {value:'PALLET',     label:'Pallet'},
 ];
 
 const PACKING_GROUPS = [
@@ -317,7 +319,7 @@ async function openItemFormModal(skuId){
   );
   const uomOptions = await buildItemUomOptions();
   initCombo('itemUomWrap',           uomOptions,       {placeholder:'EA', value:'EA', allowCustom:true});
-  initCombo('itemTypeWrap',          ITEM_TYPES,       {placeholder:'Standard', value:'STANDARD'});
+  initCombo('itemTypeWrap',          ITEM_TYPES,       {placeholder:'Each', value:'EACH'});
   initCombo('itemPackingGroupWrap',  PACKING_GROUPS,   {placeholder:'— None —'});
 
   // Wire hazmat checkbox to reveal block (idempotent)
@@ -385,7 +387,7 @@ async function openItemFormModal(skuId){
     document.getElementById('itemName').value         = sku.name || '';
     document.getElementById('itemDescription').value  = sku.description || '';
     cbSet('itemUomWrap',  sku.uom || 'EA');
-    cbSet('itemTypeWrap', sku.sku_type || 'STANDARD');
+    cbSet('itemTypeWrap', sku.sku_type || 'EACH');
     document.getElementById('itemUnitsPerCase').value = sku.units_per_case ?? '';
     document.getElementById('itemLength').value       = sku.length_in ?? '';
     document.getElementById('itemWidth').value        = sku.width_in ?? '';
@@ -420,7 +422,7 @@ async function openItemFormModal(skuId){
       .forEach(id => { document.getElementById(id).checked = false; });
     document.getElementById('itemHazmatBlock').style.display = 'none';
     document.getElementById('itemSdsExtractStatus').textContent = '';
-    cbReset('itemClientWrap'); cbSet('itemUomWrap','EA'); cbSet('itemTypeWrap','STANDARD');
+    cbReset('itemClientWrap'); cbSet('itemUomWrap','EA'); cbSet('itemTypeWrap','EACH');
     cbReset('itemPackingGroupWrap');
   }
 
