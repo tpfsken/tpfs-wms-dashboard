@@ -157,3 +157,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .cb-opt.selected{color:var(--blue);font-weight:600}
 .cb-opt-empty{padding:12px 14px;font-size:13px;color:var(--muted);text-align:center}
 .sku-lots{background:rgba(0,0,0,.2)}
+
+/* === Portal mode (Phase 3) ================================================ */
+/* body.portal-mode is added by bootPortal() in js/portal.js when the JWT
+   carries userType='client'. It hides the ops sidebar block + ops-only
+   buttons, and reveals the portal sidebar block + portal-only buttons. */
+.nav-portal-only{display:none}
+.portal-only{display:none !important}
+body.portal-mode .nav-ops-only{display:none}
+body.portal-mode .nav-portal-only{display:block}
+body.portal-mode .ops-only{display:none !important}
+body.portal-mode .btn.portal-only{display:inline-flex !important}
