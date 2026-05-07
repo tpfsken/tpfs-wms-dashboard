@@ -86,7 +86,7 @@ function bootPortal(){
 // PORTAL HOME — card grid hub
 // =============================================================================
 
-function loadPortalHome(){
+async function loadPortalHome(){
   const cards = [
     {id:'portalNewOrder', icon:'➕', title:'Place an Order',
      desc:'Manual outbound order — choose SKUs, quantities, and a ship-to.',
@@ -132,6 +132,68 @@ function loadPortalHome(){
   // Personalise the greeting
   const hi = document.getElementById('portalHomeGreeting');
   if(hi && U) hi.textContent = `Welcome, ${U.fullName || U.email || ''}`;
+
+  // Fetch + render the client-scoped KPI / SLA cards
+  const d = await apiGet('/portal/dashboard');
+  if(d) renderPortalMetrics(d);
+}
+
+// Renders the client-scoped KPI row (top) and SLA row (below) on the portal
+// home page. Data shape comes from GET /portal/dashboard (see API
+// src/queries/dashboard.js -> getPortalDashboard).
+function renderPortalMetrics(d){
+  const kpiRow = document.getElementById('portalMetricsRow');
+  const slaRow = document.getElementById('portalSlaRow');
+  if(!kpiRow || !slaRow) return;
+
+  // ----- Top row: count cards -----
+  const cards = [
+    {l:'Open Orders',      v:Number(d.openCount ?? 0).toLocaleString(),     c:'var(--blue)'},
+    {l:'Past-Due Open',    v:Number(d.pastDue ?? 0).toLocaleString(),
+     c: (d.pastDue || 0) > 0 ? 'var(--red)' : 'var(--green)'},
+    {l:'Shipped (30d)',    v:Number(d.shipped30d ?? 0).toLocaleString(),    c:'var(--green)'},
+    {l:'Orders This Month',v:Number(d.ordersThisMonth ?? 0).toLocaleString(),
+     c:'var(--text)',
+     s: d.ordersLastMonth != null ? `${d.ordersLastMonth} last month` : ''},
+    {l:'My SKUs',          v:Number(d.totalSkus ?? 0).toLocaleString(),     c:'var(--text)'},
+    {l:'On-Hand Units',    v:Number(d.totalUnits ?? 0).toLocaleString(),    c:'var(--purple)'},
+  ];
+
+  kpiRow.innerHTML = cards.map(x => `
+    <div class="kpi">
+      <div class="kpi-label">${esc(x.l)}</div>
+      <div class="kpi-val" style="color:${x.c}">${esc(x.v)}</div>
+      ${x.s ? `<div class="kpi-delta">${esc(x.s)}</div>` : ''}
+    </div>`).join('');
+
+  // ----- Bottom row: SLA / on-time performance -----
+  const pct = d.onTimePct;
+  const pctColor = pct == null ? 'var(--muted)'
+                 : pct >= 95   ? 'var(--green)'
+                 : pct >= 85   ? 'var(--amber)'
+                                : 'var(--red)';
+
+  slaRow.innerHTML = `
+    <div class="kpi">
+      <div class="kpi-label">On-Time Ship %</div>
+      <div class="kpi-val" style="color:${pctColor}">${pct == null ? '—' : esc(pct) + '%'}</div>
+      <div class="kpi-delta">${esc(d.onTimeShipped || 0)} of ${esc(d.shippedWithSla || 0)} shipped on-time</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Shipped (30d)</div>
+      <div class="kpi-val" style="color:var(--blue)">${esc(Number(d.shipped30d ?? 0).toLocaleString())}</div>
+      <div class="kpi-delta">${esc(d.period || 'last 30 days')}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">This Month</div>
+      <div class="kpi-val" style="color:var(--text)">${esc(Number(d.ordersThisMonth ?? 0).toLocaleString())}</div>
+      <div class="kpi-delta">${esc(Number(d.ordersLastMonth ?? 0).toLocaleString())} last month</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Past-Due Open</div>
+      <div class="kpi-val" style="color:${(d.pastDue || 0) > 0 ? 'var(--red)' : 'var(--green)'}">${esc(d.pastDue ?? 0)}</div>
+      <div class="kpi-delta">orders past required ship date</div>
+    </div>`;
 }
 
 // =============================================================================
