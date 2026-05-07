@@ -44,6 +44,13 @@ function bootPortal(){
   const portalTitle = document.querySelector('#page-portalHome .page-title');
   if(portalTitle) portalTitle.textContent = clientLabel;
 
+  // Top-of-page banner — visible on every portal page so the client always
+  // sees their company name front and center.
+  const bannerName = document.getElementById('portalBannerName');
+  const bannerSub  = document.getElementById('portalBannerSub');
+  if(bannerName) bannerName.textContent = clientLabel;
+  if(bannerSub && U && U.fullName) bannerSub.textContent = `Customer Portal · ${U.fullName}`;
+
   // Stub the page-level filter combos that inventory.js / orders.js read on
   // every load. The combos themselves are hidden in portal mode (.ops-only on
   // their wrappers in index.html), but the JS still references _cbState[id].

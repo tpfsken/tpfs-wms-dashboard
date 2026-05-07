@@ -53,6 +53,14 @@
     <div class="topbar-user js-signout" title="Sign Out"><div class="topbar-avatar" id="userAvatar">?</div><div class="topbar-user-info"><div class="name" id="userName">—</div><div class="role">Operations</div></div></div>
   </div>
 
+  <!-- Portal banner — visible only when body.portal-mode is set (Phase 3). -->
+  <div class="portal-banner" id="portalBanner">
+    <div>
+      <div class="portal-banner-name" id="portalBannerName">—</div>
+      <div class="portal-banner-sub" id="portalBannerSub">Customer Portal</div>
+    </div>
+  </div>
+
   <div class="page active" id="page-dashboard">
     <div class="kpi-row" id="kpiRow"></div>
     <div class="grid-2">
@@ -76,12 +84,12 @@
   </div>
 
   <div class="page" id="page-inventory">
-    <div class="page-header"><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><input type="text" class="form-input" id="invSearch" placeholder="Search SKU or lot..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadInventory()">Refresh</button><button class="btn btn-primary ops-only" onclick="showCaseBreakModal()">⊞ Case Break</button></div>
+    <div class="page-header"><button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><input type="text" class="form-input" id="invSearch" placeholder="Search SKU or lot..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadInventory()">Refresh</button><button class="btn btn-primary ops-only" onclick="showCaseBreakModal()">⊞ Case Break</button></div>
     <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;"><div style="flex:1;overflow:auto;"><table class="data-table"><thead><tr><th>SKU</th><th>Description</th><th>Client</th><th>Type</th><th>Lot</th><th>Location</th><th>LP</th><th class="right">Qty</th><th>Status</th><th style="width:70px;"></th></tr></thead><tbody id="invBody"></tbody></table></div></div>
   </div>
 
   <div class="page" id="page-orders">
-    <div class="page-header"><div><div class="page-title">Orders</div><div class="page-subtitle">Outbound order management</div></div><div style="flex:1"></div><input type="text" class="form-input" id="ordSearch" placeholder="Search order #..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="ordStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadOrders()">Refresh</button><button class="btn btn-primary ops-only" onclick="showNewOrderModal()">+ New Order</button><button class="btn btn-primary portal-only" onclick="navigateTo('portalNewOrder')">+ New Order</button></div>
+    <div class="page-header"><button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button><div><div class="page-title">Orders</div><div class="page-subtitle">Outbound order management</div></div><div style="flex:1"></div><input type="text" class="form-input" id="ordSearch" placeholder="Search order #..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="ordStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadOrders()">Refresh</button><button class="btn btn-primary ops-only" onclick="showNewOrderModal()">+ New Order</button><button class="btn btn-primary portal-only" onclick="navigateTo('portalNewOrder')">+ New Order</button></div>
     <div id="ordListView"><div class="card"><div style="overflow:auto;"><table class="data-table"><thead><tr><th>Order #</th><th>Client</th><th>Channel</th><th>Type</th><th>Customer</th><th>Ship To</th><th>Carrier</th><th class="right">Lines</th><th class="right">Units</th><th>Ship By</th><th>Status</th></tr></thead><tbody id="ordBody"></tbody></table></div></div></div>
     <div id="ordDetailView" style="display:none;">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;"><button class="btn btn-ghost" onclick="closeOrderDetail()">← Back</button><div><div style="font-size:18px;font-weight:700;" id="ordDetailTitle"></div><div style="font-size:13px;color:var(--text2);" id="ordDetailSub"></div></div><div style="flex:1"></div><span class="chip" id="ordDetailStatus"></span></div>
@@ -293,6 +301,7 @@
   <div class="page" id="page-billing">
     <div id="billListView">
       <div class="page-header">
+        <button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button>
         <div><div class="page-title">Billing</div><div class="page-subtitle">Per-client charges</div></div>
         <div style="flex:1"></div>
         <div class="cb-wrap ops-only" style="max-width:240px;" id="billClientFilterWrap"></div>
@@ -345,6 +354,7 @@
     <!-- ============ LEVEL 0: REPORTS INDEX ============ -->
     <div id="reportsIndexView">
       <div class="page-header">
+        <button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button>
         <div><div class="page-title">Reports</div><div class="page-subtitle">Pick a report to run</div></div>
       </div>
       <div class="grid-3" id="reportsIndexGrid"></div>

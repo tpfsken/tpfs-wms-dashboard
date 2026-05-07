@@ -26,7 +26,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .collapse-btn svg{width:20px;height:20px;flex-shrink:0;transition:transform .2s}
 .collapsed .collapse-btn svg{transform:rotate(180deg)}
 
-.main{display:grid;grid-template-rows:60px 1fr;overflow:hidden}
+.main{display:grid;grid-template-rows:60px auto 1fr;overflow:hidden}
 .topbar{background:var(--panel);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:16px}
 .topbar-title{font-size:16px;font-weight:600}
 .topbar-search{flex:1;max-width:400px;position:relative}
@@ -173,3 +173,16 @@ body.portal-mode .btn.portal-only{display:inline-flex !important}
    Pick Waves, Performance, Alerts, Dock Schedule, etc. — completely hidden.
    The page is also kept inert because portal-mode never calls loadDashboard. */
 body.portal-mode #page-dashboard{display:none !important}
+
+/* Portal banner — big client name shown at the top of every portal page.
+   Hidden by default; revealed only when body.portal-mode is set. The banner
+   sits between the topbar and the page content (3-row grid in .main). */
+.portal-banner{display:none}
+body.portal-mode .portal-banner{
+  display:flex;align-items:center;gap:14px;
+  padding:18px 28px;
+  background:linear-gradient(180deg, var(--blue-bg) 0%, transparent 100%);
+  border-bottom:1px solid var(--border);
+}
+.portal-banner-name{font-size:30px;font-weight:700;color:var(--text);letter-spacing:-.02em}
+.portal-banner-sub {font-size:13px;color:var(--text2);margin-top:2px}
