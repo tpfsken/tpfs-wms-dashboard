@@ -220,6 +220,17 @@ function renderPickList(d, isPickable){
   document.getElementById('pickListSuccess').textContent = '';
 
   const tbody = document.getElementById('pickListBody');
+
+  // Hazmat badge + special handling banner. Only render for pending rows
+  // (don't clutter the picked rows). Both bits come straight off the
+  // joined sku columns in /orders/:id (see queries/orders.js).
+  const hazBadge = (a) => a.is_hazmat
+    ? `<span class="chip chip-danger" style="font-size:10px;margin-right:6px;">⚠ HAZMAT${a.un_number ? ' ' + esc(a.un_number) : ''}${a.hazard_class ? ' · Cl ' + esc(a.hazard_class) : ''}</span>`
+    : '';
+  const handlingRow = (a) => a.special_handling_instructions
+    ? `<tr><td colspan="8" style="background:var(--amber-bg);color:var(--amber);font-size:12px;padding:6px 10px;border-left:3px solid var(--amber);">📋 ${esc(a.special_handling_instructions)}</td></tr>`
+    : '';
+
   tbody.innerHTML = allocs.map((a, i) => {
     const lpCell = a.lp_number
       ? `<span class="lp-badge ${a.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(a.lp_number)}</span>`
@@ -245,7 +256,9 @@ function renderPickList(d, isPickable){
         </tr>`;
     }
 
-    // PENDING (default)
+    // PENDING (default) — hazmat badge inline next to sku name, special
+    // handling banner as a sub-row (full-width amber stripe so it can't
+    // be missed by the picker on a tablet).
     return `
       <tr>
         <td>${esc(i + 1)}</td>
@@ -253,7 +266,7 @@ function renderPickList(d, isPickable){
         <td style="font-weight:600;">${esc(a.location_code || '—')}</td>
         <td style="color:var(--blue);">${esc(a.lot_number || '—')}</td>
         <td style="color:var(--blue);font-weight:600;">${esc(a.sku_code || '')}</td>
-        <td style="color:var(--text2);">${esc(a.sku_name || '')}</td>
+        <td style="color:var(--text2);">${hazBadge(a)}${esc(a.sku_name || '')}</td>
         <td class="right" style="font-weight:600;">${esc(a.quantity)}</td>
         <td>
           <input type="number" class="form-input js-pick-qty" data-id="${esc(a.id)}"
@@ -262,7 +275,8 @@ function renderPickList(d, isPickable){
           <button class="btn btn-primary js-pick-confirm" data-id="${esc(a.id)}"
                   style="padding:4px 12px;font-size:12px;">Confirm</button>
         </td>
-      </tr>`;
+      </tr>
+      ${handlingRow(a)}`;
   }).join('');
 
   tbody.querySelectorAll('.js-pick-confirm').forEach(btn => {

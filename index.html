@@ -1144,9 +1144,22 @@
         </div>
       </div>
 
+      <!-- Special handling — printed on the pick slip and shown on the
+           handheld for the picker (e.g. "Wear gloves", "Keep upright"). -->
+      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:14px;">
+        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-bottom:8px;">Special Handling Instructions</div>
+        <textarea class="form-input" id="itemSpecialHandling" rows="2" placeholder="Printed on the pick slip and shown on the handheld — e.g. 'Wear gloves', 'Keep upright', 'Do not stack'"></textarea>
+      </div>
+
       <!-- Hazmat fields — only when itemHazmat is checked -->
       <div id="itemHazmatBlock" style="display:none;border:1px solid var(--amber);border-radius:8px;padding:14px;margin-top:14px;background:var(--bg);">
-        <div style="font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-bottom:8px;">⚠ Hazmat Details</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">⚠ Hazmat Details</div>
+          <div style="flex:1"></div>
+          <button type="button" class="btn btn-ghost" onclick="document.getElementById('itemSdsExtractInput').click()" style="padding:4px 12px;font-size:12px;color:var(--blue);">📄 Read SDS to auto-fill</button>
+          <input type="file" id="itemSdsExtractInput" accept="application/pdf,.pdf" style="display:none;">
+        </div>
+        <div id="itemSdsExtractStatus" style="font-size:12px;margin-bottom:8px;"></div>
         <div class="form-row form-row-2">
           <div class="form-group"><label class="form-label">UN Number *</label><input class="form-input" id="itemUnNumber" placeholder="e.g. UN1090"></div>
           <div class="form-group"><label class="form-label">Hazard Class *</label><input class="form-input" id="itemHazardClass" placeholder="e.g. 3, 9, 1.4G"></div>
@@ -1166,6 +1179,23 @@
           </div>
         </div>
         <div class="form-group" style="margin-bottom:0;"><label class="form-label">Hazmat Notes</label><textarea class="form-input" id="itemHazmatNotes" rows="2"></textarea></div>
+      </div>
+
+      <!-- Documents — SDS, photos, spec sheets. Only shown after the
+           SKU is saved (need a sku id to attach). On Save, any pending
+           SDS file the user dropped into the AI extractor is also
+           uploaded as an attachment so it sticks with the item. -->
+      <div id="itemDocsSection" style="border-top:1px solid var(--border);margin-top:16px;padding-top:14px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Documents</div>
+          <div style="font-size:11px;color:var(--muted);">SDS, product photos, spec sheets</div>
+          <div style="flex:1"></div>
+          <button type="button" class="btn btn-ghost" id="itemDocAddBtn" style="padding:4px 12px;font-size:12px;">📎 Attach File</button>
+          <input type="file" id="itemDocAddInput" multiple style="display:none;"
+                 accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,image/*">
+        </div>
+        <div id="itemDocsBody" style="font-size:13px;"></div>
+        <div id="itemDocsHint" style="display:none;font-size:11px;color:var(--muted);margin-top:6px;">Save the item first to attach files.</div>
       </div>
 
       <div id="itemFormError" style="color:var(--red);font-size:13px;margin-top:8px;"></div>

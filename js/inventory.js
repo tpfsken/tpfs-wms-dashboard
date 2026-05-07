@@ -242,6 +242,9 @@ async function submitCaseBreak(){
 
 let _editingItemId = null;   // null = create, string = edit
 let _itemClientHazmatMap = {}; // {clientId -> hazmat_enabled} for prompting
+let _itemPendingSds = null;    // File staged from "Read SDS"; uploaded as
+                               // an attachment after the SKU is saved so
+                               // the SDS sticks with the item.
 
 // Baseline UOMs always shown in the dropdown. Anything ops has added
 // to existing SKUs gets merged in on top of this via /uoms (so the
@@ -323,6 +326,41 @@ async function openItemFormModal(skuId){
     });
   }
 
+  // Wire "Read SDS to auto-fill" — runs Claude on the PDF and pre-fills
+  // the hazmat fields. The file is also staged for upload as an
+  // attachment after the SKU is saved.
+  const sdsInput = document.getElementById('itemSdsExtractInput');
+  if(sdsInput && !sdsInput._wired){
+    sdsInput._wired = true;
+    sdsInput.addEventListener('change', e => {
+      const file = (e.target.files || [])[0];
+      e.target.value = '';
+      if(file) extractSdsAndFill(file);
+    });
+  }
+
+  // Wire Documents section's add button (idempotent)
+  const docBtn = document.getElementById('itemDocAddBtn');
+  const docInput = document.getElementById('itemDocAddInput');
+  if(docBtn && !docBtn._wired){
+    docBtn._wired = true;
+    docBtn.addEventListener('click', () => {
+      if(!_editingItemId){
+        document.getElementById('itemDocsHint').style.display = 'block';
+        return;
+      }
+      docInput.click();
+    });
+  }
+  if(docInput && !docInput._wired){
+    docInput._wired = true;
+    docInput.addEventListener('change', e => {
+      const files = Array.from(e.target.files || []);
+      e.target.value = '';
+      if(_editingItemId && files.length) uploadItemAttachments(_editingItemId, files);
+    });
+  }
+
   if(skuId){
     // Edit mode — fetch and populate
     const sku = await apiGet(`/skus/${skuId}`);
@@ -353,21 +391,31 @@ async function openItemFormModal(skuId){
     document.getElementById('itemGroundOnly').checked = !!sku.is_ground_only;
     document.getElementById('itemLimitedQty').checked = !!sku.is_limited_qty;
     document.getElementById('itemHazmatNotes').value  = sku.hazmat_notes || '';
+    document.getElementById('itemSpecialHandling').value = sku.special_handling_instructions || '';
     document.getElementById('itemHazmatBlock').style.display = sku.is_hazmat ? 'block' : 'none';
+    document.getElementById('itemSdsExtractStatus').textContent = '';
+    // Edit mode — load attachments list so ops can manage docs
+    loadItemAttachmentsList(skuId);
   } else {
     // Create mode — reset form
     [
       'itemCode','itemUpc','itemName','itemDescription','itemUnitsPerCase',
       'itemLength','itemWidth','itemHeight','itemWeight','itemUnitCost','itemUnitPrice',
       'itemUnNumber','itemHazardClass','itemProperShippingName','itemHazmatNotes',
+      'itemSpecialHandling',
     ].forEach(id => { document.getElementById(id).value = ''; });
     ['itemLotTracked','itemExpiryTracked','itemHazmat','itemGroundOnly','itemLimitedQty']
       .forEach(id => { document.getElementById(id).checked = false; });
     document.getElementById('itemHazmatBlock').style.display = 'none';
+    document.getElementById('itemSdsExtractStatus').textContent = '';
     cbReset('itemClientWrap'); cbSet('itemUomWrap','EA'); cbSet('itemTypeWrap','STANDARD');
     cbReset('itemPackingGroupWrap');
+    // Create mode shows the doc section with a hint instead of a list
+    document.getElementById('itemDocsBody').innerHTML =
+      '<div style="color:var(--muted);font-size:12px;padding:8px 0;">Save the item first to attach files (or use Read SDS above to pre-fill hazmat from a PDF — that file will also be saved as the item\'s SDS attachment after Save).</div>';
   }
 
+  _itemPendingSds = null;
   document.getElementById('itemHazmatHint').style.display = 'none';
   document.getElementById('itemFormModal').style.display  = 'flex';
 }
@@ -408,6 +456,7 @@ async function submitItemForm(){
     isLotTracked:       document.getElementById('itemLotTracked').checked,
     isExpiryTracked:    document.getElementById('itemExpiryTracked').checked,
     isHazmat:           document.getElementById('itemHazmat').checked,
+    specialHandlingInstructions: document.getElementById('itemSpecialHandling').value.trim() || null,
   };
 
   if(!body.clientId){ err.textContent = 'Client is required'; return; }
@@ -437,6 +486,24 @@ async function submitItemForm(){
     });
     const d = await r.json();
     if(!r.ok){ err.textContent = d.error || 'Save failed'; return; }
+
+    // If the user used "Read SDS to auto-fill" before saving, that PDF
+    // is staged in _itemPendingSds — upload it now as a sku attachment
+    // tagged SDS so it stays with the item.
+    if(_itemPendingSds){
+      try {
+        const fd = new FormData();
+        fd.append('file', _itemPendingSds);
+        fd.append('attachment_type', 'SDS');
+        await fetch(`${API}/skus/${d.id}/attachments`, {
+          method:'POST',
+          headers:{'Authorization':`Bearer ${T}`},
+          body: fd,
+        });
+      } catch(_) { /* swallow — SKU still saved successfully */ }
+      _itemPendingSds = null;
+    }
+
     closeModal('itemFormModal');
     loadInventory();
   } catch(e){
@@ -444,4 +511,134 @@ async function submitItemForm(){
   } finally {
     submitBtn.disabled = false;
   }
+}
+
+// =============================================================================
+// SDS AI EXTRACT — drop a PDF, run Claude on it, fill the modal
+// =============================================================================
+
+async function extractSdsAndFill(file){
+  const status = document.getElementById('itemSdsExtractStatus');
+  status.style.color = 'var(--text2)';
+  status.textContent = `Reading ${file.name}…`;
+
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const r = await fetch(`${API}/skus/extract-sds`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${T}` },
+      body: fd,
+    });
+    const d = await r.json();
+    if(!r.ok){
+      status.style.color = 'var(--red)';
+      status.textContent = d.error || 'SDS read failed';
+      return;
+    }
+    const e = d.extracted || {};
+
+    // Auto-toggle hazmat checkbox when the SDS says so. Reveal block.
+    if(e.is_hazardous){
+      document.getElementById('itemHazmat').checked = true;
+      document.getElementById('itemHazmatBlock').style.display = 'block';
+    }
+
+    // Pre-fill — only overwrite empties so we don't clobber what ops typed
+    const setIfEmpty = (id, v) => {
+      if(v == null || v === '') return;
+      const el = document.getElementById(id);
+      if(!el.value.trim()) el.value = v;
+    };
+    setIfEmpty('itemUnNumber',           e.un_number);
+    setIfEmpty('itemHazardClass',        e.hazard_class);
+    setIfEmpty('itemProperShippingName', e.proper_shipping_name);
+    setIfEmpty('itemSpecialHandling',    e.special_handling);
+    if(e.packing_group){ cbSet('itemPackingGroupWrap', e.packing_group); }
+    if(e.is_ground_only) document.getElementById('itemGroundOnly').checked = true;
+    if(e.is_limited_qty) document.getElementById('itemLimitedQty').checked = true;
+
+    // Stash the file so submitItemForm can save it as an SDS attachment
+    // post-create.
+    _itemPendingSds = file;
+
+    const conf = e.confidence == null ? '' : ` (confidence ${Math.round(Number(e.confidence) * 100)}%)`;
+    status.style.color = e.is_hazardous ? 'var(--amber)' : 'var(--green)';
+    status.textContent = e.is_hazardous
+      ? `✓ Hazardous — fields pre-filled from SDS${conf}. Review before saving.`
+      : `✓ Read SDS${conf}. No hazmat detected — fields left untouched. Review before saving.`;
+  } catch(err){
+    status.style.color = 'var(--red)';
+    status.textContent = 'Network error reading SDS';
+  }
+}
+
+// =============================================================================
+// SKU ATTACHMENTS (SDS / photos / spec sheets) — only available in edit
+// mode (we need a sku id). The list lives inside the New Item modal
+// when an existing item is open.
+// =============================================================================
+
+async function loadItemAttachmentsList(skuId){
+  const body = document.getElementById('itemDocsBody');
+  body.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0;">Loading…</div>';
+  const rows = await apiGet(`/skus/${skuId}/attachments`);
+  if(!rows){
+    body.innerHTML = '<div style="color:var(--red);font-size:12px;">Could not load attachments</div>';
+    return;
+  }
+  if(!rows.length){
+    body.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0;">No documents yet — click 📎 Attach File to add an SDS, photo, or spec sheet</div>';
+    return;
+  }
+  body.innerHTML = rows.map(r => {
+    const ext = (r.filename || '').split('.').pop()?.toUpperCase() || 'FILE';
+    const sizeKb = Number(r.size_bytes || 0) / 1024;
+    const sizeLabel = (r.size_bytes || 0) > 1024 * 1024
+      ? `${(sizeKb / 1024).toFixed(2)} MB`
+      : `${sizeKb.toFixed(0)} KB`;
+    const tag = r.attachment_type
+      ? `<span class="chip chip-warning" style="font-size:10px;">${esc(r.attachment_type)}</span>`
+      : '';
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <div style="width:38px;height:38px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--blue);">${esc(ext.slice(0,4))}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.filename || '')} ${tag}</div>
+          <div style="font-size:11px;color:var(--text2);">${esc(sizeLabel)} · ${esc(r.uploaded_by || '')}</div>
+        </div>
+        <button class="btn btn-ghost js-item-att-dl" data-att-id="${esc(r.id)}" style="padding:3px 10px;font-size:12px;">⬇ Open</button>
+        <button class="btn btn-ghost js-item-att-rm" data-att-id="${esc(r.id)}" style="padding:3px 8px;font-size:12px;color:var(--red);">✕</button>
+      </div>`;
+  }).join('');
+  body.querySelectorAll('.js-item-att-dl').forEach(b =>
+    b.addEventListener('click', async () => {
+      const d = await apiGet(`/skus/${skuId}/attachments/${b.dataset.attId}/url`);
+      if(d?.url) window.open(d.url, '_blank');
+    }));
+  body.querySelectorAll('.js-item-att-rm').forEach(b =>
+    b.addEventListener('click', async () => {
+      if(!confirm('Remove this document?')) return;
+      const r = await fetch(`${API}/skus/${skuId}/attachments/${b.dataset.attId}`, {
+        method:'DELETE', headers:{'Authorization':`Bearer ${T}`},
+      });
+      if(r.ok) loadItemAttachmentsList(skuId);
+    }));
+}
+
+async function uploadItemAttachments(skuId, files){
+  const body = document.getElementById('itemDocsBody');
+  for(const f of files){
+    body.innerHTML = `<div style="color:var(--text2);font-size:12px;">Uploading ${esc(f.name)}…</div>`;
+    const fd = new FormData();
+    fd.append('file', f);
+    // Auto-tag PDFs that look like an SDS by filename hint
+    if(/sds|safety.*data/i.test(f.name)) fd.append('attachment_type', 'SDS');
+    try {
+      await fetch(`${API}/skus/${skuId}/attachments`, {
+        method:'POST', headers:{'Authorization':`Bearer ${T}`}, body: fd,
+      });
+    } catch(_) { /* keep going */ }
+  }
+  loadItemAttachmentsList(skuId);
 }
