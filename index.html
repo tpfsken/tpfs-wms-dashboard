@@ -418,6 +418,7 @@
       <div class="page-header">
         <div><div class="page-title">Clients</div><div class="page-subtitle">3PL client management — click a row to edit KPI / SLA targets</div></div>
         <div style="flex:1"></div>
+        <button class="btn btn-primary" onclick="openClientFormModal()">+ New Client</button>
         <button class="btn btn-ghost" onclick="loadClients()">Refresh</button>
       </div>
       <div class="card">
@@ -446,7 +447,24 @@
       </div>
       <!-- Tab panels -->
       <div class="cli-panel" data-tab="profile" style="display:block;">
-        <div class="card"><div class="card-head"><div class="card-title">Profile</div></div><div style="padding:20px;" id="cliProfileBody"></div></div>
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Profile</div>
+            <div style="flex:1"></div>
+            <button class="btn btn-ghost" id="cliEditBtn">Edit</button>
+          </div>
+          <div style="padding:20px;" id="cliProfileBody"></div>
+        </div>
+        <!-- Hazmat panel — only shown when hazmat_enabled is true on the
+             client. Fields are stored in clients.hazmat_config (JSONB). -->
+        <div class="card" id="cliHazmatPanel" style="display:none;margin-top:16px;border:1px solid var(--amber);">
+          <div class="card-head" style="background:var(--amber-bg);">
+            <div class="card-title" style="color:var(--amber);">⚠ Hazmat — enabled for this client</div>
+            <div style="flex:1"></div>
+            <div style="font-size:12px;color:var(--text2);">Items added under this client require hazmat info (UN #, packing group, hazard class)</div>
+          </div>
+          <div style="padding:20px;" id="cliHazmatBody"></div>
+        </div>
       </div>
       <div class="cli-panel" data-tab="kpi" style="display:none;">
         <div class="card">
@@ -962,6 +980,80 @@
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeModal('rateCardModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveRateCard()">Save Rates</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW / EDIT CLIENT MODAL -->
+<div id="clientFormModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-head">
+      <div class="modal-title" id="clientFormTitle">New Client</div>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="closeModal('clientFormModal')" style="padding:6px 12px;">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row form-row-2">
+        <div class="form-group"><label class="form-label">Client Code *</label><input class="form-input" id="cfCode" placeholder="ACME" style="text-transform:uppercase;"></div>
+        <div class="form-group"><label class="form-label">Client Name *</label><input class="form-input" id="cfName" placeholder="Acme Supplements"></div>
+      </div>
+
+      <!-- Type toggle: B2B / B2C / Both. Drives downstream rate cards
+           and order routing logic. -->
+      <div class="form-group">
+        <label class="form-label">Business Type *</label>
+        <div id="cfTypeToggle" style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;width:fit-content;">
+          <button type="button" class="js-cf-type" data-type="B2B"  style="padding:8px 18px;background:none;border:none;color:var(--text);cursor:pointer;font-weight:600;font-size:13px;">B2B</button>
+          <button type="button" class="js-cf-type" data-type="B2C"  style="padding:8px 18px;background:none;border:none;color:var(--text);cursor:pointer;font-weight:600;font-size:13px;border-left:1px solid var(--border);">B2C</button>
+          <button type="button" class="js-cf-type" data-type="BOTH" style="padding:8px 18px;background:none;border:none;color:var(--text);cursor:pointer;font-weight:600;font-size:13px;border-left:1px solid var(--border);">B2B + B2C</button>
+        </div>
+        <input type="hidden" id="cfType" value="B2B">
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:16px;">
+        <div style="font-size:14px;font-weight:600;margin-bottom:12px;">Primary Contact</div>
+        <div class="form-row form-row-2">
+          <div class="form-group"><label class="form-label">Contact Name</label><input class="form-input" id="cfContactName"></div>
+          <div class="form-group"><label class="form-label">Contact Email</label><input class="form-input" id="cfContactEmail" type="email"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Contact Phone</label><input class="form-input" id="cfContactPhone" placeholder="+1 555 123 4567"></div>
+      </div>
+
+      <!-- Hazmat toggle. When ON, items added under this client must
+           include UN # / packing group / hazard class. The optional
+           hazmat config block below stores client-level defaults
+           (preferred carrier, ground-only, emergency contact). -->
+      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:16px;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:14px;">
+            <input type="checkbox" id="cfHazmat" style="width:18px;height:18px;">
+            <span>⚠ Hazmat Client</span>
+          </label>
+          <span style="font-size:12px;color:var(--text2);">Items under this client will require UN #, packing group, and hazard class</span>
+        </div>
+        <div id="cfHazmatBlock" style="display:none;margin-top:14px;padding:14px;background:var(--bg);border-radius:8px;border:1px solid var(--amber);">
+          <div style="font-size:12px;color:var(--amber);font-weight:600;margin-bottom:10px;">⚠ HAZMAT DEFAULTS</div>
+          <div class="form-row form-row-2">
+            <div class="form-group"><label class="form-label">Default Hazard Class</label><input class="form-input" id="cfHazClass" placeholder="e.g. 1.4G, 9, 3"></div>
+            <div class="form-group"><label class="form-label">Default Packing Group</label><input class="form-input" id="cfHazPackingGroup" placeholder="I, II, or III"></div>
+          </div>
+          <div class="form-row form-row-2">
+            <div class="form-group"><label class="form-label">Shipper ID (DOT #)</label><input class="form-input" id="cfHazShipperId"></div>
+            <div class="form-group"><label class="form-label">Emergency Contact</label><input class="form-input" id="cfHazEmergency" placeholder="24-hour phone"></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;">
+            <input type="checkbox" id="cfHazGround" style="width:16px;height:16px;">
+            <label for="cfHazGround">Ground-only — no air shipments</label>
+          </div>
+          <div class="form-group" style="margin-top:10px;margin-bottom:0;"><label class="form-label">Notes</label><textarea class="form-input" id="cfHazNotes" rows="2"></textarea></div>
+        </div>
+      </div>
+
+      <div id="cfError" style="color:var(--red);font-size:13px;margin-top:8px;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('clientFormModal')">Cancel</button>
+      <button class="btn btn-primary" id="cfSubmitBtn" onclick="submitClientForm()">Create Client</button>
     </div>
   </div>
 </div>

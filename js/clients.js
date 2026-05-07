@@ -123,6 +123,10 @@ function renderClientProfileTab(){
   const c = _currentClient;
   if(!c) return;
   const body = document.getElementById('cliProfileBody');
+  const typeLabel = c.client_type === 'BOTH' ? 'B2B + B2C'
+                  : c.client_type === 'B2C'  ? 'B2C'
+                  : c.client_type === 'B2B'  ? 'B2B'
+                  : (c.client_type || '—');
   const row = (l, v) => `
     <div style="display:grid;grid-template-columns:160px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
       <div style="color:var(--text2);font-weight:600;">${esc(l)}</div>
@@ -131,12 +135,164 @@ function renderClientProfileTab(){
   body.innerHTML =
     row('Code',           c.code) +
     row('Name',           c.name) +
-    row('Type',           c.client_type) +
+    row('Type',           typeLabel) +
     row('Contact Name',   c.contact_name) +
     row('Contact Email',  c.contact_email) +
     row('Phone',          c.contact_phone) +
+    row('Hazmat',         c.hazmat_enabled ? 'Enabled' : 'No') +
     row('Onboarded',      c.onboarded_at ? new Date(c.onboarded_at).toLocaleDateString() : null) +
     row('Status',         c.is_active ? 'Active' : 'Inactive');
+
+  // Hazmat panel — show when toggled on, render whatever's saved in
+  // hazmat_config (any keys we recognise).
+  const hazPanel = document.getElementById('cliHazmatPanel');
+  if(c.hazmat_enabled){
+    hazPanel.style.display = 'block';
+    const hc = c.hazmat_config || {};
+    const fields = [
+      ['Default Hazard Class', hc.hazard_class],
+      ['Default Packing Group', hc.packing_group],
+      ['Shipper ID (DOT #)',    hc.shipper_id],
+      ['Emergency Contact',     hc.emergency_contact],
+      ['Ground-Only',           hc.ground_only ? 'Yes — no air shipments' : 'No'],
+      ['Notes',                 hc.notes],
+    ];
+    document.getElementById('cliHazmatBody').innerHTML = fields.map(([l, v]) => `
+      <div style="display:grid;grid-template-columns:200px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <div style="color:var(--text2);font-weight:600;">${esc(l)}</div>
+        <div>${esc(v ?? '—')}</div>
+      </div>`).join('');
+  } else {
+    hazPanel.style.display = 'none';
+  }
+
+  // Wire Edit button on Profile tab — idempotent
+  const editBtn = document.getElementById('cliEditBtn');
+  if(editBtn && !editBtn._wired){
+    editBtn._wired = true;
+    editBtn.addEventListener('click', () => openClientFormModal(_currentClient));
+  }
+}
+
+// =============================================================================
+// NEW / EDIT CLIENT MODAL
+// =============================================================================
+// Same modal handles both Create (when client is null) and Edit.
+
+let _editingClientId = null;   // null for new, string id for edit
+
+function openClientFormModal(client){
+  _editingClientId = client?.id || null;
+
+  document.getElementById('clientFormTitle').textContent = client ? 'Edit Client' : 'New Client';
+  document.getElementById('cfSubmitBtn').textContent     = client ? 'Save Changes' : 'Create Client';
+  document.getElementById('cfError').textContent         = '';
+
+  // Pre-fill (or clear)
+  document.getElementById('cfCode').value         = client?.code         || '';
+  document.getElementById('cfName').value         = client?.name         || '';
+  document.getElementById('cfContactName').value  = client?.contact_name || '';
+  document.getElementById('cfContactEmail').value = client?.contact_email|| '';
+  document.getElementById('cfContactPhone').value = client?.contact_phone|| '';
+  document.getElementById('cfHazmat').checked     = !!client?.hazmat_enabled;
+
+  const hc = client?.hazmat_config || {};
+  document.getElementById('cfHazClass').value         = hc.hazard_class       || '';
+  document.getElementById('cfHazPackingGroup').value  = hc.packing_group      || '';
+  document.getElementById('cfHazShipperId').value     = hc.shipper_id         || '';
+  document.getElementById('cfHazEmergency').value     = hc.emergency_contact  || '';
+  document.getElementById('cfHazGround').checked      = !!hc.ground_only;
+  document.getElementById('cfHazNotes').value         = hc.notes              || '';
+
+  // Set the type toggle
+  setClientFormType(client?.client_type || 'B2B');
+
+  // Wire toggle buttons + hazmat-block visibility (idempotent)
+  const wrap = document.getElementById('cfTypeToggle');
+  if(!wrap._wired){
+    wrap._wired = true;
+    wrap.querySelectorAll('.js-cf-type').forEach(btn =>
+      btn.addEventListener('click', () => setClientFormType(btn.dataset.type))
+    );
+  }
+  const haz = document.getElementById('cfHazmat');
+  if(!haz._wired){
+    haz._wired = true;
+    haz.addEventListener('change', () => {
+      document.getElementById('cfHazmatBlock').style.display = haz.checked ? 'block' : 'none';
+    });
+  }
+  document.getElementById('cfHazmatBlock').style.display = haz.checked ? 'block' : 'none';
+
+  document.getElementById('clientFormModal').style.display = 'flex';
+  document.getElementById('cfCode').focus?.();
+}
+
+function setClientFormType(type){
+  document.getElementById('cfType').value = type;
+  document.querySelectorAll('.js-cf-type').forEach(btn => {
+    const active = btn.dataset.type === type;
+    btn.style.background = active ? 'var(--blue)' : 'transparent';
+    btn.style.color      = active ? 'var(--white, #fff)' : 'var(--text)';
+  });
+}
+
+async function submitClientForm(){
+  const err = document.getElementById('cfError');
+  err.textContent = '';
+
+  const body = {
+    code:           document.getElementById('cfCode').value.trim().toUpperCase(),
+    name:           document.getElementById('cfName').value.trim(),
+    client_type:    document.getElementById('cfType').value,
+    contact_name:   document.getElementById('cfContactName').value.trim() || null,
+    contact_email:  document.getElementById('cfContactEmail').value.trim() || null,
+    contact_phone:  document.getElementById('cfContactPhone').value.trim() || null,
+    hazmat_enabled: document.getElementById('cfHazmat').checked,
+  };
+
+  if(!body.code) { err.textContent = 'Client code is required'; return; }
+  if(!body.name) { err.textContent = 'Client name is required'; return; }
+
+  // Build hazmat_config only when hazmat is on
+  if(body.hazmat_enabled){
+    body.hazmat_config = {
+      hazard_class:      document.getElementById('cfHazClass').value.trim() || null,
+      packing_group:     document.getElementById('cfHazPackingGroup').value.trim() || null,
+      shipper_id:        document.getElementById('cfHazShipperId').value.trim() || null,
+      emergency_contact: document.getElementById('cfHazEmergency').value.trim() || null,
+      ground_only:       document.getElementById('cfHazGround').checked,
+      notes:             document.getElementById('cfHazNotes').value.trim() || null,
+    };
+  } else {
+    body.hazmat_config = null;
+  }
+
+  const submitBtn = document.getElementById('cfSubmitBtn');
+  submitBtn.disabled = true;
+  try {
+    const url = _editingClientId
+      ? `${API}/clients/${_editingClientId}`
+      : `${API}/clients`;
+    const method = _editingClientId ? 'PATCH' : 'POST';
+    const r = await fetch(url, {
+      method, headers: {'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if(!r.ok){ err.textContent = d.error || 'Save failed'; return; }
+
+    closeModal('clientFormModal');
+    // Refresh the list and jump straight to the new/edited client's
+    // detail page so ops can dial in the SLA targets right away.
+    clientsCache = []; await loadCC();
+    await loadClients();
+    openClientDetail(d.id);
+  } catch(e){
+    err.textContent = 'Network error';
+  } finally {
+    submitBtn.disabled = false;
+  }
 }
 
 // ----- KPI / SLA SETTINGS TAB -----
