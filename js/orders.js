@@ -104,31 +104,39 @@ async function openOrderDetail(id){
     ? '<div class="workflow-step" style="color:var(--red);"><div class="workflow-icon">✕</div>CANCELLED</div>'
     : '');
 
-  const tr = await apiGet(`/orders/${id}/valid-transitions`);
+  // Phase 3: portal users (clients) only see status, not actions.
+  // /orders/:id/valid-transitions is requireOps and would 403 anyway, and
+  // the allocate / pick / ship buttons are not exposed to clients — ops
+  // handles all fulfilment.
   const transBtns = document.getElementById('ordTransitionBtns');
-  // Ship Order is its own action — collapses PACKING/PACKED → SHIPPED in one
-  // step. Show it prominently when the order is ready to ship.
-  const canShip = ['PICKED', 'PACKED'].includes(d.status);
-  let html = '';
-  if(canShip){
-    html += `<button class="btn btn-success js-ship-btn" style="margin:0 8px 8px 0;">📦 Ship Order</button>`;
+  if(typeof isPortalMode === 'function' && isPortalMode()){
+    transBtns.innerHTML = '<div style="color:var(--muted);font-size:13px;">Read-only in portal</div>';
+  } else {
+    const tr = await apiGet(`/orders/${id}/valid-transitions`);
+    // Ship Order is its own action — collapses PACKING/PACKED → SHIPPED in one
+    // step. Show it prominently when the order is ready to ship.
+    const canShip = ['PICKED', 'PACKED'].includes(d.status);
+    let html = '';
+    if(canShip){
+      html += `<button class="btn btn-success js-ship-btn" style="margin:0 8px 8px 0;">📦 Ship Order</button>`;
+    }
+    if(tr?.allowed?.length){
+      html += tr.allowed.map(t =>
+        `<button class="btn ${t === 'CANCELLED' ? 'btn-danger' : 'btn-primary'} js-trans-btn"
+                 data-target="${esc(t)}" style="margin:0 8px 8px 0;">${t === 'CANCELLED' ? 'Cancel' : '→ ' + esc(t)}</button>`
+      ).join('');
+    }
+    if(!html){
+      html = '<div style="color:var(--muted);font-size:13px;">Terminal state</div>';
+    }
+    transBtns.innerHTML = html;
+    transBtns.querySelectorAll('.js-trans-btn').forEach(btn =>
+      btn.addEventListener('click', () => transitionOrder(id, btn.dataset.target))
+    );
+    transBtns.querySelectorAll('.js-ship-btn').forEach(btn =>
+      btn.addEventListener('click', () => showShipOrderModal())
+    );
   }
-  if(tr?.allowed?.length){
-    html += tr.allowed.map(t =>
-      `<button class="btn ${t === 'CANCELLED' ? 'btn-danger' : 'btn-primary'} js-trans-btn"
-               data-target="${esc(t)}" style="margin:0 8px 8px 0;">${t === 'CANCELLED' ? 'Cancel' : '→ ' + esc(t)}</button>`
-    ).join('');
-  }
-  if(!html){
-    html = '<div style="color:var(--muted);font-size:13px;">Terminal state</div>';
-  }
-  transBtns.innerHTML = html;
-  transBtns.querySelectorAll('.js-trans-btn').forEach(btn =>
-    btn.addEventListener('click', () => transitionOrder(id, btn.dataset.target))
-  );
-  transBtns.querySelectorAll('.js-ship-btn').forEach(btn =>
-    btn.addEventListener('click', () => showShipOrderModal())
-  );
 
   const shipTo = `
     <div style="font-weight:600;font-size:15px;margin-bottom:6px;">${esc(d.ship_to_name || d.customer_name || '—')}</div>
@@ -152,7 +160,9 @@ async function openOrderDetail(id){
   document.getElementById('allocPanel').style.display = 'none';
 
   // Pick List takes over from Allocations history when order is actively pickable.
-  const isPickable = ['ALLOCATED', 'PICKING'].includes(d.status);
+  // Hidden entirely for portal users — picking is an ops workflow.
+  const portal = (typeof isPortalMode === 'function' && isPortalMode());
+  const isPickable = !portal && ['ALLOCATED', 'PICKING'].includes(d.status);
   renderPickList(d, isPickable);
 
   const ah = document.getElementById('allocHistPanel');
