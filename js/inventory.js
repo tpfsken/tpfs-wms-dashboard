@@ -32,7 +32,8 @@ async function loadInventory(){
     const lpBadge = r.lp_number
       ? `<span class="lp-badge ${r.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(r.lp_number)}</span>`
       : '—';
-    const breakBtn = isCaseAvail
+    // Case-break is an ops action — clients in portal mode never see this button.
+    const breakBtn = (isCaseAvail && !(typeof isPortalMode === 'function' && isPortalMode()))
       ? `<button class="btn btn-ghost js-break-btn" style="padding:4px 10px;font-size:12px;"
                  data-payload='${esc(JSON.stringify({
                    lp_id: r.lp_id, id: r.id, lp_number: r.lp_number,
