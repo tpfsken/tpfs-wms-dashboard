@@ -139,62 +139,54 @@ async function loadPortalHome(){
   if(d) renderPortalMetrics(d);
 }
 
-// Renders the client-scoped KPI row (top) and SLA row (below) on the portal
-// home page. Data shape comes from GET /portal/dashboard (see API
-// src/queries/dashboard.js -> getPortalDashboard).
+// Renders the client-scoped KPI row on the portal home page. Data shape
+// comes from GET /portal/dashboard (see API src/queries/dashboard.js
+// -> getPortalDashboard). One compact row of mini-cards — purposely
+// smaller than the ops dashboard cards because portal users don't need
+// real-time monitoring, just a quick health check.
 function renderPortalMetrics(d){
   const kpiRow = document.getElementById('portalMetricsRow');
   const slaRow = document.getElementById('portalSlaRow');
-  if(!kpiRow || !slaRow) return;
+  if(!kpiRow) return;
 
-  // ----- Top row: count cards -----
-  const cards = [
-    {l:'Open Orders',      v:Number(d.openCount ?? 0).toLocaleString(),     c:'var(--blue)'},
-    {l:'Past-Due Open',    v:Number(d.pastDue ?? 0).toLocaleString(),
-     c: (d.pastDue || 0) > 0 ? 'var(--red)' : 'var(--green)'},
-    {l:'Shipped (30d)',    v:Number(d.shipped30d ?? 0).toLocaleString(),    c:'var(--green)'},
-    {l:'Orders This Month',v:Number(d.ordersThisMonth ?? 0).toLocaleString(),
-     c:'var(--text)',
-     s: d.ordersLastMonth != null ? `${d.ordersLastMonth} last month` : ''},
-    {l:'My SKUs',          v:Number(d.totalSkus ?? 0).toLocaleString(),     c:'var(--text)'},
-    {l:'On-Hand Units',    v:Number(d.totalUnits ?? 0).toLocaleString(),    c:'var(--purple)'},
-  ];
-
-  kpiRow.innerHTML = cards.map(x => `
-    <div class="kpi">
-      <div class="kpi-label">${esc(x.l)}</div>
-      <div class="kpi-val" style="color:${x.c}">${esc(x.v)}</div>
-      ${x.s ? `<div class="kpi-delta">${esc(x.s)}</div>` : ''}
-    </div>`).join('');
-
-  // ----- Bottom row: SLA / on-time performance -----
+  // SLA on-time tier color (green ≥95, amber 85–94, red <85)
   const pct = d.onTimePct;
   const pctColor = pct == null ? 'var(--muted)'
                  : pct >= 95   ? 'var(--green)'
                  : pct >= 85   ? 'var(--amber)'
                                 : 'var(--red)';
 
-  slaRow.innerHTML = `
-    <div class="kpi">
-      <div class="kpi-label">On-Time Ship %</div>
-      <div class="kpi-val" style="color:${pctColor}">${pct == null ? '—' : esc(pct) + '%'}</div>
-      <div class="kpi-delta">${esc(d.onTimeShipped || 0)} of ${esc(d.shippedWithSla || 0)} shipped on-time</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Shipped (30d)</div>
-      <div class="kpi-val" style="color:var(--blue)">${esc(Number(d.shipped30d ?? 0).toLocaleString())}</div>
-      <div class="kpi-delta">${esc(d.period || 'last 30 days')}</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">This Month</div>
-      <div class="kpi-val" style="color:var(--text)">${esc(Number(d.ordersThisMonth ?? 0).toLocaleString())}</div>
-      <div class="kpi-delta">${esc(Number(d.ordersLastMonth ?? 0).toLocaleString())} last month</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Past-Due Open</div>
-      <div class="kpi-val" style="color:${(d.pastDue || 0) > 0 ? 'var(--red)' : 'var(--green)'}">${esc(d.pastDue ?? 0)}</div>
-      <div class="kpi-delta">orders past required ship date</div>
-    </div>`;
+  // Single consolidated row — duplicates from the prior two-row layout
+  // collapsed into one. Sub-line shows "last month" delta or SLA fraction.
+  const cards = [
+    {l:'Open',     v:Number(d.openCount ?? 0).toLocaleString(),  c:'var(--blue)'},
+    {l:'Past-Due', v:Number(d.pastDue ?? 0).toLocaleString(),
+     c: (d.pastDue || 0) > 0 ? 'var(--red)' : 'var(--green)'},
+    {l:'On-Time %', v: pct == null ? '—' : pct + '%',  c:pctColor,
+     s: `${d.onTimeShipped || 0}/${d.shippedWithSla || 0}`},
+    {l:'Shipped 30d', v:Number(d.shipped30d ?? 0).toLocaleString(), c:'var(--green)'},
+    {l:'This Month',  v:Number(d.ordersThisMonth ?? 0).toLocaleString(),
+     c:'var(--text)',
+     s: d.ordersLastMonth != null ? `${d.ordersLastMonth} last mo` : ''},
+    {l:'SKUs',        v:Number(d.totalSkus ?? 0).toLocaleString(),  c:'var(--text)'},
+    {l:'On-Hand',     v:Number(d.totalUnits ?? 0).toLocaleString(), c:'var(--purple)'},
+  ];
+
+  // Compact inline-styled mini-cards — about half the height of .kpi.
+  kpiRow.style.display = 'grid';
+  kpiRow.style.gridTemplateColumns = `repeat(${cards.length}, minmax(110px, 1fr))`;
+  kpiRow.style.gap = '10px';
+
+  kpiRow.innerHTML = cards.map(x => `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
+      <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">${esc(x.l)}</div>
+      <div style="font-size:20px;font-weight:700;line-height:1.1;margin-top:4px;color:${x.c};">${esc(x.v)}</div>
+      ${x.s ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;">${esc(x.s)}</div>` : ''}
+    </div>`).join('');
+
+  // Old SLA row is now folded into the row above — clear it so the
+  // empty container doesn't reserve vertical space.
+  if(slaRow) slaRow.innerHTML = '';
 }
 
 // =============================================================================
