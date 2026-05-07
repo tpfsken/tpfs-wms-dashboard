@@ -91,6 +91,9 @@ function loadPortalHome(){
     {id:'portalNewOrder', icon:'➕', title:'Place an Order',
      desc:'Manual outbound order — choose SKUs, quantities, and a ship-to.',
      accent:'var(--blue)'},
+    {id:'portalIntake',   icon:'📄', title:'Upload Documents',
+     desc:'Drop a PDF (PO, BOL, ASN, packing slip) — AI extracts and creates the order.',
+     accent:'var(--purple)'},
     {id:'inventory',      icon:'📦', title:'My Inventory',
      desc:'On-hand SKUs, lots, and license plates at the warehouse.',
      accent:'var(--green)'},
@@ -467,4 +470,115 @@ async function submitPortalNewOrder(){
   } finally {
     submitBtn.disabled = false;
   }
+}
+
+// =============================================================================
+// PORTAL INTAKE — upload PDFs (POs, BOLs, ASNs, supporting docs)
+// =============================================================================
+
+const PORTAL_INTAKE_CHIP = {
+  UPLOADED:'chip-new', EXTRACTING:'chip-active', EXTRACTED:'chip-warning',
+  EXTRACTION_FAILED:'chip-danger', APPROVED:'chip-success', REJECTED:'chip-danger',
+};
+
+function loadPortalIntake(){
+  // Wire drop-zone (once)
+  const drop = document.getElementById('portalIntakeDrop');
+  if(drop && !drop._wired){
+    drop._wired = true;
+    ['dragenter','dragover'].forEach(e => drop.addEventListener(e, ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      drop.style.borderColor = 'var(--blue)'; drop.style.background = 'var(--blue-bg)';
+    }));
+    ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      drop.style.borderColor = 'var(--border)'; drop.style.background = 'transparent';
+    }));
+    drop.addEventListener('drop', ev => {
+      const files = Array.from(ev.dataTransfer.files || [])
+        .filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+      if(files.length) uploadPortalIntakeFiles(files);
+    });
+  }
+
+  // Wire file input (once)
+  const input = document.getElementById('portalIntakeUpload');
+  if(input && !input._wired){
+    input._wired = true;
+    input.addEventListener('change', ev => {
+      const files = Array.from(ev.target.files || []);
+      if(files.length) uploadPortalIntakeFiles(files);
+      ev.target.value = ''; // allow re-pick of same file
+    });
+  }
+
+  // Refresh the list
+  refreshPortalIntakeList();
+}
+
+async function uploadPortalIntakeFiles(files){
+  const status = document.getElementById('portalIntakeStatus');
+  status.style.color = 'var(--text2)';
+  let done = 0, failed = 0;
+  for(const file of files){
+    status.textContent = `Uploading ${file.name} (${done + 1}/${files.length})…`;
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const r = await fetch(`${API}/intake/upload`, {
+        method:'POST', headers:{'Authorization':`Bearer ${T}`}, body:fd,
+      });
+      const d = await r.json();
+      if(!r.ok) throw new Error(d.error || 'Upload failed');
+      done++;
+      // Kick off extraction in background — endpoint is now scopeClient.
+      fetch(`${API}/intake/${d.id}/extract`, {
+        method:'POST', headers:{'Authorization':`Bearer ${T}`},
+      }).catch(() => {});
+    } catch(e){
+      failed++;
+      status.style.color = 'var(--red)';
+      status.textContent = `Failed on ${file.name}: ${e.message}`;
+    }
+  }
+  if(!failed){
+    status.style.color = 'var(--green)';
+    status.textContent = `✓ Uploaded ${done} document${done !== 1 ? 's' : ''} · AI is reading…`;
+  }
+  setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 4000);
+  // Refresh list after a brief delay so extraction has a head start.
+  setTimeout(refreshPortalIntakeList, 1500);
+  refreshPortalIntakeList();
+}
+
+async function refreshPortalIntakeList(){
+  const tbody = document.getElementById('portalIntakeBody');
+  if(!tbody) return;
+  const data = await apiGet('/intake?limit=100');
+  if(!data){
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Could not load uploads</td></tr>';
+    return;
+  }
+  if(!data.length){
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No uploads yet — drop a PDF above to get started</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(r => {
+    const chipCls = PORTAL_INTAKE_CHIP[r.status] || 'chip-new';
+    const result = r.created_order_number
+      ? `<span class="chip chip-success" style="font-size:11px;">SO ${esc(r.created_order_number)}</span>`
+      : r.created_po_number
+        ? `<span class="chip chip-success" style="font-size:11px;">PO ${esc(r.created_po_number)}</span>`
+        : (r.status === 'REJECTED' ? '<span style="color:var(--red);font-size:12px;">Rejected</span>'
+          : r.status === 'APPROVED' ? '—'
+          : '<span style="color:var(--muted);font-size:12px;">Pending review</span>');
+    return `
+      <tr>
+        <td>${esc(fmtTimeShort(r.uploaded_at))}</td>
+        <td><span style="font-family:monospace;font-size:12px;">${esc((r.pdf_filename || '').slice(0, 60))}</span></td>
+        <td><span class="chip" style="font-size:11px;">${esc(r.doc_type || '—')}</span></td>
+        <td class="right">${esc(fmtBytes(r.pdf_size_bytes))}</td>
+        <td><span class="chip ${chipCls}" style="font-size:11px;">${esc(r.status)}</span></td>
+        <td>${result}</td>
+      </tr>`;
+  }).join('');
 }

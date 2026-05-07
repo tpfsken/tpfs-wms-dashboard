@@ -57,7 +57,7 @@ const titles = {
   dashboard:'Dashboard', inventory:'Inventory', orders:'Orders',
   inbound:'Receiving', intake:'Intake', clients:'Clients',
   billing:'Billing', reports:'Reports',
-  portalHome:'Customer Portal', portalNewOrder:'Place an Order',
+  portalHome:'Customer Portal', portalNewOrder:'Place an Order', portalIntake:'Upload Documents',
 };
 
 // FIX: clients was missing from this map, so the Clients tab never auto-loaded.
@@ -72,6 +72,7 @@ const loaders = {
   reports:        loadReports,
   portalHome:     loadPortalHome,
   portalNewOrder: loadPortalNewOrder,
+  portalIntake:   loadPortalIntake,
 };
 
 function navigateTo(p){

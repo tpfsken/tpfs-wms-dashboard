@@ -32,6 +32,7 @@
       <div class="nav-section">Portal</div>
       <div class="nav-item" data-page="portalHome"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg><span class="nav-label">Home</span></div>
       <div class="nav-item" data-page="portalNewOrder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg><span class="nav-label">New Order</span></div>
+      <div class="nav-item" data-page="portalIntake"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13l2 2 4-4"/></svg><span class="nav-label">Upload Docs</span></div>
       <div class="nav-item" data-page="inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8l-9-5L3 8l9 5 9-5z"/><path d="M3 16l9 5 9-5M3 12l9 5 9-5"/></svg><span class="nav-label">Inventory</span></div>
       <div class="nav-item" data-page="orders"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg><span class="nav-label">Orders</span></div>
       <div class="nav-item" data-page="billing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg><span class="nav-label">Billing</span></div>
@@ -305,6 +306,45 @@
       <div style="flex:1"></div>
       <div id="pnoError"   style="color:var(--red);font-size:13px;"></div>
       <div id="pnoSuccess" style="color:var(--green);font-size:13px;"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- PORTAL INTAKE — upload PDFs (POs, BOLs, ASNs, supporting docs) -->
+  <!-- ============================================================ -->
+  <div class="page" id="page-portalIntake">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Upload Documents</div>
+        <div class="page-subtitle">Drop a PDF — our AI extracts the data and our ops team reviews + creates the order or PO.</div>
+      </div>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="navigateTo('portalHome')">← Home</button>
+      <button class="btn btn-primary" onclick="document.getElementById('portalIntakeUpload').click()">⬆ Upload PDF</button>
+      <input type="file" id="portalIntakeUpload" accept="application/pdf,.pdf" multiple style="display:none;">
+    </div>
+
+    <!-- Drop zone -->
+    <div id="portalIntakeDrop" class="card" style="padding:32px;border:2px dashed var(--border);text-align:center;cursor:pointer;transition:all .15s;" onclick="document.getElementById('portalIntakeUpload').click()">
+      <div style="font-size:32px;margin-bottom:8px;opacity:.5;">⬆</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:4px;">Drop PDFs here or click to browse</div>
+      <div style="font-size:13px;color:var(--text2);">PO, ASN, BOL, packing slips · 25MB max · AI classifies and extracts</div>
+      <div id="portalIntakeStatus" style="margin-top:12px;font-size:13px;"></div>
+    </div>
+
+    <!-- Recent uploads list -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Your Uploads</div>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" onclick="loadPortalIntake()">Refresh</button>
+      </div>
+      <div style="overflow:auto;max-height:60vh;">
+        <table class="data-table">
+          <thead><tr><th>Uploaded</th><th>File</th><th>Type</th><th class="right">Size</th><th>Status</th><th>Result</th></tr></thead>
+          <tbody id="portalIntakeBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
