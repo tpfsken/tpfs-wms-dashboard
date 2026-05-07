@@ -147,7 +147,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .cb-input:focus,.cb-input.open{border-color:var(--blue)}
 .cb-arrow{position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted);font-size:11px;transition:transform .15s}
 .cb-input.open+.cb-arrow{transform:translateY(-50%) rotate(180deg)}
-.cb-drop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;z-index:99999;max-height:220px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.cb-drop{position:fixed;background:var(--panel);border:1px solid var(--border);border-radius:8px;z-index:99999;max-height:220px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 .cb-search{padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
 .cb-search input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-family:var(--font);font-size:13px;outline:none}
 .cb-search input:focus{border-color:var(--blue)}

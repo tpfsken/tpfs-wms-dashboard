@@ -34,6 +34,7 @@ function _cbToggle(id){
   // Close any other open combos
   document.querySelectorAll('.cb-drop').forEach(d => {
     if(d.dataset.id !== id){
+      if(typeof d._cleanup === 'function') d._cleanup();
       d.remove();
       document.getElementById(d.dataset.id + '_btn')?.classList.remove('open');
     }
@@ -41,6 +42,7 @@ function _cbToggle(id){
 
   const existing = document.getElementById(id + '_drop');
   if(existing){
+    if(typeof existing._cleanup === 'function') existing._cleanup();
     existing.remove();
     document.getElementById(id + '_btn')?.classList.remove('open');
     return;
@@ -57,7 +59,26 @@ function _cbToggle(id){
   drop.id = id + '_drop';
   drop.dataset.id = id;
   drop.innerHTML = `<div class="cb-search"><input id="${esc(id)}_search" placeholder="Type to filter..." autocomplete="off"></div><div class="cb-list" id="${esc(id)}_list"></div>`;
-  wrap.appendChild(drop);
+
+  // Append to body so the dropdown escapes any overflow:hidden / scrolling
+  // ancestor (the .page container clips with overflow-y:auto). Position is
+  // computed fixed-relative to the button.
+  document.body.appendChild(drop);
+  const positionDrop = () => {
+    const r = btn.getBoundingClientRect();
+    drop.style.top   = (r.bottom + 4) + 'px';
+    drop.style.left  = r.left + 'px';
+    drop.style.width = r.width + 'px';
+  };
+  positionDrop();
+  // Re-position on window resize / scroll while the dropdown is open
+  const reposition = () => positionDrop();
+  window.addEventListener('resize', reposition);
+  window.addEventListener('scroll', reposition, true);
+  drop._cleanup = () => {
+    window.removeEventListener('resize', reposition);
+    window.removeEventListener('scroll', reposition, true);
+  };
 
   // Delegate option clicks via the list container so we don't have to escape
   // values into inline onclick handlers. Note: data-value="" is a VALID value
@@ -82,9 +103,13 @@ function _cbToggle(id){
     if(e.key === 'Escape'){    _cbClose(id); }
   });
 
-  // Close on outside click
+  // Close on outside click. Drop is now a sibling of wrap (in body), so
+  // we have to check both for "outside".
   setTimeout(() => document.addEventListener('click', function handler(e){
-    if(!wrap.contains(e.target)){ _cbClose(id); document.removeEventListener('click', handler); }
+    if(!wrap.contains(e.target) && !drop.contains(e.target)){
+      _cbClose(id);
+      document.removeEventListener('click', handler);
+    }
   }), 50);
 }
 
@@ -150,7 +175,11 @@ function _cbSelect(id, value, label){
 }
 
 function _cbClose(id){
-  document.getElementById(id + '_drop')?.remove();
+  const drop = document.getElementById(id + '_drop');
+  if(drop){
+    if(typeof drop._cleanup === 'function') drop._cleanup();
+    drop.remove();
+  }
   document.getElementById(id + '_btn')?.classList.remove('open');
 }
 
