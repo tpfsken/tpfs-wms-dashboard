@@ -243,7 +243,12 @@ async function submitCaseBreak(){
 let _editingItemId = null;   // null = create, string = edit
 let _itemClientHazmatMap = {}; // {clientId -> hazmat_enabled} for prompting
 
-const ITEM_UOMS = [
+// Baseline UOMs always shown in the dropdown. Anything ops has added
+// to existing SKUs gets merged in on top of this via /uoms (so the
+// list grows over time). The combo has allowCustom:true, so ops can
+// type a brand-new value (e.g. "TON", "ROLL", "BX") and it'll save on
+// the SKU and show up in the dropdown next time.
+const ITEM_UOM_BASELINE = [
   {value:'EA',  label:'EA — Each'},
   {value:'CS',  label:'CS — Case'},
   {value:'PL',  label:'PL — Pallet'},
@@ -252,6 +257,17 @@ const ITEM_UOMS = [
   {value:'OZ',  label:'OZ — Ounce'},
   {value:'GAL', label:'GAL — Gallon'},
 ];
+
+// Build the merged UOM option list — baseline + anything else used on
+// existing SKUs. Returns the combo-options shape.
+async function buildItemUomOptions(){
+  const used = (await apiGet('/uoms')) || [];
+  const seen = new Set(ITEM_UOM_BASELINE.map(o => o.value));
+  const extras = used
+    .filter(u => u && !seen.has(u))
+    .map(u => ({value: u, label: u}));
+  return ITEM_UOM_BASELINE.concat(extras);
+}
 
 const ITEM_TYPES = [
   {value:'STANDARD', label:'Standard'},
@@ -283,14 +299,18 @@ async function openItemFormModal(skuId){
     _itemClientHazmatMap[c.id] = !!c.hazmat_enabled;
   }
 
-  // Init combos
+  // Init combos. UOM options merge the baseline catalog with whatever's
+  // already in use on existing SKUs (loaded fresh each open). allowCustom
+  // lets ops type a brand-new UOM inline — it persists to the SKU on
+  // save and appears in the dropdown on next open.
   initCombo('itemClientWrap',
     [{value:'', label:'— Pick a client —'}].concat(
       clientsCache.map(c => ({value:String(c.id), label:`${c.code} — ${c.name}`}))
     ),
     {placeholder:'— Pick a client —', onChange: () => onItemClientChange()}
   );
-  initCombo('itemUomWrap',           ITEM_UOMS,        {placeholder:'EA', value:'EA'});
+  const uomOptions = await buildItemUomOptions();
+  initCombo('itemUomWrap',           uomOptions,       {placeholder:'EA', value:'EA', allowCustom:true});
   initCombo('itemTypeWrap',          ITEM_TYPES,       {placeholder:'Standard', value:'STANDARD'});
   initCombo('itemPackingGroupWrap',  PACKING_GROUPS,   {placeholder:'— None —'});
 
