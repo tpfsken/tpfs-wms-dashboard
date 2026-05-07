@@ -18,6 +18,86 @@ async function loadDashboard(){
     document.getElementById('laborUnitsHr').textContent = d.labor.summary?.avg_units_per_hour || '—';
     document.getElementById('laborWorkers').textContent = d.labor.summary?.active_workers || '0';
   }
+  // Per-client SLA rollup — separate request so the main dashboard
+  // doesn't slow down if this is heavy.
+  loadClientsPerformance();
+}
+
+// Render the "Performance by Client" panel — one row per active
+// client showing their on-time % vs their saved target, past-due, and
+// a status chip. Click a row to drill to that client's detail page.
+async function loadClientsPerformance(){
+  const body = document.getElementById('clientsPerformanceBody');
+  if(!body) return;
+  body.innerHTML = '<tr><td colspan="7" class="empty-state">Loading…</td></tr>';
+
+  const rows = await apiGet('/dashboard/clients-performance');
+  if(!rows){
+    body.innerHTML = '<tr><td colspan="7" class="empty-state">Could not load</td></tr>';
+    return;
+  }
+  if(!rows.length){
+    body.innerHTML = '<tr><td colspan="7" class="empty-state">No active clients</td></tr>';
+    return;
+  }
+
+  // Tier color for on-time %: respects the client's saved target if any,
+  // otherwise falls back to the 95/85 industry-default tiers.
+  const onTimeColor = (pct, target, warning) => {
+    if(pct == null) return 'var(--muted)';
+    const t = target ?? 95;
+    const w = warning ?? 85;
+    return pct >= t ? 'var(--green)' : pct >= w ? 'var(--amber)' : 'var(--red)';
+  };
+  const pastDueColor = (n, target, warning) => {
+    if(n == null) return 'var(--muted)';
+    const t = target ?? 0;
+    const w = warning ?? 5;
+    return n <= t ? 'var(--green)' : n <= w ? 'var(--amber)' : 'var(--red)';
+  };
+  const statusChip = (pct, target, pastDue, pdTarget) => {
+    // If neither metric is configured, show "Info"; otherwise compute
+    // the worst status across the two and chip-ify it.
+    const tiers = [];
+    if(target != null && pct != null){
+      tiers.push(pct >= target ? 'good' : 'breach');
+    }
+    if(pdTarget != null && pastDue != null){
+      tiers.push(pastDue <= pdTarget ? 'good' : 'breach');
+    }
+    if(!tiers.length) return '<span class="chip chip-new">No SLA set</span>';
+    if(tiers.includes('breach')) return '<span class="chip chip-danger">✕ Below SLA</span>';
+    return '<span class="chip chip-success">✓ Meeting SLA</span>';
+  };
+
+  body.innerHTML = rows.map(r => {
+    const pct  = r.on_time_pct;
+    const otc  = onTimeColor(pct, r.on_time_target, r.on_time_warning);
+    const pdc  = pastDueColor(r.past_due, r.past_due_target, r.past_due_warning);
+    const targetTxt = r.on_time_target == null ? '—' : `${r.on_time_target}%`;
+    return `
+      <tr class="js-cli-perf-row" data-id="${esc(r.client_id)}" style="cursor:pointer;">
+        <td>
+          <div style="font-weight:600;color:var(--blue);">${esc(r.client_code || '')}</div>
+          <div style="font-size:12px;color:var(--text2);">${esc(r.client_name || '')}</div>
+        </td>
+        <td class="right" style="font-weight:700;color:${otc};">${pct == null ? '—' : esc(pct) + '%'}</td>
+        <td class="right" style="color:var(--text2);">${esc(targetTxt)}</td>
+        <td class="right" style="font-weight:700;color:${pdc};">${esc(r.past_due ?? 0)}</td>
+        <td class="right">${esc(r.open_count ?? 0)}</td>
+        <td class="right" style="color:var(--text2);">${esc(r.shipped_30d ?? 0)}</td>
+        <td>${statusChip(pct, r.on_time_target, r.past_due, r.past_due_target)}</td>
+      </tr>`;
+  }).join('');
+
+  body.querySelectorAll('.js-cli-perf-row').forEach(row => {
+    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
+    row.addEventListener('mouseout',  () => row.style.background = '');
+    row.addEventListener('click', () => {
+      navigateTo('clients');
+      setTimeout(() => openClientDetail(row.dataset.id), 100);
+    });
+  });
 }
 
 function renderSLA(s){

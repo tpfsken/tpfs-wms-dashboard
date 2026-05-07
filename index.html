@@ -84,6 +84,34 @@
         <div style="border-top:1px solid var(--border);padding:16px;"><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Labor</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div style="background:var(--bg);border-radius:8px;padding:12px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Units/hr</div><div style="font-size:24px;font-weight:700;color:var(--blue);" id="laborUnitsHr">—</div></div><div style="background:var(--bg);border-radius:8px;padding:12px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Workers</div><div style="font-size:24px;font-weight:700;color:var(--green);" id="laborWorkers">—</div></div></div></div>
       </div>
     </div>
+    <!-- Performance by Client — drill from warehouse-wide totals into a
+         specific client's KPIs. Shows on-time vs target + past-due so a
+         CSR can spot SLA breaches at 8am. Click a row to jump straight
+         to that client's detail page. -->
+    <div class="card" style="margin-top:16px;">
+      <div class="card-head">
+        <div class="card-title">Performance by Client</div>
+        <div style="font-size:12px;color:var(--text2);margin-left:12px;">SLA status across all active clients · last 30 days</div>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" onclick="loadClientsPerformance()">Refresh</button>
+      </div>
+      <div style="overflow:auto;max-height:400px;">
+        <table class="data-table" style="margin:0;">
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th class="right">On-Time %</th>
+              <th class="right">Target</th>
+              <th class="right">Past-Due</th>
+              <th class="right">Open</th>
+              <th class="right">Shipped 30d</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="clientsPerformanceBody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <div class="page" id="page-inventory">

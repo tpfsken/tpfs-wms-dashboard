@@ -134,58 +134,76 @@ async function loadPortalHome(){
   const hi = document.getElementById('portalHomeGreeting');
   if(hi && U) hi.textContent = `Welcome, ${U.fullName || U.email || ''}`;
 
-  // Fetch + render the client-scoped KPI / SLA cards
-  const d = await apiGet('/portal/dashboard');
-  if(d) renderPortalMetrics(d);
+  // Fetch + render the client-scoped KPI / SLA cards using per-client
+  // configuration. /clients/:id/performance returns one item per
+  // ENABLED metric with its current value, target, warning_threshold,
+  // and a derived status (good/warn/breach/info) — the UI just colors
+  // against the status, no threshold logic on the client side.
+  if(U && U.clientId){
+    const perf = await apiGet(`/clients/${U.clientId}/performance`);
+    if(perf?.items) renderPortalMetrics(perf.items, perf.raw || {});
+  }
 }
 
-// Renders the client-scoped KPI row on the portal home page. Data shape
-// comes from GET /portal/dashboard (see API src/queries/dashboard.js
-// -> getPortalDashboard). One compact row of mini-cards — purposely
-// smaller than the ops dashboard cards because portal users don't need
-// real-time monitoring, just a quick health check.
-function renderPortalMetrics(d){
+// Format a metric value with its unit suffix (% / hrs / min / count).
+function fmtMetricValue(v, unit){
+  if(v == null) return '—';
+  if(unit === 'pct') return v + '%';
+  if(unit === 'hours') return Number(v).toLocaleString() + 'h';
+  if(unit === 'minutes') return Number(v).toLocaleString() + 'm';
+  return Number(v).toLocaleString();
+}
+
+// Map status -> colour. info metrics get a neutral color since they
+// don't have a target.
+function statusColor(s){
+  return s === 'good'   ? 'var(--green)'
+       : s === 'warn'   ? 'var(--amber)'
+       : s === 'breach' ? 'var(--red)'
+       :                  'var(--text)';
+}
+
+// Renders the client-scoped KPI row on the portal home page. Driven
+// by per-client config from /clients/:id/performance — items only
+// include ENABLED metrics, in display_order, with status pre-computed
+// against the saved targets.
+function renderPortalMetrics(items, raw){
   const kpiRow = document.getElementById('portalMetricsRow');
   const slaRow = document.getElementById('portalSlaRow');
   if(!kpiRow) return;
 
-  // SLA on-time tier color (green ≥95, amber 85–94, red <85)
-  const pct = d.onTimePct;
-  const pctColor = pct == null ? 'var(--muted)'
-                 : pct >= 95   ? 'var(--green)'
-                 : pct >= 85   ? 'var(--amber)'
-                                : 'var(--red)';
+  if(!items.length){
+    kpiRow.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px;">No KPIs configured — ask ops to enable metrics on your account</div>';
+    if(slaRow) slaRow.innerHTML = '';
+    return;
+  }
 
-  // Single consolidated row — duplicates from the prior two-row layout
-  // collapsed into one. Sub-line shows "last month" delta or SLA fraction.
-  const cards = [
-    {l:'Open',     v:Number(d.openCount ?? 0).toLocaleString(),  c:'var(--blue)'},
-    {l:'Past-Due', v:Number(d.pastDue ?? 0).toLocaleString(),
-     c: (d.pastDue || 0) > 0 ? 'var(--red)' : 'var(--green)'},
-    {l:'On-Time %', v: pct == null ? '—' : pct + '%',  c:pctColor,
-     s: `${d.onTimeShipped || 0}/${d.shippedWithSla || 0}`},
-    {l:'Shipped 30d', v:Number(d.shipped30d ?? 0).toLocaleString(), c:'var(--green)'},
-    {l:'This Month',  v:Number(d.ordersThisMonth ?? 0).toLocaleString(),
-     c:'var(--text)',
-     s: d.ordersLastMonth != null ? `${d.ordersLastMonth} last mo` : ''},
-    {l:'SKUs',        v:Number(d.totalSkus ?? 0).toLocaleString(),  c:'var(--text)'},
-    {l:'On-Hand',     v:Number(d.totalUnits ?? 0).toLocaleString(), c:'var(--purple)'},
-  ];
-
-  // Compact inline-styled mini-cards — about half the height of .kpi.
+  // Compact mini-cards — one column per metric, wraps on narrow widths.
   kpiRow.style.display = 'grid';
-  kpiRow.style.gridTemplateColumns = `repeat(${cards.length}, minmax(110px, 1fr))`;
+  kpiRow.style.gridTemplateColumns = `repeat(${items.length}, minmax(110px, 1fr))`;
   kpiRow.style.gap = '10px';
 
-  kpiRow.innerHTML = cards.map(x => `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
-      <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">${esc(x.l)}</div>
-      <div style="font-size:20px;font-weight:700;line-height:1.1;margin-top:4px;color:${x.c};">${esc(x.v)}</div>
-      ${x.s ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;">${esc(x.s)}</div>` : ''}
-    </div>`).join('');
+  kpiRow.innerHTML = items.map(it => {
+    const color = statusColor(it.status);
+    const val   = fmtMetricValue(it.value, it.unit);
+    // Sub-line: SLA target if set, otherwise contextual fact for info metrics.
+    let sub = '';
+    if(it.direction !== 'info' && it.target_value != null){
+      const arrow = it.direction === 'higher_is_better' ? '≥' : '≤';
+      sub = `Target ${arrow} ${fmtMetricValue(it.target_value, it.unit)}`;
+    } else if(it.metric_key === 'on_time_pct'){
+      sub = `${raw._onTimeShipped || 0}/${raw._shippedWithSla || 0}`;
+    } else if(it.metric_key === 'orders_this_month'){
+      sub = `${raw._ordersLastMonth || 0} last mo`;
+    }
+    return `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">${esc(it.custom_label || it.label)}</div>
+        <div style="font-size:20px;font-weight:700;line-height:1.1;margin-top:4px;color:${color};">${esc(val)}</div>
+        ${sub ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;">${esc(sub)}</div>` : ''}
+      </div>`;
+  }).join('');
 
-  // Old SLA row is now folded into the row above — clear it so the
-  // empty container doesn't reserve vertical space.
   if(slaRow) slaRow.innerHTML = '';
 }
 
