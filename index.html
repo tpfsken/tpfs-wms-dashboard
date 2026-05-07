@@ -316,8 +316,10 @@
 
     <!-- Supporting documents — files staged on the client, uploaded to the
          order after it's created (since /orders/:id/attachments needs an
-         order id). Spans the full width below the two-column grid. -->
-    <div class="card" style="margin-top:20px;">
+         order id). Spans the full width below the two-column grid.
+         flex-shrink:0 prevents the parent flex column from squashing it
+         to 2px when the page is short. -->
+    <div class="card" style="margin-top:20px;flex:0 0 auto;">
       <div class="card-head">
         <div class="card-title">Supporting Documents</div>
         <div id="pnoAttachCount" style="font-size:12px;color:var(--muted);margin-left:8px;"></div>
