@@ -125,6 +125,27 @@ function _fmtAddr(a) {
     .filter(Boolean).join('<br>');
 }
 
+// Aggregates allocation lot numbers under an order line. Returns an
+// array of distinct lot strings (skipping nulls). When the same line
+// has been split across multiple lots (FEFO), every lot is returned so
+// the slip / BOL can show all of them.
+function _lotsForLine(line, allocations) {
+  if (!line || !Array.isArray(allocations)) return [];
+  const seen = new Set();
+  for (const a of allocations) {
+    if (a.status === 'CANCELLED') continue;
+    // Match by line id when available, otherwise fall back to sku.
+    const matches = (line.id && a.order_line_id && a.order_line_id === line.id)
+      || (a.sku_id && line.sku_id && a.sku_id === line.sku_id);
+    if (!matches) continue;
+    if (a.lot_number && !seen.has(a.lot_number)) seen.add(a.lot_number);
+  }
+  // If no allocation lot data (pre-allocate), fall back to a customer-
+  // requested lot captured on the order line itself.
+  if (!seen.size && line.lot_number) seen.add(line.lot_number);
+  return Array.from(seen);
+}
+
 function _openDocWindow(html) {
   const w = window.open('', '_blank', 'width=900,height=1100');
   if (!w) {
@@ -287,6 +308,7 @@ function renderPickSlip(order) {
 
 function renderPackingSlip(order) {
   const lines = order.lines || [];
+  const allocs = order.allocations || [];
   const totalUnits = lines.reduce((s, l) => s + (Number(l.shipped_qty || l.allocated_qty || l.ordered_qty) || 0), 0);
 
   const linesHtml = lines.length
@@ -296,21 +318,29 @@ function renderPackingSlip(order) {
             <th style="width:50px;">Line</th>
             <th>SKU</th>
             <th>Description</th>
+            <th>Lot</th>
             <th class="right">Ordered</th>
             <th class="right">Shipped</th>
             <th>UOM</th>
           </tr>
         </thead>
         <tbody>
-          ${lines.map(l => `
-            <tr>
-              <td class="center mono">${_esc(l.line_number || '')}</td>
-              <td class="mono">${_esc(l.sku_code || '')}</td>
-              <td>${_esc(l.sku_name || '')}</td>
-              <td class="right mono">${_esc(l.ordered_qty || 0)}</td>
-              <td class="right mono"><strong>${_esc(l.shipped_qty || l.allocated_qty || 0)}</strong></td>
-              <td>${_esc(l.sku_uom || 'EA')}</td>
-            </tr>`).join('')}
+          ${lines.map(l => {
+            const lots = _lotsForLine(l, allocs);
+            const lotCell = lots.length
+              ? lots.map(n => `<div class="mono">${_esc(n)}</div>`).join('')
+              : '<span style="color:#999;">—</span>';
+            return `
+              <tr>
+                <td class="center mono">${_esc(l.line_number || '')}</td>
+                <td class="mono">${_esc(l.sku_code || '')}</td>
+                <td>${_esc(l.sku_name || '')}</td>
+                <td>${lotCell}</td>
+                <td class="right mono">${_esc(l.ordered_qty || 0)}</td>
+                <td class="right mono"><strong>${_esc(l.shipped_qty || l.allocated_qty || 0)}</strong></td>
+                <td>${_esc(l.sku_uom || 'EA')}</td>
+              </tr>`;
+          }).join('')}
         </tbody>
       </table>`
     : '<p><em>No line items.</em></p>';
@@ -362,6 +392,7 @@ function renderPackingSlip(order) {
 // =============================================================================
 
 function renderBol(order) {
+  const allocs = order.allocations || [];
   const lines = (order.lines || []).filter(l => Number(l.allocated_qty || l.shipped_qty || l.ordered_qty) > 0);
 
   // Compute totals from line weight × qty. We use shipped_qty if present
@@ -373,10 +404,13 @@ function renderBol(order) {
     totalPieces += pieces;
     totalWeight += wt;
 
+    const lots = _lotsForLine(l, allocs);
     let descr;
     if (l.is_hazmat) {
       // DOT-required basic description: UN/NA #, Proper Shipping Name,
       // Hazard Class, Packing Group (when applicable). Class 2 has no PG.
+      // Lot number(s) appended for traceability — not strictly DOT
+      // required on the BOL but standard practice for hazmat shipments.
       const parts = [
         l.un_number || '',
         (l.proper_shipping_name || l.sku_name || '').toUpperCase(),
@@ -394,6 +428,7 @@ function renderBol(order) {
       isHazmat:    !!l.is_hazmat,
       description: descr,
       sku_code:    l.sku_code,
+      lots,
       weight:      wt,
       nmfc:        l.nmfc_code || '',
       cls:         l.freight_class || '',
@@ -413,18 +448,24 @@ function renderBol(order) {
           </tr>
         </thead>
         <tbody>
-          ${rows.map(r => `
-            <tr>
-              <td class="right mono"><strong>${_esc(r.pieces)}</strong></td>
-              <td class="center"><strong style="color:${r.isHazmat ? '#d22' : '#555'};">${r.isHazmat ? 'X' : '—'}</strong></td>
-              <td>
-                <div class="mono small" style="color:#555;">${_esc(r.sku_code || '')}</div>
-                <div>${_esc(r.description)}</div>
-              </td>
-              <td class="right mono">${r.weight ? _esc(r.weight.toFixed(1)) : '—'}</td>
-              <td class="mono">${_esc(r.nmfc || '—')}</td>
-              <td class="right mono"><strong>${_esc(r.cls || '—')}</strong></td>
-            </tr>`).join('')}
+          ${rows.map(r => {
+            const lotLine = r.lots && r.lots.length
+              ? `<div class="small" style="color:#444;margin-top:2px;"><strong>Lot${r.lots.length > 1 ? 's' : ''}:</strong> ${r.lots.map(l => `<span class="mono">${_esc(l)}</span>`).join(', ')}</div>`
+              : '';
+            return `
+              <tr>
+                <td class="right mono"><strong>${_esc(r.pieces)}</strong></td>
+                <td class="center"><strong style="color:${r.isHazmat ? '#d22' : '#555'};">${r.isHazmat ? 'X' : '—'}</strong></td>
+                <td>
+                  <div class="mono small" style="color:#555;">${_esc(r.sku_code || '')}</div>
+                  <div>${_esc(r.description)}</div>
+                  ${lotLine}
+                </td>
+                <td class="right mono">${r.weight ? _esc(r.weight.toFixed(1)) : '—'}</td>
+                <td class="mono">${_esc(r.nmfc || '—')}</td>
+                <td class="right mono"><strong>${_esc(r.cls || '—')}</strong></td>
+              </tr>`;
+          }).join('')}
           <tr style="background:#f4f4f4;">
             <td class="right mono"><strong>${_esc(totalPieces)}</strong></td>
             <td></td>
