@@ -37,7 +37,9 @@ async function doLogin(){
     sessionStorage.setItem('tpfs_token', T);
     sessionStorage.setItem('tpfs_user', JSON.stringify(U));
     document.getElementById('loginOverlay').style.display = 'none';
-    boot();
+    // Phase 3: client portal users get the portal shell; ops/admin get the
+    // full ops dashboard. Switch is purely on the JWT's userType claim.
+    if(U && U.userType === 'client') bootPortal(); else boot();
   } catch(x){
     err.textContent = 'Network error';
   }
@@ -55,18 +57,21 @@ const titles = {
   dashboard:'Dashboard', inventory:'Inventory', orders:'Orders',
   inbound:'Receiving', intake:'Intake', clients:'Clients',
   billing:'Billing', reports:'Reports',
+  portalHome:'Customer Portal', portalNewOrder:'Place an Order',
 };
 
 // FIX: clients was missing from this map, so the Clients tab never auto-loaded.
 const loaders = {
-  dashboard: loadDashboard,
-  inventory: loadInventory,
-  orders:    loadOrders,
-  inbound:   loadInbound,
-  intake:    loadIntake,
-  clients:   loadClients,
-  billing:   loadBilling,
-  reports:   loadReports,
+  dashboard:      loadDashboard,
+  inventory:      loadInventory,
+  orders:         loadOrders,
+  inbound:        loadInbound,
+  intake:         loadIntake,
+  clients:        loadClients,
+  billing:        loadBilling,
+  reports:        loadReports,
+  portalHome:     loadPortalHome,
+  portalNewOrder: loadPortalNewOrder,
 };
 
 function navigateTo(p){
@@ -176,6 +181,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // If we already have a token, skip login overlay and boot.
   if(T && U){
     document.getElementById('loginOverlay').style.display = 'none';
-    boot();
+    // Phase 3: dispatch on JWT userType — clients land in the portal shell,
+    // ops/admin keep the existing dashboard boot.
+    if(U.userType === 'client') bootPortal(); else boot();
   }
 });
