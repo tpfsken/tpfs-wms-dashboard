@@ -101,6 +101,18 @@
           <div class="detail-panel" style="margin-bottom:16px;"><div class="detail-grid" id="ordInfoGrid"></div></div>
           <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Order Lines</div></div><div><table class="data-table"><thead><tr><th>Line</th><th>SKU</th><th>Description</th><th>Type</th><th class="right">Ordered</th><th class="right">Allocated</th><th class="right">Picked</th><th class="right">Shipped</th></tr></thead><tbody id="ordLinesBody"></tbody></table></div></div>
           <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Shipments</div></div><div id="ordShipments"></div></div>
+          <div class="card" id="ordAttachCard" style="margin-bottom:16px;">
+            <div class="card-head">
+              <div class="card-title">Attachments</div>
+              <div id="ordAttachCount" style="font-size:12px;color:var(--muted);margin-left:8px;"></div>
+              <div style="flex:1"></div>
+              <button class="btn btn-ghost" id="ordAttachAddBtn" onclick="document.getElementById('ordAttachInput').click()">📎 Add</button>
+              <input type="file" id="ordAttachInput" style="display:none;"
+                     accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,image/*">
+            </div>
+            <div id="ordAttachList" style="padding:0 20px 16px 20px;"></div>
+            <div id="ordAttachStatus" style="padding:0 20px 12px 20px;font-size:12px;"></div>
+          </div>
           <div id="allocPanel" class="card" style="margin-bottom:16px;display:none;"><div class="card-head"><div class="card-title">Allocate Inventory</div><div class="card-badge" style="background:var(--blue-bg);color:var(--blue);" id="allocModeBadge">FEFO</div></div><div style="padding:20px;"><div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Select lots and quantities. Override the recommendation as needed.</div><div id="allocLinesList"></div><div style="display:flex;gap:8px;margin-top:16px;"><button class="btn btn-primary" onclick="submitAllocation()">Confirm Allocation</button><button class="btn btn-ghost" onclick="document.getElementById('allocPanel').style.display='none'">Cancel</button></div><div id="allocError" style="color:var(--red);font-size:13px;margin-top:8px;"></div><div id="allocSuccess" style="color:var(--green);font-size:13px;margin-top:8px;"></div></div></div>
           <div id="pickListPanel" class="card" style="display:none;margin-bottom:16px;">
             <div class="card-head">
@@ -300,6 +312,24 @@
           No lines yet — search for a SKU above to get started.
         </div>
       </div>
+    </div>
+
+    <!-- Supporting documents — files staged on the client, uploaded to the
+         order after it's created (since /orders/:id/attachments needs an
+         order id). Spans the full width below the two-column grid. -->
+    <div class="card" style="margin-top:20px;">
+      <div class="card-head">
+        <div class="card-title">Supporting Documents</div>
+        <div id="pnoAttachCount" style="font-size:12px;color:var(--muted);margin-left:8px;"></div>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" onclick="document.getElementById('pnoAttachInput').click()">📎 Attach File</button>
+        <input type="file" id="pnoAttachInput" multiple style="display:none;"
+               accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,image/*">
+      </div>
+      <div style="padding:14px 20px;font-size:12px;color:var(--text2);">
+        Optional — upload customer POs, BOLs, packing lists, or photos. These ride along with the order for our ops team to reference. Not AI-scanned.
+      </div>
+      <div id="pnoAttachList" style="padding:0 20px 16px 20px;"></div>
     </div>
 
     <!-- Sticky submit bar — always visible at the bottom of the page so the

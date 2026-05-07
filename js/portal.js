@@ -16,6 +16,7 @@
 
 let _portalNewOrderLines = [];   // pending lines in the portal new-order form
 let _portalShipToCache   = null; // prior ship-to addresses for the dropdown
+let _portalNewOrderAttachments = []; // staged File objects, uploaded post-create
 
 function isPortalMode(){
   return typeof U !== 'undefined' && U && U.userType === 'client';
@@ -205,6 +206,7 @@ function renderPortalMetrics(d){
 async function loadPortalNewOrder(){
   // Reset form
   _portalNewOrderLines = [];
+  _portalNewOrderAttachments = [];
   ['pnoCustName','pnoCustEmail','pnoAddr1','pnoAddr2','pnoCity','pnoState',
    'pnoPostal','pnoShipDate','pnoSkuSearch'].forEach(id => {
     const el = document.getElementById(id);
@@ -215,6 +217,28 @@ async function loadPortalNewOrder(){
   document.getElementById('pnoError').textContent = '';
   document.getElementById('pnoSuccess').textContent = '';
   renderPortalNewOrderLines();
+  renderPortalNewOrderAttachments();
+
+  // Wire attachment input (idempotent — only the first time the page loads)
+  const attachInput = document.getElementById('pnoAttachInput');
+  if(attachInput && !attachInput._wired){
+    attachInput._wired = true;
+    attachInput.addEventListener('change', e => {
+      const files = Array.from(e.target.files || []);
+      // 25MB ceiling matches the API's multer limit. Also enforce in browser
+      // so we don't make the user wait for an upload that's going to 413.
+      const MAX = 25 * 1024 * 1024;
+      for(const f of files){
+        if(f.size > MAX){
+          alert(`${f.name} is ${(f.size/1024/1024).toFixed(1)}MB — max is 25MB`);
+          continue;
+        }
+        _portalNewOrderAttachments.push(f);
+      }
+      renderPortalNewOrderAttachments();
+      e.target.value = ''; // allow re-pick of same file
+    });
+  }
 
   // Prior ship-to addresses (if any) — populated as a dropdown for quick reuse.
   const addrs = await apiGet('/ship-to-addresses');
@@ -450,6 +474,72 @@ function renderPortalNewOrderLines(){
   });
 }
 
+// Renders the staged attachment list on the portal new-order page. Files
+// only exist client-side until the order is created; then we POST each
+// to /orders/:id/attachments.
+function renderPortalNewOrderAttachments(){
+  const wrap  = document.getElementById('pnoAttachList');
+  const count = document.getElementById('pnoAttachCount');
+  if(!wrap) return;
+
+  if(count){
+    const n = _portalNewOrderAttachments.length;
+    count.textContent = n ? `· ${n} ${n === 1 ? 'file' : 'files'}` : '';
+  }
+
+  if(!_portalNewOrderAttachments.length){
+    wrap.innerHTML = '<div class="empty-state" style="padding:18px;text-align:center;color:var(--muted);font-size:13px;">No documents attached</div>';
+    return;
+  }
+
+  wrap.innerHTML = _portalNewOrderAttachments.map((f, i) => {
+    const sizeKb = (f.size / 1024).toFixed(0);
+    const sizeMb = (f.size / 1024 / 1024).toFixed(2);
+    const sizeLabel = f.size > 1024 * 1024 ? `${sizeMb} MB` : `${sizeKb} KB`;
+    const ext = (f.name.split('.').pop() || '').toUpperCase();
+    return `
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <div style="width:42px;height:42px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--blue);">${esc(ext.slice(0,4) || 'FILE')}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name)}</div>
+          <div style="font-size:11px;color:var(--text2);">${esc(sizeLabel)} · ${esc(f.type || 'unknown')}</div>
+        </div>
+        <button class="btn btn-ghost js-pno-att-rm" data-idx="${esc(i)}"
+                style="padding:4px 10px;font-size:12px;color:var(--red);">✕</button>
+      </div>`;
+  }).join('');
+
+  wrap.querySelectorAll('.js-pno-att-rm').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _portalNewOrderAttachments.splice(parseInt(btn.dataset.idx), 1);
+      renderPortalNewOrderAttachments();
+    });
+  });
+}
+
+// Upload all staged attachments to /orders/:id/attachments. Failures are
+// logged but don't block — the order is already created.
+async function uploadPortalNewOrderAttachments(orderId){
+  if(!_portalNewOrderAttachments.length) return;
+  for(const file of _portalNewOrderAttachments){
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch(`${API}/orders/${orderId}/attachments`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${T}` },
+        body: fd,
+      });
+      if(!r.ok){
+        const d = await r.json().catch(() => ({}));
+        console.error(`Attachment ${file.name} failed:`, d.error || r.status);
+      }
+    } catch(e){
+      console.error(`Attachment ${file.name} network error:`, e);
+    }
+  }
+}
+
 async function submitPortalNewOrder(){
   const err = document.getElementById('pnoError');
   const suc = document.getElementById('pnoSuccess');
@@ -523,9 +613,22 @@ async function submitPortalNewOrder(){
       err.textContent = d.error || 'Order create failed';
       return;
     }
-    suc.textContent = `Order ${d.order_number} created. Our ops team will allocate and ship it.`;
+
+    // Upload any staged attachments to the new order. Done here (not in the
+    // POST /orders body) because /orders/:id/attachments is a multipart
+    // endpoint per file — and because it needs the order's id back from
+    // the server first.
+    const attachCount = _portalNewOrderAttachments.length;
+    if(attachCount){
+      suc.textContent = `Order ${d.order_number} created — uploading ${attachCount} document${attachCount === 1 ? '' : 's'}…`;
+      await uploadPortalNewOrderAttachments(d.id);
+    }
+
+    suc.textContent = `Order ${d.order_number} created${attachCount ? ` with ${attachCount} attachment${attachCount === 1 ? '' : 's'}` : ''}. Our ops team will allocate and ship it.`;
     _portalNewOrderLines = [];
+    _portalNewOrderAttachments = [];
     renderPortalNewOrderLines();
+    renderPortalNewOrderAttachments();
     setTimeout(() => navigateTo('orders'), 1500);
   } catch(e){
     err.textContent = 'Network error';

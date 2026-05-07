@@ -149,6 +149,10 @@ async function openOrderDetail(id){
     ${d.customer_email ? `<div style="color:var(--muted);margin-top:8px;">${esc(d.customer_email)}</div>` : ''}`;
   document.getElementById('ordShipTo').innerHTML = shipTo;
 
+  // Attachments — supporting docs (PDFs, images) bound to the order.
+  // Rendered in both ops + portal modes.
+  loadOrderAttachments(id);
+
   document.getElementById('ordShipments').innerHTML = d.shipments?.length
     ? d.shipments.map(sh => `
         <div style="padding:14px 20px;border-bottom:1px solid var(--border);">
@@ -882,4 +886,138 @@ async function submitNewOrder(){
   } catch(e){
     err.textContent = 'Network error';
   }
+}
+
+// =============================================================================
+// ORDER ATTACHMENTS — supporting documents bound to the order detail page.
+// Wired from openOrderDetail. Available to both ops and portal users; portal
+// users can only upload/view their own client's order attachments (enforced
+// by the API).
+// =============================================================================
+
+async function loadOrderAttachments(orderId){
+  const list   = document.getElementById('ordAttachList');
+  const count  = document.getElementById('ordAttachCount');
+  const status = document.getElementById('ordAttachStatus');
+  if(!list) return;
+
+  // Wire add-button input once (delegates to current COI on each upload).
+  const input = document.getElementById('ordAttachInput');
+  if(input && !input._wired){
+    input._wired = true;
+    input.addEventListener('change', async ev => {
+      const files = Array.from(ev.target.files || []);
+      ev.target.value = '';
+      const id = COI;
+      if(!id || !files.length) return;
+      const MAX = 25 * 1024 * 1024;
+      let done = 0, failed = 0;
+      for(const f of files){
+        if(f.size > MAX){
+          failed++;
+          status.style.color = 'var(--red)';
+          status.textContent = `${f.name} is over 25MB — skipped`;
+          continue;
+        }
+        status.style.color = 'var(--text2)';
+        status.textContent = `Uploading ${f.name} (${done + 1}/${files.length})…`;
+        try {
+          const fd = new FormData();
+          fd.append('file', f);
+          const r = await fetch(`${API}/orders/${id}/attachments`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${T}` },
+            body: fd,
+          });
+          if(!r.ok){
+            failed++;
+            const d = await r.json().catch(() => ({}));
+            status.style.color = 'var(--red)';
+            status.textContent = `${f.name} failed: ${d.error || r.status}`;
+            continue;
+          }
+          done++;
+        } catch(e){
+          failed++;
+          status.style.color = 'var(--red)';
+          status.textContent = `${f.name} network error`;
+        }
+      }
+      if(!failed){
+        status.style.color = 'var(--green)';
+        status.textContent = `✓ Uploaded ${done} file${done === 1 ? '' : 's'}`;
+      }
+      setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 3500);
+      loadOrderAttachments(id);
+    });
+  }
+
+  list.innerHTML = '<div style="padding:14px 0;color:var(--muted);font-size:13px;">Loading…</div>';
+  const rows = await apiGet(`/orders/${orderId}/attachments`);
+  if(!rows){
+    list.innerHTML = '<div style="padding:14px 0;color:var(--red);font-size:13px;">Could not load attachments</div>';
+    if(count) count.textContent = '';
+    return;
+  }
+  if(count) count.textContent = rows.length ? `· ${rows.length} ${rows.length === 1 ? 'file' : 'files'}` : '';
+
+  if(!rows.length){
+    list.innerHTML = '<div style="padding:14px 0;color:var(--muted);font-size:13px;text-align:center;">No attachments</div>';
+    return;
+  }
+
+  // Hide delete button for portal users — DELETE is requireOps.
+  const portal = (typeof isPortalMode === 'function' && isPortalMode());
+
+  list.innerHTML = rows.map(r => {
+    const sizeKb = Number(r.size_bytes || 0) / 1024;
+    const sizeMb = sizeKb / 1024;
+    const sizeLabel = (r.size_bytes || 0) > 1024 * 1024
+      ? `${sizeMb.toFixed(2)} MB`
+      : `${sizeKb.toFixed(0)} KB`;
+    const ext = (r.filename || '').split('.').pop()?.toUpperCase() || 'FILE';
+    const when = r.uploaded_at ? new Date(r.uploaded_at).toLocaleString() : '';
+    return `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <div style="width:42px;height:42px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--blue);">${esc(ext.slice(0,4))}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.filename || '')}</div>
+          <div style="font-size:11px;color:var(--text2);">${esc(sizeLabel)} · ${esc(r.uploaded_by || '')} · ${esc(when)}</div>
+        </div>
+        <button class="btn btn-ghost js-ord-att-dl" data-att-id="${esc(r.id)}"
+                style="padding:4px 12px;font-size:12px;">⬇ Open</button>
+        ${portal ? '' : `<button class="btn btn-ghost js-ord-att-rm" data-att-id="${esc(r.id)}"
+                  style="padding:4px 10px;font-size:12px;color:var(--red);">✕</button>`}
+      </div>`;
+  }).join('');
+
+  list.querySelectorAll('.js-ord-att-dl').forEach(btn =>
+    btn.addEventListener('click', () => openOrderAttachment(orderId, btn.dataset.attId))
+  );
+  list.querySelectorAll('.js-ord-att-rm').forEach(btn =>
+    btn.addEventListener('click', () => deleteOrderAttachment(orderId, btn.dataset.attId))
+  );
+}
+
+async function openOrderAttachment(orderId, attId){
+  const d = await apiGet(`/orders/${orderId}/attachments/${attId}/url`);
+  if(!d?.url){
+    alert('Could not get a download URL.');
+    return;
+  }
+  window.open(d.url, '_blank');
+}
+
+async function deleteOrderAttachment(orderId, attId){
+  if(!confirm('Remove this attachment?')) return;
+  const r = await fetch(`${API}/orders/${orderId}/attachments/${attId}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${T}` },
+  });
+  if(!r.ok){
+    const d = await r.json().catch(() => ({}));
+    alert(d.error || 'Delete failed');
+    return;
+  }
+  loadOrderAttachments(orderId);
 }
