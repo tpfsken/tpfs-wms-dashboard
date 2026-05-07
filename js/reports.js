@@ -95,26 +95,34 @@ async function openItemHistoryReport(){
   document.getElementById('traceView').style.display = 'none';
   document.getElementById('itemHistoryError').textContent = '';
 
-  // Always fetch fresh — bypass any cache state that might be empty.
-  const clientsList = await apiGet('/clients');
-  const clients = Array.isArray(clientsList) ? clientsList : [];
+  // Phase 3: in portal mode the client picker is hidden (.ops-only on the
+  // form-group in index.html) and /clients is requireOps anyway, so skip
+  // both the fetch and the combo init. Reports are auto-scoped server-side
+  // by scopeClient.
+  if(typeof isPortalMode === 'function' && isPortalMode()){
+    _reportsClient = '';
+  } else {
+    // Always fetch fresh — bypass any cache state that might be empty.
+    const clientsList = await apiGet('/clients');
+    const clients = Array.isArray(clientsList) ? clientsList : [];
 
-  initCombo('reportsClientWrap',
-    [{value:'', label:'All clients'}].concat(
-      clients.map(c => ({value:String(c.id), label:`${c.code} — ${c.name}`}))
-    ),
-    {
-      placeholder: 'All clients',
-      value: _reportsClient || '',
-      onChange: (v) => {
-        _reportsClient = v || '';
-        if(document.getElementById('traceView').style.display !== 'none'){
-          backToItemHistory();
-        }
-        runItemHistory();
-      },
-    }
-  );
+    initCombo('reportsClientWrap',
+      [{value:'', label:'All clients'}].concat(
+        clients.map(c => ({value:String(c.id), label:`${c.code} — ${c.name}`}))
+      ),
+      {
+        placeholder: 'All clients',
+        value: _reportsClient || '',
+        onChange: (v) => {
+          _reportsClient = v || '';
+          if(document.getElementById('traceView').style.display !== 'none'){
+            backToItemHistory();
+          }
+          runItemHistory();
+        },
+      }
+    );
+  }
 
   if(!_itemHistory) runItemHistory();
   document.getElementById('reportSkuInput').focus?.();
