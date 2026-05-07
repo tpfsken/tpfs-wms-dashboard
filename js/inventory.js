@@ -245,6 +245,9 @@ let _itemClientHazmatMap = {}; // {clientId -> hazmat_enabled} for prompting
 let _itemPendingSds = null;    // File staged from "Read SDS"; uploaded as
                                // an attachment after the SKU is saved so
                                // the SDS sticks with the item.
+let _itemPendingDocs = [];     // Files staged in create mode via the
+                               // Documents section. Uploaded as
+                               // sku_attachments after the SKU is saved.
 
 // Baseline UOMs always shown in the dropdown. Anything ops has added
 // to existing SKUs gets merged in on top of this via /uoms (so the
@@ -339,25 +342,34 @@ async function openItemFormModal(skuId){
     });
   }
 
-  // Wire Documents section's add button (idempotent)
+  // Wire Documents section's add button (idempotent). In create mode we
+  // stage files client-side and upload them after Save; in edit mode we
+  // upload directly.
   const docBtn = document.getElementById('itemDocAddBtn');
   const docInput = document.getElementById('itemDocAddInput');
   if(docBtn && !docBtn._wired){
     docBtn._wired = true;
-    docBtn.addEventListener('click', () => {
-      if(!_editingItemId){
-        document.getElementById('itemDocsHint').style.display = 'block';
-        return;
-      }
-      docInput.click();
-    });
+    docBtn.addEventListener('click', () => docInput.click());
   }
   if(docInput && !docInput._wired){
     docInput._wired = true;
     docInput.addEventListener('change', e => {
       const files = Array.from(e.target.files || []);
       e.target.value = '';
-      if(_editingItemId && files.length) uploadItemAttachments(_editingItemId, files);
+      if(!files.length) return;
+      if(_editingItemId){
+        uploadItemAttachments(_editingItemId, files);
+      } else {
+        const MAX = 25 * 1024 * 1024;
+        for(const f of files){
+          if(f.size > MAX){
+            alert(`${f.name} is over 25MB — skipped`);
+            continue;
+          }
+          _itemPendingDocs.push(f);
+        }
+        renderItemPendingDocs();
+      }
     });
   }
 
@@ -410,12 +422,13 @@ async function openItemFormModal(skuId){
     document.getElementById('itemSdsExtractStatus').textContent = '';
     cbReset('itemClientWrap'); cbSet('itemUomWrap','EA'); cbSet('itemTypeWrap','STANDARD');
     cbReset('itemPackingGroupWrap');
-    // Create mode shows the doc section with a hint instead of a list
-    document.getElementById('itemDocsBody').innerHTML =
-      '<div style="color:var(--muted);font-size:12px;padding:8px 0;">Save the item first to attach files (or use Read SDS above to pre-fill hazmat from a PDF — that file will also be saved as the item\'s SDS attachment after Save).</div>';
   }
 
+  // Reset staging before rendering so a previous modal open doesn't leak
+  // files into a fresh New Item form.
   _itemPendingSds = null;
+  _itemPendingDocs = [];
+  if(!skuId) renderItemPendingDocs();
   document.getElementById('itemHazmatHint').style.display = 'none';
   document.getElementById('itemFormModal').style.display  = 'flex';
 }
@@ -504,6 +517,24 @@ async function submitItemForm(){
       _itemPendingSds = null;
     }
 
+    // Any other documents the user staged via 📎 Attach File before
+    // Save — upload them now too.
+    if(_itemPendingDocs.length){
+      for(const f of _itemPendingDocs){
+        try {
+          const fd = new FormData();
+          fd.append('file', f);
+          if(/sds|safety.*data/i.test(f.name)) fd.append('attachment_type', 'SDS');
+          await fetch(`${API}/skus/${d.id}/attachments`, {
+            method:'POST',
+            headers:{'Authorization':`Bearer ${T}`},
+            body: fd,
+          });
+        } catch(_) { /* keep going on individual failures */ }
+      }
+      _itemPendingDocs = [];
+    }
+
     closeModal('itemFormModal');
     loadInventory();
   } catch(e){
@@ -578,6 +609,38 @@ async function extractSdsAndFill(file){
 // mode (we need a sku id). The list lives inside the New Item modal
 // when an existing item is open.
 // =============================================================================
+
+// Renders the create-mode staging list — files the user has dropped in
+// via 📎 Attach File before the SKU exists. They sit client-side until
+// Save creates the SKU, then they're uploaded as attachments.
+function renderItemPendingDocs(){
+  const body = document.getElementById('itemDocsBody');
+  if(!body) return;
+  if(!_itemPendingDocs.length){
+    body.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0;">No documents staged. Click 📎 Attach File to add an SDS, photo, or spec sheet — they\'ll upload after Save. (Or use Read SDS above to also auto-fill hazmat from a PDF.)</div>';
+    return;
+  }
+  body.innerHTML = _itemPendingDocs.map((f, i) => {
+    const ext = (f.name.split('.').pop() || 'FILE').toUpperCase();
+    const sizeKb = (f.size / 1024).toFixed(0);
+    const sizeMb = (f.size / 1024 / 1024).toFixed(2);
+    const sizeLabel = f.size > 1024 * 1024 ? `${sizeMb} MB` : `${sizeKb} KB`;
+    const tagged = /sds|safety.*data/i.test(f.name);
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <div style="width:38px;height:38px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--blue);">${esc(ext.slice(0,4))}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name)} ${tagged ? '<span class="chip chip-warning" style="font-size:10px;">SDS</span>' : ''} <span style="color:var(--muted);font-weight:400;">· uploads on Save</span></div>
+          <div style="font-size:11px;color:var(--text2);">${esc(sizeLabel)} · ${esc(f.type || 'unknown')}</div>
+        </div>
+        <button class="btn btn-ghost js-item-pend-rm" data-idx="${esc(i)}" style="padding:3px 10px;font-size:12px;color:var(--red);">✕</button>
+      </div>`;
+  }).join('');
+  body.querySelectorAll('.js-item-pend-rm').forEach(btn => btn.addEventListener('click', () => {
+    _itemPendingDocs.splice(parseInt(btn.dataset.idx), 1);
+    renderItemPendingDocs();
+  }));
+}
 
 async function loadItemAttachmentsList(skuId){
   const body = document.getElementById('itemDocsBody');
