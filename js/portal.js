@@ -333,6 +333,15 @@ function addPortalNewOrderLine(p){
 function renderPortalNewOrderLines(){
   const body  = document.getElementById('pnoLinesBody');
   const empty = document.getElementById('pnoLinesEmpty');
+  const count = document.getElementById('pnoLinesCount');
+
+  // Header line counter
+  if(count){
+    const n = _portalNewOrderLines.length;
+    const totalQty = _portalNewOrderLines.reduce((s, l) => s + (Number(l.qty) || 0), 0);
+    count.textContent = n ? `· ${n} ${n === 1 ? 'line' : 'lines'} · ${totalQty} units` : '';
+  }
+
   if(!_portalNewOrderLines.length){
     body.innerHTML = '';
     empty.style.display = 'block';

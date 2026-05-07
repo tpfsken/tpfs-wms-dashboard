@@ -186,3 +186,9 @@ body.portal-mode .portal-banner{
 }
 .portal-banner-name{font-size:30px;font-weight:700;color:var(--text);letter-spacing:-.02em}
 .portal-banner-sub {font-size:13px;color:var(--text2);margin-top:2px}
+
+/* Portal new-order page two-column layout — stack on narrow screens. */
+@media (max-width: 1100px) {
+  .pno-grid { grid-template-columns: 1fr !important; }
+  .pno-grid .card[style*="position:sticky"] { position: relative !important; }
+}

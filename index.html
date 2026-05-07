@@ -245,50 +245,55 @@
       <button class="btn btn-ghost" onclick="navigateTo('portalHome')">← Back</button>
     </div>
 
-    <div class="card">
-      <div class="card-head">
-        <div class="card-title">Ship To</div>
-        <div style="flex:1"></div>
-        <div class="cb-wrap" style="max-width:320px;" id="pnoPriorAddrWrap"></div>
-      </div>
-      <div style="padding:20px;">
-        <div class="form-row form-row-2">
+    <!-- Two-column layout: Ship To (compact, fixed-width) on the left;
+         Order Lines (flex, scrollable internally) on the right. Stacks
+         vertically on screens narrower than 1100px (mobile-friendly). -->
+    <div class="pno-grid" style="display:grid;grid-template-columns:minmax(360px,420px) 1fr;gap:20px;align-items:start;">
+
+      <!-- Ship To column -->
+      <div class="card" style="position:sticky;top:0;">
+        <div class="card-head">
+          <div class="card-title">Ship To</div>
+          <div style="flex:1"></div>
+          <div class="cb-wrap" style="max-width:200px;" id="pnoPriorAddrWrap"></div>
+        </div>
+        <div style="padding:16px 20px;">
           <div class="form-group"><label class="form-label">Customer / Ship-To Name *</label><input class="form-input" id="pnoCustName"></div>
           <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="pnoCustEmail" type="email"></div>
-        </div>
-        <div class="form-group"><label class="form-label">Address Line 1 *</label><input class="form-input" id="pnoAddr1"></div>
-        <div class="form-group"><label class="form-label">Address Line 2</label><input class="form-input" id="pnoAddr2"></div>
-        <div class="form-row form-row-4">
-          <div class="form-group"><label class="form-label">City *</label><input class="form-input" id="pnoCity"></div>
-          <div class="form-group"><label class="form-label">State *</label><input class="form-input" id="pnoState"></div>
-          <div class="form-group"><label class="form-label">Postal *</label><input class="form-input" id="pnoPostal"></div>
-          <div class="form-group"><label class="form-label">Country</label><input class="form-input" id="pnoCountry" value="US"></div>
-        </div>
-        <div class="form-row form-row-2">
-          <div class="form-group"><label class="form-label">Required Ship Date</label><input class="form-input" type="date" id="pnoShipDate"></div>
-          <div class="form-group"><!-- spacer --></div>
+          <div class="form-group"><label class="form-label">Address Line 1 *</label><input class="form-input" id="pnoAddr1"></div>
+          <div class="form-group"><label class="form-label">Address Line 2</label><input class="form-input" id="pnoAddr2"></div>
+          <div class="form-row form-row-2">
+            <div class="form-group"><label class="form-label">City *</label><input class="form-input" id="pnoCity"></div>
+            <div class="form-group"><label class="form-label">State *</label><input class="form-input" id="pnoState"></div>
+          </div>
+          <div class="form-row form-row-2">
+            <div class="form-group"><label class="form-label">Postal *</label><input class="form-input" id="pnoPostal"></div>
+            <div class="form-group"><label class="form-label">Country</label><input class="form-input" id="pnoCountry" value="US"></div>
+          </div>
+          <div class="form-group" style="margin-bottom:0;"><label class="form-label">Required Ship Date</label><input class="form-input" type="date" id="pnoShipDate"></div>
         </div>
       </div>
-    </div>
 
-    <div class="card" style="overflow:visible;position:relative;">
-      <div class="card-head">
-        <div class="card-title">Order Lines</div>
-        <div style="flex:1"></div>
-        <input type="text" class="form-input" id="pnoSkuSearch" placeholder="Click to browse SKUs..." style="max-width:280px;" oninput="searchPortalSkus()" onfocus="searchPortalSkus()">
-      </div>
-      <!-- SKU dropdown — absolute-positioned so it can overflow the card cleanly,
-           large max-height (60vh) so 50+ SKUs scroll comfortably, high z-index
-           so it stays above the sticky Submit bar. -->
-      <div id="pnoSkuResults" style="display:none;position:absolute;top:62px;left:20px;right:20px;background:var(--bg);border:1px solid var(--border);border-radius:8px;max-height:min(620px,60vh);overflow-y:auto;box-shadow:0 12px 32px rgba(0,0,0,.5);z-index:50;"></div>
-      <div style="overflow-x:auto;padding:0 4px;">
-        <table class="data-table" style="margin:0;">
-          <thead><tr><th>SKU</th><th>Description</th><th>Lot</th><th>Expiry</th><th>UOM</th><th class="right">Available</th><th style="width:120px;">Quantity</th><th style="width:50px;"></th></tr></thead>
-          <tbody id="pnoLinesBody"></tbody>
-        </table>
-      </div>
-      <div id="pnoLinesEmpty" class="empty-state" style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">
-        No lines yet — search for a SKU above to get started.
+      <!-- Order Lines column -->
+      <div class="card" style="overflow:visible;position:relative;">
+        <div class="card-head">
+          <div class="card-title">Order Lines</div>
+          <div id="pnoLinesCount" style="font-size:12px;color:var(--muted);margin-left:8px;"></div>
+          <div style="flex:1"></div>
+          <input type="text" class="form-input" id="pnoSkuSearch" placeholder="Click to browse SKUs..." style="max-width:280px;" oninput="searchPortalSkus()" onfocus="searchPortalSkus()">
+        </div>
+        <!-- SKU dropdown — absolute over card, large internal scroll. -->
+        <div id="pnoSkuResults" style="display:none;position:absolute;top:62px;left:20px;right:20px;background:var(--bg);border:1px solid var(--border);border-radius:8px;max-height:min(620px,60vh);overflow-y:auto;box-shadow:0 12px 32px rgba(0,0,0,.5);z-index:50;"></div>
+        <!-- Lines table — internal scroll for many items (sticky header). -->
+        <div style="max-height:min(620px,55vh);overflow-y:auto;overflow-x:auto;">
+          <table class="data-table" style="margin:0;">
+            <thead><tr><th>SKU</th><th>Description</th><th>Lot</th><th>Expiry</th><th>UOM</th><th class="right">Available</th><th style="width:120px;">Quantity</th><th style="width:50px;"></th></tr></thead>
+            <tbody id="pnoLinesBody"></tbody>
+          </table>
+        </div>
+        <div id="pnoLinesEmpty" class="empty-state" style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">
+          No lines yet — search for a SKU above to get started.
+        </div>
       </div>
     </div>
 
