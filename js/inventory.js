@@ -275,15 +275,23 @@ async function buildItemUomOptions(){
   return ITEM_UOM_BASELINE.concat(extras);
 }
 
-// SKU types — must match the skus_sku_type_check CHECK constraint.
-// (PALLET, CASE, INNER_PACK, EACH). Adjust here AND on the DB if you
-// want to add new types.
-const ITEM_TYPES = [
+// SKU type baseline — the conventional handling-unit hierarchy. The DB
+// CHECK constraint was dropped (migration 013) so this list is just a
+// suggestion; the combo merges in any custom types that have been added
+// on the fly via /sku-types and accepts free-typed values too.
+const ITEM_TYPE_BASELINE = [
   {value:'EACH',       label:'Each — single sellable unit'},
   {value:'INNER_PACK', label:'Inner Pack — retail multi-unit'},
   {value:'CASE',       label:'Case — shipping carton'},
   {value:'PALLET',     label:'Pallet'},
 ];
+
+async function buildItemTypeOptions(){
+  const used = (await apiGet('/sku-types')) || [];
+  const seen = new Set(ITEM_TYPE_BASELINE.map(o => o.value));
+  const extras = used.filter(t => t && !seen.has(t)).map(t => ({value:t, label:t}));
+  return ITEM_TYPE_BASELINE.concat(extras);
+}
 
 const PACKING_GROUPS = [
   {value:'',    label:'— None —'},
@@ -317,9 +325,12 @@ async function openItemFormModal(skuId){
     ),
     {placeholder:'— Pick a client —', onChange: () => onItemClientChange()}
   );
-  const uomOptions = await buildItemUomOptions();
+  const [uomOptions, typeOptions] = await Promise.all([
+    buildItemUomOptions(),
+    buildItemTypeOptions(),
+  ]);
   initCombo('itemUomWrap',           uomOptions,       {placeholder:'EA', value:'EA', allowCustom:true});
-  initCombo('itemTypeWrap',          ITEM_TYPES,       {placeholder:'Each', value:'EACH'});
+  initCombo('itemTypeWrap',          typeOptions,      {placeholder:'Each', value:'EACH', allowCustom:true});
   initCombo('itemPackingGroupWrap',  PACKING_GROUPS,   {placeholder:'— None —'});
 
   // Wire hazmat checkbox to reveal block (idempotent)
