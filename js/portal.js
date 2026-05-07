@@ -198,19 +198,23 @@ const searchPortalSkus = debounce(async function(){
     return;
   }
   div.innerHTML = rows.map(r => `
-    <div class="js-pno-sku-row"
-         data-payload='${esc(JSON.stringify({
-           skuId: r.id, sku_code: r.sku_code, sku_name: r.name || '',
-           uom: r.uom || 'EA', sku_type: r.sku_type || '',
-           qty_available: Number(r.qty_available || 0),
-         }))}'
-         style="padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:12px;font-size:13px;">
-      <span style="font-weight:600;color:var(--blue);min-width:120px;">${esc(r.sku_code)}</span>
-      <span style="color:var(--text2);flex:1;">${esc(r.name || '')}</span>
-      <span style="color:var(--text2);font-size:11px;">${esc(r.uom || '')}</span>
-      <span style="font-weight:600;color:var(--green);min-width:90px;text-align:right;">
-        ${esc(Number(r.qty_available || 0).toLocaleString())} avail
-      </span>
+    <div style="border-bottom:1px solid var(--border);">
+      <div class="js-pno-sku-row"
+           data-payload='${esc(JSON.stringify({
+             skuId: r.id, sku_code: r.sku_code, sku_name: r.name || '',
+             uom: r.uom || 'EA', sku_type: r.sku_type || '',
+             qty_available: Number(r.qty_available || 0),
+           }))}'
+           style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:12px;font-size:13px;">
+        <span style="font-weight:600;color:var(--blue);min-width:120px;">${esc(r.sku_code)}</span>
+        <span style="color:var(--text2);flex:1;">${esc(r.name || '')}</span>
+        <span style="color:var(--text2);font-size:11px;">${esc(r.uom || '')}</span>
+        <span style="font-weight:600;color:var(--green);min-width:90px;text-align:right;">
+          ${esc(Number(r.qty_available || 0).toLocaleString())} avail
+        </span>
+        <span class="js-pno-sku-arrow" style="color:var(--muted);font-size:11px;">▶</span>
+      </div>
+      <div class="sku-lots js-pno-sku-lots" id="pnoLots_${esc(r.id)}" style="display:none;"></div>
     </div>`).join('');
   div.style.display = 'block';
 
@@ -218,20 +222,103 @@ const searchPortalSkus = debounce(async function(){
     row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
     row.addEventListener('mouseout',  () => row.style.background = '');
     row.addEventListener('click', () => {
-      try { addPortalNewOrderLine(JSON.parse(row.dataset.payload)); }
+      try { expandPortalSkuLots(row, JSON.parse(row.dataset.payload)); }
       catch(e){ console.error('pno sku parse', e); }
     });
   });
 }, 250);
 
+// Click a SKU result -> fetch its available lots and let the customer pick one.
+async function expandPortalSkuLots(skuRow, sku){
+  const lotsDiv = document.getElementById('pnoLots_' + sku.skuId);
+  if(!lotsDiv) return;
+
+  const arrow = skuRow.querySelector('.js-pno-sku-arrow');
+
+  // Toggle close
+  if(lotsDiv.style.display === 'block'){
+    lotsDiv.style.display = 'none';
+    if(arrow) arrow.textContent = '▶';
+    return;
+  }
+
+  if(arrow) arrow.textContent = '▼';
+  lotsDiv.style.display = 'block';
+  lotsDiv.innerHTML = '<div style="padding:8px 16px 8px 32px;color:var(--muted);font-size:12px;">Loading lots…</div>';
+
+  // /inventory is auto-scoped to the user's client_id by scopeClient on the API.
+  const d = await apiGet(`/inventory?limit=100&status=available&skuCode=${encodeURIComponent('%' + sku.sku_code + '%')}`);
+  const allRows = (d?.rows || d || []).filter(r => r.sku_id === sku.skuId && Number(r.quantity) > 0);
+
+  if(!allRows.length){
+    lotsDiv.innerHTML = '<div style="padding:8px 16px 8px 32px;color:var(--muted);font-size:12px;">No available inventory.</div>';
+    return;
+  }
+
+  const header = `
+    <div style="padding:6px 16px 6px 32px;display:grid;grid-template-columns:140px 110px 130px 60px 80px;gap:8px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;border-top:1px solid var(--border);background:rgba(0,0,0,.15);">
+      <span>Lot</span><span>Expiry</span><span>Location</span><span>Qty</span><span></span>
+    </div>`;
+
+  const body = allRows.map(r => {
+    const expiringSoon = r.expiry_date && new Date(r.expiry_date) < new Date(Date.now() + 30 * 864e5);
+    return `
+      <div class="js-pno-lot-row"
+           data-payload='${esc(JSON.stringify({
+             skuId:    sku.skuId,
+             sku_code: sku.sku_code,
+             sku_name: sku.sku_name,
+             uom:      sku.uom,
+             sku_type: sku.sku_type,
+             lot_id:   r.lot_id || null,
+             lot_number: r.lot_number || null,
+             expiry_date: r.expiry_date || null,
+             location_code: r.location_code || null,
+             qty_available: Number(r.quantity || 0),
+           }))}'
+           style="padding:8px 16px 8px 32px;border-top:1px solid var(--border);display:grid;grid-template-columns:140px 110px 130px 60px 80px;align-items:center;gap:8px;font-size:12px;cursor:pointer;transition:background .1s;">
+        <span style="color:var(--blue);font-weight:600;">${esc(r.lot_number || 'No lot')}</span>
+        <span style="color:${expiringSoon ? 'var(--red)' : 'var(--text2)'};">${esc(r.expiry_date ? new Date(r.expiry_date).toLocaleDateString() : '—')}</span>
+        <span style="color:var(--muted);">${esc(r.location_code || '—')}</span>
+        <span style="font-weight:600;color:var(--green);">${esc(r.quantity)}</span>
+        <span style="color:var(--blue);font-size:11px;font-weight:600;">+ Add</span>
+      </div>`;
+  }).join('');
+
+  lotsDiv.innerHTML = header + body;
+
+  lotsDiv.querySelectorAll('.js-pno-lot-row').forEach(row => {
+    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
+    row.addEventListener('mouseout',  () => row.style.background = '');
+    row.addEventListener('click', e => {
+      e.stopPropagation();
+      try { addPortalNewOrderLine(JSON.parse(row.dataset.payload)); }
+      catch(err){ console.error('pno lot parse', err); }
+    });
+  });
+}
+
 function addPortalNewOrderLine(p){
-  const exists = _portalNewOrderLines.find(l => l.skuId === p.skuId);
+  // De-dupe by (skuId, lot_id) so the same SKU at different lots can be
+  // ordered as separate lines.
+  const key = p.skuId + '_' + (p.lot_id || 'nolot');
+  const exists = _portalNewOrderLines.find(l => l._key === key);
   if(exists){
     exists.qty = (Number(exists.qty) || 0) + 1;
   } else {
     _portalNewOrderLines.push({
-      skuId: p.skuId, sku_code: p.sku_code, sku_name: p.sku_name,
-      uom: p.uom, qty_available: p.qty_available, qty: 1,
+      _key: key,
+      skuId:         p.skuId,
+      sku_code:      p.sku_code,
+      sku_name:      p.sku_name,
+      uom:           p.uom,
+      sku_type:      p.sku_type || '',
+      lot_id:        p.lot_id || null,
+      lot_number:    p.lot_number || null,
+      expiry_date:   p.expiry_date || null,
+      location_code: p.location_code || null,
+      qty_available: p.qty_available,
+      qty:           1,
     });
   }
   document.getElementById('pnoSkuSearch').value = '';
@@ -248,10 +335,14 @@ function renderPortalNewOrderLines(){
     return;
   }
   empty.style.display = 'none';
-  body.innerHTML = _portalNewOrderLines.map((l, i) => `
+  body.innerHTML = _portalNewOrderLines.map((l, i) => {
+    const expiringSoon = l.expiry_date && new Date(l.expiry_date) < new Date(Date.now() + 30 * 864e5);
+    return `
     <tr>
       <td style="font-weight:600;color:var(--blue);">${esc(l.sku_code)}</td>
       <td>${esc(l.sku_name)}</td>
+      <td style="color:var(--blue);font-size:12px;">${esc(l.lot_number || '—')}</td>
+      <td style="font-size:12px;color:${expiringSoon ? 'var(--red)' : 'var(--text2)'};">${esc(l.expiry_date ? new Date(l.expiry_date).toLocaleDateString() : '—')}</td>
       <td>${esc(l.uom)}</td>
       <td class="right" style="color:var(--text2);font-size:12px;">
         ${esc(Number(l.qty_available || 0).toLocaleString())}
@@ -265,7 +356,8 @@ function renderPortalNewOrderLines(){
         <button class="btn btn-ghost js-pno-rm" data-idx="${esc(i)}"
                 style="padding:4px 10px;font-size:12px;color:var(--red);">✕</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   body.querySelectorAll('.js-pno-qty').forEach(inp => {
     inp.addEventListener('input', e => {
       const idx = parseInt(e.target.dataset.idx);
@@ -321,11 +413,24 @@ async function submitPortalNewOrder(){
       city, state, postal, country,
     },
     lines: _portalNewOrderLines.map(l => ({
-      skuId: l.skuId,
-      qty:   Number(l.qty),
-      uom:   l.uom || 'EACH',
+      skuId:      l.skuId,
+      qty:        Number(l.qty),
+      uom:        l.uom || 'EACH',
+      // Customer's preferred lot — passed through so ops can honor it during
+      // allocation. Backend currently logs these in order notes; in a future
+      // pass we'll auto-allocate from the requested lot.
+      lotId:      l.lot_id || null,
+      lotNumber:  l.lot_number || null,
     })),
   };
+
+  // Build a customer-readable summary of lot preferences so ops sees it on
+  // the order even before we add a dedicated requested_lot_id column.
+  const lotSummary = _portalNewOrderLines
+    .filter(l => l.lot_number)
+    .map(l => `${l.sku_code} → ${l.lot_number}${l.expiry_date ? ` (exp ${new Date(l.expiry_date).toLocaleDateString()})` : ''}`)
+    .join('; ');
+  if(lotSummary) body.notes = `Customer requested lots: ${lotSummary}`;
 
   const submitBtn = document.getElementById('pnoSubmitBtn');
   submitBtn.disabled = true;

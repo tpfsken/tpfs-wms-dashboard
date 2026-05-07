@@ -280,20 +280,23 @@
       <div id="pnoSkuResults" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin:12px 20px 0;max-height:340px;overflow-y:auto;"></div>
       <div style="overflow-x:auto;padding:0 4px;">
         <table class="data-table" style="margin:0;">
-          <thead><tr><th>SKU</th><th>Description</th><th>UOM</th><th class="right">Available</th><th style="width:120px;">Quantity</th><th style="width:50px;"></th></tr></thead>
+          <thead><tr><th>SKU</th><th>Description</th><th>Lot</th><th>Expiry</th><th>UOM</th><th class="right">Available</th><th style="width:120px;">Quantity</th><th style="width:50px;"></th></tr></thead>
           <tbody id="pnoLinesBody"></tbody>
         </table>
       </div>
       <div id="pnoLinesEmpty" class="empty-state" style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">
         No lines yet — search for a SKU above to get started.
       </div>
-      <div style="padding:16px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;">
-        <button class="btn btn-primary" id="pnoSubmitBtn" onclick="submitPortalNewOrder()">Submit Order</button>
-        <button class="btn btn-ghost" onclick="navigateTo('portalHome')">Cancel</button>
-        <div style="flex:1"></div>
-        <div id="pnoError"   style="color:var(--red);font-size:13px;"></div>
-        <div id="pnoSuccess" style="color:var(--green);font-size:13px;"></div>
-      </div>
+    </div>
+
+    <!-- Sticky submit bar — always visible at the bottom of the page so the
+         user never has to scroll to find Submit. -->
+    <div style="position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:12px;z-index:10;margin-top:auto;">
+      <button class="btn btn-primary" id="pnoSubmitBtn" onclick="submitPortalNewOrder()">Submit Order</button>
+      <button class="btn btn-ghost" onclick="navigateTo('portalHome')">Cancel</button>
+      <div style="flex:1"></div>
+      <div id="pnoError"   style="color:var(--red);font-size:13px;"></div>
+      <div id="pnoSuccess" style="color:var(--green);font-size:13px;"></div>
     </div>
   </div>
 
