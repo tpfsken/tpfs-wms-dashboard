@@ -405,6 +405,10 @@ async function openItemFormModal(skuId){
 
   // Reset working set every open
   _itemHandlingUnits = [];
+  // Hide the "Re-read attached SDS" button until loadItemAttachmentsList
+  // sees one for this SKU.
+  const reuseBtn = document.getElementById('itemSdsReuseBtn');
+  if(reuseBtn) reuseBtn.style.display = 'none';
 
   if(skuId){
     // Edit mode — fetch and populate
@@ -922,8 +926,17 @@ async function loadItemAttachmentsList(skuId){
   const rows = await apiGet(`/skus/${skuId}/attachments`);
   if(!rows){
     body.innerHTML = '<div style="color:var(--red);font-size:12px;">Could not load attachments</div>';
+    updateSdsReuseButton(skuId, null);
     return;
   }
+
+  // Surface the most recent SDS (if any) on the hazmat block's re-read
+  // button so ops can extract from it without re-uploading.
+  const latestSds = rows.find(a =>
+    a.attachment_type === 'SDS' || /sds|safety.*data/i.test(a.filename || '')
+  );
+  updateSdsReuseButton(skuId, latestSds);
+
   if(!rows.length){
     body.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0;">No documents yet — click 📎 Attach File to add an SDS, photo, or spec sheet</div>';
     return;
@@ -961,6 +974,68 @@ async function loadItemAttachmentsList(skuId){
       });
       if(r.ok) loadItemAttachmentsList(skuId);
     }));
+}
+
+// Show / hide the "🔄 Re-read attached SDS" button based on whether the
+// SKU has an SDS attached. When clicked, re-runs Claude on the attached
+// PDF (server-side fetch from S3 + extract) and fills the hazmat fields.
+function updateSdsReuseButton(skuId, sdsAttachment){
+  const btn = document.getElementById('itemSdsReuseBtn');
+  if(!btn) return;
+  if(!skuId || !sdsAttachment){
+    btn.style.display = 'none';
+    return;
+  }
+  btn.style.display = '';
+  btn.title = `Re-extract hazmat info from ${sdsAttachment.filename}`;
+  // Replace any prior listener
+  btn.onclick = () => extractFromAttachedSds(skuId, sdsAttachment.id, sdsAttachment.filename);
+}
+
+async function extractFromAttachedSds(skuId, attId, filename){
+  const status = document.getElementById('itemSdsExtractStatus');
+  status.style.color = 'var(--text2)';
+  status.textContent = `Re-reading ${filename}…`;
+  try {
+    const r = await fetch(`${API}/skus/${skuId}/attachments/${attId}/extract`, {
+      method:'POST', headers:{'Authorization':`Bearer ${T}`},
+    });
+    const d = await r.json();
+    if(!r.ok){
+      status.style.color = 'var(--red)';
+      status.textContent = d.error || 'SDS read failed';
+      return;
+    }
+    const e = d.extracted || {};
+
+    // Fill the hazmat fields. Same overwrite-only-empty rule as the
+    // upload path — don't clobber what ops typed.
+    if(e.is_hazardous){
+      document.getElementById('itemHazmat').checked = true;
+      document.getElementById('itemHazmatBlock').style.display = 'block';
+    }
+    const setIfEmpty = (id, v) => {
+      if(v == null || v === '') return;
+      const el = document.getElementById(id);
+      if(!el.value.trim()) el.value = v;
+    };
+    setIfEmpty('itemUnNumber',           e.un_number);
+    setIfEmpty('itemHazardClass',        e.hazard_class);
+    setIfEmpty('itemProperShippingName', e.proper_shipping_name);
+    setIfEmpty('itemSpecialHandling',    e.special_handling);
+    if(e.packing_group){ cbSet('itemPackingGroupWrap', e.packing_group); }
+    if(e.is_ground_only) document.getElementById('itemGroundOnly').checked = true;
+    if(e.is_limited_qty) document.getElementById('itemLimitedQty').checked = true;
+
+    const conf = e.confidence == null ? '' : ` (confidence ${Math.round(Number(e.confidence) * 100)}%)`;
+    status.style.color = e.is_hazardous ? 'var(--amber)' : 'var(--green)';
+    status.textContent = e.is_hazardous
+      ? `✓ Hazardous — fields pre-filled${conf}. Review and click Save Changes.`
+      : `✓ Read SDS${conf}. No hazmat detected. Review and click Save Changes.`;
+  } catch(_) {
+    status.style.color = 'var(--red)';
+    status.textContent = 'Network error reading SDS';
+  }
 }
 
 async function uploadItemAttachments(skuId, files){

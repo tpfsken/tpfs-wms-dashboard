@@ -1180,10 +1180,11 @@
 
       <!-- Hazmat fields — only when itemHazmat is checked -->
       <div id="itemHazmatBlock" style="display:none;border:1px solid var(--amber);border-radius:8px;padding:14px;margin-top:14px;background:var(--bg);">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
           <div style="font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">⚠ Hazmat Details</div>
           <div style="flex:1"></div>
-          <button type="button" class="btn btn-ghost" onclick="document.getElementById('itemSdsExtractInput').click()" style="padding:4px 12px;font-size:12px;color:var(--blue);">📄 Read SDS to auto-fill</button>
+          <button type="button" class="btn btn-ghost" id="itemSdsReuseBtn" style="display:none;padding:4px 12px;font-size:12px;color:var(--blue);">🔄 Re-read attached SDS</button>
+          <button type="button" class="btn btn-ghost" onclick="document.getElementById('itemSdsExtractInput').click()" style="padding:4px 12px;font-size:12px;color:var(--blue);">📄 Upload SDS to auto-fill</button>
           <input type="file" id="itemSdsExtractInput" accept="application/pdf,.pdf" style="display:none;">
         </div>
         <div id="itemSdsExtractStatus" style="font-size:12px;margin-bottom:8px;"></div>
