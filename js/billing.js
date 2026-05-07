@@ -3,11 +3,12 @@
 // billing_periods schema. Money is NUMERIC dollars throughout.
 // =============================================================================
 
-let billingPeriod  = null;        // 'YYYY-MM' currently shown
-let billingMeter   = null;        // {period, rows: [...]}
-let billingClient  = null;        // currently drilled-down client {id, name, code}
-let billingCharges = [];          // charges for drilled client/period
-let billingRates   = [];          // active rates for drilled client
+let billingMeter      = null;     // {period, rows: [...]}
+let billingClient     = null;     // currently drilled-down client {id, name, code}
+let billingCharges    = [];       // charges for drilled client/period
+let billingRates      = [];       // active rates for drilled client
+let billingGranularity = 'month'; // 'day' | 'week' | 'month' | 'year'
+let billingRefDate    = new Date();  // anchor date for the current view
 
 // These match the billing_rates_rate_type_check constraint in the DB.
 const RATE_TYPE_OPTIONS = [
@@ -28,15 +29,63 @@ const RATE_TYPE_OPTIONS = [
   {value:'OTHER',             label:'Other',                 uom:'unit'},
 ];
 
-function defaultPeriod(){
-  const d = new Date();
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+// Compute {from, to} ISO date strings for the current granularity + ref date.
+function getBillingRange(){
+  const d = new Date(billingRefDate);
+  const y = d.getFullYear();
+  const m = d.getMonth();   // 0-based
+  const dd = d.getDate();
+  const isoDay = (yy, mm, ddd) => {
+    const dt = new Date(yy, mm, ddd);
+    return dt.toISOString().slice(0, 10);
+  };
+  if(billingGranularity === 'day'){
+    const s = isoDay(y, m, dd);
+    return {from: s, to: s};
+  }
+  if(billingGranularity === 'week'){
+    const dow = d.getDay(); // 0=Sun
+    return {
+      from: isoDay(y, m, dd - dow),
+      to:   isoDay(y, m, dd - dow + 6),
+    };
+  }
+  if(billingGranularity === 'year'){
+    return {from: `${y}-01-01`, to: `${y}-12-31`};
+  }
+  // month (default)
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  return {
+    from: `${y}-${String(m + 1).padStart(2, '0')}-01`,
+    to:   `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
+  };
 }
 
-function shiftPeriod(period, delta){
-  const [y, m] = period.split('-').map(Number);
-  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+function shiftBillingRange(delta){
+  const d = new Date(billingRefDate);
+  if(billingGranularity === 'day')   d.setDate(d.getDate() + delta);
+  if(billingGranularity === 'week')  d.setDate(d.getDate() + 7 * delta);
+  if(billingGranularity === 'month') d.setMonth(d.getMonth() + delta);
+  if(billingGranularity === 'year')  d.setFullYear(d.getFullYear() + delta);
+  billingRefDate = d;
+  loadBilling();
+}
+
+function fmtBillingRangeLabel(){
+  const r = getBillingRange();
+  const opts = {month:'short', day:'numeric', year:'numeric'};
+  if(billingGranularity === 'day'){
+    return new Date(r.from + 'T00:00:00').toLocaleDateString('en-US', opts);
+  }
+  if(billingGranularity === 'week'){
+    const a = new Date(r.from + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'});
+    const b = new Date(r.to   + 'T00:00:00').toLocaleDateString('en-US', opts);
+    return `${a} – ${b}`;
+  }
+  if(billingGranularity === 'year'){
+    return new Date(r.from + 'T00:00:00').getFullYear().toString();
+  }
+  return new Date(r.from + 'T00:00:00').toLocaleDateString('en-US', {month:'long', year:'numeric'});
 }
 
 // =============================================================================
@@ -44,12 +93,10 @@ function shiftPeriod(period, delta){
 // =============================================================================
 
 async function loadBilling(){
-  if(!billingPeriod) billingPeriod = defaultPeriod();
   document.getElementById('billListView').style.display = 'block';
   document.getElementById('billDetailView').style.display = 'none';
-  document.getElementById('billPeriodLabel').textContent = billingPeriod;
 
-  // Init the Client filter combo (once) — populated from clientsCache.
+  // Init Client filter combo (once)
   if(!_cbState['billClientFilterWrap']){
     await loadCC();
     initCombo('billClientFilterWrap',
@@ -60,8 +107,25 @@ async function loadBilling(){
     );
   }
 
+  // Init Granularity combo (once)
+  if(!_cbState['billGranularityWrap']){
+    initCombo('billGranularityWrap', [
+      {value:'day',   label:'Day'},
+      {value:'week',  label:'Week'},
+      {value:'month', label:'Month'},
+      {value:'year',  label:'Year'},
+    ], {
+      placeholder: 'Period',
+      value: billingGranularity,
+      onChange: (v) => { billingGranularity = v || 'month'; loadBilling(); },
+    });
+  }
+
+  document.getElementById('billPeriodLabel').textContent = fmtBillingRangeLabel();
+
+  const range = getBillingRange();
   const cl = cbVal('billClientFilterWrap');
-  let url = `/billing/meter?period=${encodeURIComponent(billingPeriod)}`;
+  let url = `/billing/meter?from=${range.from}&to=${range.to}`;
   if(cl) url += `&clientId=${encodeURIComponent(cl)}`;
 
   const data = await apiGet(url);
@@ -74,7 +138,7 @@ function renderMeter(){
   const rows = billingMeter?.rows || [];
   const tbody = document.getElementById('billMeterBody');
   if(!rows.length){
-    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No billable activity in ${esc(billingPeriod)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No billable activity in ${esc(fmtBillingRangeLabel())}</td></tr>`;
     document.getElementById('billGrandTotal').textContent = fmtDollars(0);
     document.getElementById('billGrandEvents').textContent = '0';
     return;
@@ -105,10 +169,9 @@ function renderMeter(){
   );
 }
 
-function shiftBillingPeriod(delta){
-  billingPeriod = shiftPeriod(billingPeriod, delta);
-  loadBilling();
-}
+// Legacy stub kept in case any HTML still references it; just delegates
+// to the new range-based stepper.
+function shiftBillingPeriod(delta){ shiftBillingRange(delta); }
 
 // =============================================================================
 // CLIENT DRILL-DOWN
@@ -119,10 +182,11 @@ async function openClientBilling(client){
   document.getElementById('billListView').style.display = 'none';
   document.getElementById('billDetailView').style.display = 'block';
   document.getElementById('billDetailTitle').textContent = `${client.code} — ${client.name}`;
-  document.getElementById('billDetailPeriod').textContent = billingPeriod;
+  document.getElementById('billDetailPeriod').textContent = fmtBillingRangeLabel();
 
+  const range = getBillingRange();
   const [chRes, rRes] = await Promise.all([
-    apiGet(`/billing/charges?clientId=${encodeURIComponent(client.id)}&period=${encodeURIComponent(billingPeriod)}&limit=500`),
+    apiGet(`/billing/charges?clientId=${encodeURIComponent(client.id)}&from=${range.from}&to=${range.to}&limit=500`),
     apiGet(`/clients/${encodeURIComponent(client.id)}/rates`),
   ]);
 
@@ -154,7 +218,7 @@ function renderClientHeaderTotals(){
 function renderClientCharges(){
   const tbody = document.getElementById('billEventsBody');
   if(!billingCharges.length){
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No charges for ${esc(billingClient.name)} in ${esc(billingPeriod)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No charges for ${esc(billingClient.name)} in ${esc(fmtBillingRangeLabel())}</td></tr>`;
     return;
   }
   tbody.innerHTML = billingCharges.map(c => {

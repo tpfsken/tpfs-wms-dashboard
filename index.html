@@ -204,12 +204,13 @@
   <div class="page" id="page-billing">
     <div id="billListView">
       <div class="page-header">
-        <div><div class="page-title">Billing</div><div class="page-subtitle">Per-client charges by month</div></div>
+        <div><div class="page-title">Billing</div><div class="page-subtitle">Per-client charges</div></div>
         <div style="flex:1"></div>
         <div class="cb-wrap" style="max-width:240px;" id="billClientFilterWrap"></div>
-        <button class="btn btn-ghost" onclick="shiftBillingPeriod(-1)">‹ Prev</button>
-        <div style="font-weight:600;font-size:15px;min-width:80px;text-align:center;" id="billPeriodLabel">—</div>
-        <button class="btn btn-ghost" onclick="shiftBillingPeriod(1)">Next ›</button>
+        <div class="cb-wrap" style="max-width:140px;" id="billGranularityWrap"></div>
+        <button class="btn btn-ghost" onclick="shiftBillingRange(-1)">‹ Prev</button>
+        <div style="font-weight:600;font-size:14px;min-width:170px;text-align:center;" id="billPeriodLabel">—</div>
+        <button class="btn btn-ghost" onclick="shiftBillingRange(1)">Next ›</button>
         <button class="btn btn-ghost" onclick="loadBilling()">Refresh</button>
       </div>
 
