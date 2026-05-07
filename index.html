@@ -1133,14 +1133,23 @@
         <div class="form-group"><label class="form-label">Units / Case</label><input class="form-input" id="itemUnitsPerCase" type="number" min="0" step="1" placeholder="e.g. 24"></div>
       </div>
 
-      <!-- Physical -->
+      <!-- Physical + Freight -->
       <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:14px;">
-        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-bottom:8px;">Physical</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Physical &amp; Freight</div>
+          <div style="flex:1"></div>
+          <span id="itemDensityReadout" style="font-size:11px;color:var(--text2);"></span>
+          <button type="button" class="btn btn-ghost" id="itemFreightCalcBtn" style="padding:4px 10px;font-size:12px;color:var(--blue);">⚡ Calc class from density</button>
+        </div>
         <div class="form-row form-row-4">
           <div class="form-group"><label class="form-label">Length (in)</label><input class="form-input" id="itemLength" type="number" min="0" step="0.01"></div>
           <div class="form-group"><label class="form-label">Width (in)</label><input class="form-input" id="itemWidth" type="number" min="0" step="0.01"></div>
           <div class="form-group"><label class="form-label">Height (in)</label><input class="form-input" id="itemHeight" type="number" min="0" step="0.01"></div>
           <div class="form-group"><label class="form-label">Weight (lbs)</label><input class="form-input" id="itemWeight" type="number" min="0" step="0.01"></div>
+        </div>
+        <div class="form-row form-row-2">
+          <div class="form-group"><label class="form-label">NMFC Code</label><input class="form-input" id="itemNmfc" placeholder="e.g. 156600.04"></div>
+          <div class="form-group"><label class="form-label">Freight Class</label><input class="form-input" id="itemFreightClass" placeholder="e.g. 60, 77.5, 125"></div>
         </div>
       </div>
 

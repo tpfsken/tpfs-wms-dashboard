@@ -331,6 +331,20 @@ async function openItemFormModal(skuId){
     });
   }
 
+  // Wire freight-class density calculator + live density readout
+  const calcBtn = document.getElementById('itemFreightCalcBtn');
+  if(calcBtn && !calcBtn._wired){
+    calcBtn._wired = true;
+    calcBtn.addEventListener('click', () => calcFreightClassFromDensity());
+  }
+  ['itemLength','itemWidth','itemHeight','itemWeight'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el && !el._densityWired){
+      el._densityWired = true;
+      el.addEventListener('input', updateDensityReadout);
+    }
+  });
+
   // Wire "Read SDS to auto-fill" — runs Claude on the PDF and pre-fills
   // the hazmat fields. The file is also staged for upload as an
   // attachment after the SKU is saved.
@@ -406,8 +420,11 @@ async function openItemFormModal(skuId){
     document.getElementById('itemLimitedQty').checked = !!sku.is_limited_qty;
     document.getElementById('itemHazmatNotes').value  = sku.hazmat_notes || '';
     document.getElementById('itemSpecialHandling').value = sku.special_handling_instructions || '';
+    document.getElementById('itemNmfc').value         = sku.nmfc_code || '';
+    document.getElementById('itemFreightClass').value = sku.freight_class || '';
     document.getElementById('itemHazmatBlock').style.display = sku.is_hazmat ? 'block' : 'none';
     document.getElementById('itemSdsExtractStatus').textContent = '';
+    updateDensityReadout();
     // Edit mode — load attachments list so ops can manage docs
     loadItemAttachmentsList(skuId);
   } else {
@@ -416,7 +433,7 @@ async function openItemFormModal(skuId){
       'itemCode','itemUpc','itemName','itemDescription','itemUnitsPerCase',
       'itemLength','itemWidth','itemHeight','itemWeight','itemUnitCost','itemUnitPrice',
       'itemUnNumber','itemHazardClass','itemProperShippingName','itemHazmatNotes',
-      'itemSpecialHandling',
+      'itemSpecialHandling','itemNmfc','itemFreightClass',
     ].forEach(id => { document.getElementById(id).value = ''; });
     ['itemLotTracked','itemExpiryTracked','itemHazmat','itemGroundOnly','itemLimitedQty']
       .forEach(id => { document.getElementById(id).checked = false; });
@@ -424,6 +441,7 @@ async function openItemFormModal(skuId){
     document.getElementById('itemSdsExtractStatus').textContent = '';
     cbReset('itemClientWrap'); cbSet('itemUomWrap','EA'); cbSet('itemTypeWrap','EACH');
     cbReset('itemPackingGroupWrap');
+    document.getElementById('itemDensityReadout').textContent = '';
   }
 
   // Reset staging before rendering so a previous modal open doesn't leak
@@ -472,6 +490,8 @@ async function submitItemForm(){
     isExpiryTracked:    document.getElementById('itemExpiryTracked').checked,
     isHazmat:           document.getElementById('itemHazmat').checked,
     specialHandlingInstructions: document.getElementById('itemSpecialHandling').value.trim() || null,
+    nmfcCode:           document.getElementById('itemNmfc').value.trim() || null,
+    freightClass:       document.getElementById('itemFreightClass').value.trim() || null,
   };
 
   if(!body.clientId){ err.textContent = 'Client is required'; return; }
@@ -544,6 +564,75 @@ async function submitItemForm(){
   } finally {
     submitBtn.disabled = false;
   }
+}
+
+// =============================================================================
+// FREIGHT CLASS — density-based suggestion. NMTA freight classes map to
+// density brackets (lbs per cubic foot). Manual override always wins.
+// =============================================================================
+
+// Density (lbs/ft³) -> freight class. Brackets per the NMTA Density-
+// Based Density Guidelines. We pick the lowest class whose floor density
+// is <= the item's density (i.e. denser items are cheaper to ship).
+const FREIGHT_DENSITY_BRACKETS = [
+  // [min density (lbs/cuft), freight class]
+  [50,    50  ],
+  [35,    55  ],
+  [30,    60  ],
+  [22.5,  65  ],
+  [15,    70  ],
+  [13.5,  77.5],
+  [12,    85  ],
+  [10.5,  92.5],
+  [9,    100  ],
+  [8,    110  ],
+  [7,    125  ],
+  [6,    150  ],
+  [5,    175  ],
+  [4,    200  ],
+  [3,    250  ],
+  [2,    300  ],
+  [1,    400  ],
+  [0,    500  ],
+];
+
+function computeDensityLbsPerCuFt(){
+  const L = Number(document.getElementById('itemLength').value);
+  const W = Number(document.getElementById('itemWidth').value);
+  const H = Number(document.getElementById('itemHeight').value);
+  const wt = Number(document.getElementById('itemWeight').value);
+  if(!(L > 0 && W > 0 && H > 0 && wt > 0)) return null;
+  const cuFt = (L * W * H) / 1728; // in³ to ft³
+  if(cuFt <= 0) return null;
+  return wt / cuFt;
+}
+
+function densityToFreightClass(d){
+  if(d == null) return null;
+  for(const [floor, cls] of FREIGHT_DENSITY_BRACKETS){
+    if(d >= floor) return cls;
+  }
+  return 500;
+}
+
+function updateDensityReadout(){
+  const d = computeDensityLbsPerCuFt();
+  const out = document.getElementById('itemDensityReadout');
+  if(!out) return;
+  if(d == null){ out.textContent = ''; return; }
+  const cls = densityToFreightClass(d);
+  out.textContent = `${d.toFixed(2)} lbs/ft³ → suggests Class ${cls}`;
+  out.style.color = 'var(--text2)';
+}
+
+function calcFreightClassFromDensity(){
+  const d = computeDensityLbsPerCuFt();
+  if(d == null){
+    alert('Need length, width, height, and weight all > 0 to compute density.');
+    return;
+  }
+  const cls = densityToFreightClass(d);
+  document.getElementById('itemFreightClass').value = String(cls);
 }
 
 // =============================================================================
