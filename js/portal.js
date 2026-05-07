@@ -53,6 +53,13 @@ function bootPortal(){
     {value:'SHIPPED',label:'Shipped'},{value:'CANCELLED',label:'Cancelled'},
   ], {placeholder:'All statuses', onChange:() => loadOrders()});
 
+  // Pre-init the Billing client-filter combo so loadBilling() skips its
+  // first-time init branch — that branch calls loadCC() -> GET /clients,
+  // which is requireOps and would 403 a portal user. The wrap itself is
+  // .ops-only in index.html, so the stub combo is never shown.
+  initCombo('billClientFilterWrap', [{value:'', label:'My Account'}],
+    {placeholder:'My Account'});
+
   // Clock + sign-out wiring already attached in app.js DOMContentLoaded —
   // those run regardless of mode. Just navigate to the portal home so the
   // active nav-item / active page line up with what the user sees.
@@ -74,6 +81,9 @@ function loadPortalHome(){
     {id:'orders',         icon:'📋', title:'My Orders',
      desc:'Status of every order you placed — open, picking, shipped.',
      accent:'var(--amber)'},
+    {id:'billing',        icon:'💵', title:'My Billing',
+     desc:'Per-period charges and the rates set up for your account.',
+     accent:'var(--green)'},
     {id:'reports',        icon:'🔎', title:'Reports',
      desc:'Item history and full LP traceability for compliance / recall.',
      accent:'var(--purple)'},
