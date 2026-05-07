@@ -11,20 +11,93 @@ let _traceData   = null;       // last trace query result
 let _traceContext = null;      // {sku, lot} we drilled into
 let _reportsClient = '';       // selected client id, '' = all clients
 
+// Catalog of available reports — add a new entry per report as it's built.
+// status:'live' renders a clickable card; 'soon' renders a disabled placeholder.
+const REPORTS_CATALOG = [
+  {
+    id:    'item-history',
+    title: 'Item History → LP Trace',
+    desc:  'Search by SKU or lot. Drill into any row to follow the LP family — receiving, picks, shipments, full timeline.',
+    phase: '9.16 / 9.17',
+    icon:  '🔎',
+    open:  () => openItemHistoryReport(),
+    status:'live',
+  },
+  // Future stubs — uncomment / wire up as we build them
+  // {id:'inventory-as-of', title:'Inventory On-Hand by Date', phase:'9.7',  icon:'📅', status:'soon'},
+  // {id:'item-activity',   title:'Item Activity Detail',     phase:'9.15', icon:'📊', status:'soon'},
+  // {id:'b2b-shipment',    title:'B2B Shipment Detail',      phase:'9.18', icon:'📦', status:'soon'},
+  // {id:'case-breaks',     title:'Case Break Activity',      phase:'9.19', icon:'⊞',  status:'soon'},
+  // {id:'daily-snapshot',  title:'Daily Snapshot',           phase:'9.20', icon:'🌙', status:'soon'},
+  // {id:'txn-export',      title:'Transaction Log Export',   phase:'9.21', icon:'⬇',  status:'soon'},
+];
+
 // =============================================================================
 // LEVEL 1 — ITEM HISTORY
 // =============================================================================
 
-async function loadReports(){
+// Default landing — a card grid of every available report.
+function loadReports(){
+  document.getElementById('reportsIndexView').style.display = 'block';
+  document.getElementById('reportsContent').style.display = 'none';
+  renderReportsIndex();
+}
+
+function renderReportsIndex(){
+  const grid = document.getElementById('reportsIndexGrid');
+  grid.innerHTML = REPORTS_CATALOG.map(r => {
+    const live = r.status === 'live';
+    const opacity = live ? '1' : '.55';
+    const cursor  = live ? 'cursor:pointer;' : 'cursor:default;';
+    const badge   = live
+      ? `<span class="chip chip-success" style="font-size:10px;">Live</span>`
+      : `<span class="chip chip-new" style="font-size:10px;">Coming soon</span>`;
+    return `
+      <div class="card js-report-card" data-id="${esc(r.id)}"
+           style="padding:20px;${cursor}opacity:${opacity};transition:border-color .15s;">
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;">
+          <div style="font-size:24px;line-height:1;">${esc(r.icon || '📄')}</div>
+          <div style="flex:1;">
+            <div style="font-size:15px;font-weight:700;">${esc(r.title)}</div>
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;">Phase ${esc(r.phase || '')}</div>
+          </div>
+          ${badge}
+        </div>
+        ${r.desc ? `<div style="font-size:13px;color:var(--text2);line-height:1.5;">${esc(r.desc)}</div>` : ''}
+      </div>`;
+  }).join('');
+
+  grid.querySelectorAll('.js-report-card').forEach(card => {
+    const r = REPORTS_CATALOG.find(x => x.id === card.dataset.id);
+    if(!r || r.status !== 'live') return;
+    card.addEventListener('mouseover', () => card.style.borderColor = 'var(--blue)');
+    card.addEventListener('mouseout',  () => card.style.borderColor = '');
+    card.addEventListener('click', () => r.open());
+  });
+}
+
+function backToReportsIndex(){
+  document.getElementById('reportsContent').style.display = 'none';
+  document.getElementById('reportsIndexView').style.display = 'block';
+}
+
+// =============================================================================
+// REPORT — Item History → LP Trace
+// =============================================================================
+
+async function openItemHistoryReport(){
+  document.getElementById('reportsIndexView').style.display = 'none';
+  document.getElementById('reportsContent').style.display = 'block';
+  document.getElementById('reportsCurrentTitle').textContent = 'Item History';
+  document.getElementById('reportsCurrentSub').textContent   = 'Item history → LP traceability';
+
   document.getElementById('itemHistoryView').style.display = 'block';
   document.getElementById('traceView').style.display = 'none';
   document.getElementById('itemHistoryError').textContent = '';
 
-  // Always fetch fresh — bypass any cache state that might be empty
-  // from a previous failure. /clients is cheap.
+  // Always fetch fresh — bypass any cache state that might be empty.
   const clientsList = await apiGet('/clients');
   const clients = Array.isArray(clientsList) ? clientsList : [];
-  console.log('[reports] clients loaded:', clients.length);
 
   initCombo('reportsClientWrap',
     [{value:'', label:'All clients'}].concat(
@@ -43,7 +116,6 @@ async function loadReports(){
     }
   );
 
-  // Auto-load recent activity on first open
   if(!_itemHistory) runItemHistory();
   document.getElementById('reportSkuInput').focus?.();
 }

@@ -252,8 +252,17 @@
     </div>
   </div>
   <div class="page" id="page-reports">
+    <!-- ============ LEVEL 0: REPORTS INDEX ============ -->
+    <div id="reportsIndexView">
+      <div class="page-header">
+        <div><div class="page-title">Reports</div><div class="page-subtitle">Pick a report to run</div></div>
+      </div>
+      <div class="grid-3" id="reportsIndexGrid"></div>
+    </div>
+
+    <div id="reportsContent" style="display:none;">
     <div class="page-header">
-      <div><div class="page-title">Reports</div><div class="page-subtitle">Item history → LP traceability</div></div>
+      <div style="display:flex;align-items:center;gap:12px;"><button class="btn btn-ghost" onclick="backToReportsIndex()">← All Reports</button><div><div class="page-title" id="reportsCurrentTitle">Item History</div><div class="page-subtitle" id="reportsCurrentSub">Item history → LP traceability</div></div></div>
     </div>
 
     <!-- ============ LEVEL 1: ITEM HISTORY ============ -->
@@ -410,6 +419,7 @@
       </div>
     </div>
   </div>
+  </div><!-- /reportsContent -->
 </div>
 </div>
 
