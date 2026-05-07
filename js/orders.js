@@ -1035,3 +1035,21 @@ async function deleteOrderAttachment(orderId, attId){
   }
   loadOrderAttachments(orderId);
 }
+
+// =============================================================================
+// PRINT DOCS — opens a printable HTML window for the current order. The
+// renderers live in printDocs.js; we just hand them the order detail
+// payload from /orders/:id (which now includes client_full /
+// warehouse_full / per-line hazmat + freight fields).
+// =============================================================================
+
+async function printOrderDoc(kind){
+  if(!COI){ alert('No order selected'); return; }
+  // Re-fetch so we always print the latest state — saves the user from
+  // staring at stale data after a recent allocate / pick / ship.
+  const order = await apiGet(`/orders/${COI}`);
+  if(!order){ alert('Could not load order'); return; }
+  if(kind === 'pick')         renderPickSlip(order);
+  else if(kind === 'packing') renderPackingSlip(order);
+  else if(kind === 'bol')     renderBol(order);
+}

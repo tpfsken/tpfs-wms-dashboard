@@ -123,7 +123,15 @@
     <div class="page-header"><button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button><div><div class="page-title">Orders</div><div class="page-subtitle">Outbound order management</div></div><div style="flex:1"></div><input type="text" class="form-input" id="ordSearch" placeholder="Search order #..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="ordStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadOrders()">Refresh</button><button class="btn btn-primary ops-only" onclick="showNewOrderModal()">+ New Order</button><button class="btn btn-primary portal-only" onclick="navigateTo('portalNewOrder')">+ New Order</button></div>
     <div id="ordListView"><div class="card"><div style="overflow:auto;"><table class="data-table"><thead><tr><th>Order #</th><th>Client</th><th>Channel</th><th>Type</th><th>Customer</th><th>Ship To</th><th>Carrier</th><th class="right">Lines</th><th class="right">Units</th><th>Ship By</th><th>Status</th></tr></thead><tbody id="ordBody"></tbody></table></div></div></div>
     <div id="ordDetailView" style="display:none;">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;"><button class="btn btn-ghost" onclick="closeOrderDetail()">← Back</button><div><div style="font-size:18px;font-weight:700;" id="ordDetailTitle"></div><div style="font-size:13px;color:var(--text2);" id="ordDetailSub"></div></div><div style="flex:1"></div><span class="chip" id="ordDetailStatus"></span></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" onclick="closeOrderDetail()">← Back</button>
+        <div><div style="font-size:18px;font-weight:700;" id="ordDetailTitle"></div><div style="font-size:13px;color:var(--text2);" id="ordDetailSub"></div></div>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost ops-only" onclick="printOrderDoc('pick')"   title="Pick slip — for the warehouse picker">🖨️ Pick</button>
+        <button class="btn btn-ghost"          onclick="printOrderDoc('packing')" title="Packing slip — goes in the box">📦 Packing</button>
+        <button class="btn btn-ghost ops-only" onclick="printOrderDoc('bol')"    title="Bill of Lading — driver / freight">📄 BOL</button>
+        <span class="chip" id="ordDetailStatus"></span>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 360px;gap:20px;">
         <div>
           <div class="detail-panel" style="margin-bottom:16px;"><div class="detail-grid" id="ordInfoGrid"></div></div>
@@ -1237,6 +1245,7 @@
 <!-- Scripts: load order matters. util/combo first, then domain modules, then app.js boots. -->
 <script src="js/util.js"></script>
 <script src="js/combo.js"></script>
+<script src="js/printDocs.js"></script>
 <script src="js/clients.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inventory.js"></script>
