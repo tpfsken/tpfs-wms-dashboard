@@ -163,54 +163,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('invSearch')?.addEventListener('input', debounce(loadInventory, 400));
   document.getElementById('ordSearch')?.addEventListener('input', debounce(loadOrders, 400));
 
-  // Global topbar search — heuristic routing on Enter:
-  //   ORD-…  → Orders page, prefilled
-  //   PO-…   → Receiving page, prefilled (ops only)
-  //   LP-…   → Reports → trace by LP (manual LP search box)
-  //   anything else → Inventory page, treated as SKU/lot search
-  document.getElementById('globalSearch')?.addEventListener('keydown', e => {
-    if(e.key !== 'Enter') return;
-    const v = e.target.value.trim();
-    if(!v) return;
-
-    const route = (page, inputId) => {
-      navigateTo(page);
-      setTimeout(() => {
-        const ip = document.getElementById(inputId);
-        if(ip){
-          ip.value = v;
-          ip.dispatchEvent(new Event('input', {bubbles:true}));
-          ip.focus?.();
-        }
-      }, 150);
-    };
-
-    const portal = typeof isPortalMode === 'function' && isPortalMode();
-
-    if(/^ORD/i.test(v)){
-      route('orders', 'ordSearch');
-    } else if(/^PO/i.test(v) && !portal){
-      navigateTo('inbound');
-    } else if(/^LP/i.test(v)){
-      navigateTo('reports');
-      setTimeout(() => {
-        if(typeof openItemHistoryReport === 'function') openItemHistoryReport();
-        setTimeout(() => {
-          const lp = document.getElementById('manualLpInput');
-          if(lp){ lp.value = v; }
-          if(typeof runManualTrace === 'function'){
-            // Need to flip into trace view first via a fake item click — easier
-            // path: leave the LP populated, user clicks Trace LP button.
-          }
-        }, 200);
-      }, 150);
-    } else {
-      // Default: SKU/lot search → Inventory
-      route('inventory', 'invSearch');
-    }
-
-    e.target.value = '';
-  });
+  // Topbar global search was removed — each page has its own scoped search
+  // (Inventory: SKU/lot, Orders: order #, Reports: SKU/lot/LP).
 
   // Intake upload + case-break LP search
   document.getElementById('intakeUploadInput')?.addEventListener('change', onIntakeFilesPicked);

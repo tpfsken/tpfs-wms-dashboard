@@ -46,7 +46,7 @@
 <div class="main">
   <div class="topbar">
     <div class="topbar-title" id="pageTitle">Dashboard</div>
-    <div class="topbar-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input id="globalSearch" placeholder="Search orders, SKUs, lots — Enter to search"></div>
+    <div style="flex:1"></div><!-- topbar search removed; each page has its own search where it makes sense -->
     <div class="topbar-sep"></div>
     <div class="topbar-wh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21V12h6v9"/></svg><span>ONT-01</span></div>
     <div class="topbar-time" id="clock"></div>
@@ -271,13 +271,16 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" style="overflow:visible;position:relative;">
       <div class="card-head">
         <div class="card-title">Order Lines</div>
         <div style="flex:1"></div>
         <input type="text" class="form-input" id="pnoSkuSearch" placeholder="Click to browse SKUs..." style="max-width:280px;" oninput="searchPortalSkus()" onfocus="searchPortalSkus()">
       </div>
-      <div id="pnoSkuResults" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin:12px 20px 0;max-height:340px;overflow-y:auto;"></div>
+      <!-- SKU dropdown — absolute-positioned so it can overflow the card cleanly,
+           large max-height (60vh) so 50+ SKUs scroll comfortably, high z-index
+           so it stays above the sticky Submit bar. -->
+      <div id="pnoSkuResults" style="display:none;position:absolute;top:62px;left:20px;right:20px;background:var(--bg);border:1px solid var(--border);border-radius:8px;max-height:min(620px,60vh);overflow-y:auto;box-shadow:0 12px 32px rgba(0,0,0,.5);z-index:50;"></div>
       <div style="overflow-x:auto;padding:0 4px;">
         <table class="data-table" style="margin:0;">
           <thead><tr><th>SKU</th><th>Description</th><th>Lot</th><th>Expiry</th><th>UOM</th><th class="right">Available</th><th style="width:120px;">Quantity</th><th style="width:50px;"></th></tr></thead>

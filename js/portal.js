@@ -247,8 +247,12 @@ async function expandPortalSkuLots(skuRow, sku){
   lotsDiv.innerHTML = '<div style="padding:8px 16px 8px 32px;color:var(--muted);font-size:12px;">Loading lots…</div>';
 
   // /inventory is auto-scoped to the user's client_id by scopeClient on the API.
-  const d = await apiGet(`/inventory?limit=100&status=available&skuCode=${encodeURIComponent('%' + sku.sku_code + '%')}`);
-  const allRows = (d?.rows || d || []).filter(r => r.sku_id === sku.skuId && Number(r.quantity) > 0);
+  const d = await apiGet(`/inventory?limit=200&status=available&skuCode=${encodeURIComponent('%' + sku.sku_code + '%')}`);
+  // Filter by sku_code (more reliable than sku_id which can vary by representation)
+  // and require positive qty.
+  const allRows = (d?.rows || d || []).filter(r =>
+    r.sku_code === sku.sku_code && Number(r.quantity) > 0
+  );
 
   if(!allRows.length){
     lotsDiv.innerHTML = '<div style="padding:8px 16px 8px 32px;color:var(--muted);font-size:12px;">No available inventory.</div>';
