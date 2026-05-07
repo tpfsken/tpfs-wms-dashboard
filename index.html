@@ -451,6 +451,7 @@
       <!-- Tab strip -->
       <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;">
         <button class="cli-tab" data-tab="profile" style="padding:10px 18px;border:none;background:none;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--blue);">Profile</button>
+        <button class="cli-tab" data-tab="items" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">Item Master</button>
         <button class="cli-tab" data-tab="kpi" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">KPI / SLA Targets</button>
         <button class="cli-tab" data-tab="rules" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">SLA Rules</button>
         <button class="cli-tab" data-tab="performance" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">Current Performance</button>
@@ -474,6 +475,33 @@
             <div style="font-size:12px;color:var(--text2);">Items added under this client require hazmat info (UN #, packing group, hazard class)</div>
           </div>
           <div style="padding:20px;" id="cliHazmatBody"></div>
+        </div>
+      </div>
+      <div class="cli-panel" data-tab="items" style="display:none;">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Item Master</div>
+            <div id="cliItemsCount" style="font-size:12px;color:var(--muted);margin-left:8px;"></div>
+            <div style="flex:1"></div>
+            <input type="text" class="form-input" id="cliItemsSearch" placeholder="Search SKU, UPC, or name..." style="max-width:280px;">
+            <button class="btn btn-primary" id="cliItemsAddBtn">+ Add Item</button>
+          </div>
+          <div style="overflow:auto;max-height:60vh;">
+            <table class="data-table" style="margin:0;">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>UOM</th>
+                  <th class="right">On-Hand</th>
+                  <th>Tracking</th>
+                  <th style="width:80px;text-align:right;"></th>
+                </tr>
+              </thead>
+              <tbody id="cliItemsBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
       <div class="cli-panel" data-tab="kpi" style="display:none;">

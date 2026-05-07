@@ -113,6 +113,7 @@ function switchClientTab(tab){
   });
 
   if(tab === 'profile')          renderClientProfileTab();
+  else if(tab === 'items')       loadClientItemsTab();
   else if(tab === 'kpi')         loadClientKpiTab();
   else if(tab === 'rules')       loadClientRulesTab();
   else if(tab === 'performance') loadClientPerformanceTab();
@@ -751,6 +752,104 @@ async function saveSlaRule(idx){
     // Reload from server so we get the canonical row + clear _draft flags
     await loadClientRulesTab();
   } catch(e){ alert('Network error'); }
+}
+
+// =============================================================================
+// ITEM MASTER TAB — full SKU catalog for the active client. Powered by
+// /clients/:id/skus (broader than the 50-row /skus search). Click a row
+// to edit; + Add Item opens the New Item modal pre-filled with this
+// client.
+// =============================================================================
+
+let _cliItemsSearchDebounce = null;
+
+async function loadClientItemsTab(){
+  if(!_currentClient) return;
+  // Wire search + add button (idempotent)
+  const search = document.getElementById('cliItemsSearch');
+  if(search && !search._wired){
+    search._wired = true;
+    search.addEventListener('input', () => {
+      clearTimeout(_cliItemsSearchDebounce);
+      _cliItemsSearchDebounce = setTimeout(() => fetchClientItems(search.value.trim()), 300);
+    });
+  }
+  const addBtn = document.getElementById('cliItemsAddBtn');
+  if(addBtn && !addBtn._wired){
+    addBtn._wired = true;
+    addBtn.addEventListener('click', async () => {
+      // Open the existing New Item modal, then preselect this client.
+      // openItemFormModal lives in inventory.js — relies on globals.
+      await openItemFormModal();
+      const cid = String(_currentClient.id);
+      cbSet('itemClientWrap', cid,
+        `${_currentClient.code || ''} — ${_currentClient.name || ''}`);
+      // Trigger the hazmat hint logic
+      if(typeof onItemClientChange === 'function') onItemClientChange();
+    });
+  }
+  fetchClientItems(search?.value.trim() || '');
+}
+
+async function fetchClientItems(searchTerm){
+  const body  = document.getElementById('cliItemsBody');
+  const count = document.getElementById('cliItemsCount');
+  body.innerHTML = '<tr><td colspan="7" class="empty-state">Loading…</td></tr>';
+
+  let url = `/clients/${_currentClient.id}/skus?limit=500`;
+  if(searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
+  const rows = await apiGet(url);
+  if(!rows){
+    body.innerHTML = '<tr><td colspan="7" class="empty-state">Could not load items</td></tr>';
+    return;
+  }
+  if(count) count.textContent = rows.length ? `· ${rows.length} item${rows.length === 1 ? '' : 's'}` : '';
+
+  if(!rows.length){
+    body.innerHTML = '<tr><td colspan="7" class="empty-state">No items yet — click + Add Item to create one</td></tr>';
+    return;
+  }
+
+  body.innerHTML = rows.map(r => {
+    const tracking = [];
+    if(r.is_lot_tracked)    tracking.push('<span class="chip chip-new" style="font-size:10px;">Lot</span>');
+    if(r.is_expiry_tracked) tracking.push('<span class="chip chip-new" style="font-size:10px;">Exp</span>');
+    if(r.is_hazmat) {
+      const txt = r.hazard_class
+        ? `⚠ Hazmat ${esc(r.un_number || '')} · Cl ${esc(r.hazard_class)}`
+        : '⚠ Hazmat';
+      tracking.push(`<span class="chip chip-danger" style="font-size:10px;">${txt}</span>`);
+    }
+    if(r.attachment_count > 0) {
+      tracking.push(`<span class="chip chip-warning" style="font-size:10px;">📎 ${r.attachment_count}</span>`);
+    }
+    return `
+      <tr class="js-cli-item-row" data-id="${esc(r.id)}" style="cursor:pointer;">
+        <td style="font-weight:600;color:var(--blue);">${esc(r.sku_code || '')}</td>
+        <td>
+          <div>${esc(r.name || '')}</div>
+          ${r.special_handling_instructions ? `<div style="font-size:11px;color:var(--amber);margin-top:2px;">📋 ${esc(r.special_handling_instructions)}</div>` : ''}
+        </td>
+        <td><span class="chip" style="font-size:11px;">${esc(r.sku_type || '')}</span></td>
+        <td style="color:var(--text2);">${esc(r.uom || '')}</td>
+        <td class="right" style="font-weight:600;color:${Number(r.qty_available) > 0 ? 'var(--green)' : 'var(--muted)'};">${esc(Number(r.qty_available || 0).toLocaleString())}</td>
+        <td>${tracking.join(' ')}</td>
+        <td style="text-align:right;"><button class="btn btn-ghost js-cli-item-edit" data-id="${esc(r.id)}" style="padding:3px 10px;font-size:12px;">Edit</button></td>
+      </tr>`;
+  }).join('');
+
+  // Hover + click — both row and edit button open the item modal
+  body.querySelectorAll('.js-cli-item-row').forEach(row => {
+    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
+    row.addEventListener('mouseout',  () => row.style.background = '');
+    row.addEventListener('click', () => openItemFormModal(row.dataset.id));
+  });
+  body.querySelectorAll('.js-cli-item-edit').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openItemFormModal(btn.dataset.id);
+    });
+  });
 }
 
 async function deleteSlaRule(idx){
