@@ -442,7 +442,8 @@
       <!-- Tab strip -->
       <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;">
         <button class="cli-tab" data-tab="profile" style="padding:10px 18px;border:none;background:none;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--blue);">Profile</button>
-        <button class="cli-tab" data-tab="kpi" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">KPI / SLA Settings</button>
+        <button class="cli-tab" data-tab="kpi" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">KPI / SLA Targets</button>
+        <button class="cli-tab" data-tab="rules" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">SLA Rules</button>
         <button class="cli-tab" data-tab="performance" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">Current Performance</button>
       </div>
       <!-- Tab panels -->
@@ -477,6 +478,19 @@
           </div>
           <div id="cliKpiBody" style="padding:20px;"></div>
           <div id="cliKpiStatus" style="padding:0 20px 16px;font-size:13px;"></div>
+        </div>
+      </div>
+      <div class="cli-panel" data-tab="rules" style="display:none;">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">SLA Rules</div>
+            <div style="font-size:12px;color:var(--text2);margin-left:12px;">Operational rules — order cut-off times, lead times, weekend handling, etc. Editable on the fly.</div>
+            <div style="flex:1"></div>
+            <button class="btn btn-primary" id="cliRuleAddBtn">+ Add Rule</button>
+          </div>
+          <!-- Quick-add chips: click a preset to drop a new row in -->
+          <div id="cliRulePresets" style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:8px;"></div>
+          <div id="cliRulesBody" style="padding:20px;"></div>
         </div>
       </div>
       <div class="cli-panel" data-tab="performance" style="display:none;">

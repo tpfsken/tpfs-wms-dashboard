@@ -112,8 +112,9 @@ function switchClientTab(tab){
     p.style.display = p.dataset.tab === tab ? 'block' : 'none';
   });
 
-  if(tab === 'profile')      renderClientProfileTab();
-  else if(tab === 'kpi')     loadClientKpiTab();
+  if(tab === 'profile')          renderClientProfileTab();
+  else if(tab === 'kpi')         loadClientKpiTab();
+  else if(tab === 'rules')       loadClientRulesTab();
   else if(tab === 'performance') loadClientPerformanceTab();
 }
 
@@ -511,4 +512,206 @@ async function loadClientPerformanceTab(){
           </tr>`).join('')}
       </tbody>
     </table>`;
+}
+
+// =============================================================================
+// SLA RULES TAB — ad-hoc operational policy (cut-off times, lead times,
+// weekend handling, etc.). Distinct from the measurable KPIs in the
+// KPI/SLA Targets tab. Each row is editable inline; quick-add chips at
+// the top let ops drop in common ones with one click.
+// =============================================================================
+
+let _slaPresets = null;   // cached /sla-rule-presets response
+let _slaRules   = [];     // currently shown rules for the active client
+
+async function loadClientRulesTab(){
+  if(!_currentClient) return;
+  const body = document.getElementById('cliRulesBody');
+  body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px;">Loading…</div>';
+
+  // Cache presets — they're identical across all clients
+  if(!_slaPresets) _slaPresets = (await apiGet('/sla-rule-presets')) || [];
+  const rules = await apiGet(`/clients/${_currentClient.id}/sla-rules`);
+  if(!rules){
+    body.innerHTML = '<div style="color:var(--red);padding:20px;">Could not load SLA rules</div>';
+    return;
+  }
+  _slaRules = rules;
+
+  // Wire the + Add Rule button (free-form custom rule)
+  const addBtn = document.getElementById('cliRuleAddBtn');
+  if(addBtn && !addBtn._wired){
+    addBtn._wired = true;
+    addBtn.addEventListener('click', () => addCustomSlaRule());
+  }
+
+  renderSlaRulePresets();
+  renderSlaRulesBody();
+}
+
+function renderSlaRulePresets(){
+  const wrap = document.getElementById('cliRulePresets');
+  // Hide presets that already have a saved rule for this client
+  const existing = new Set(_slaRules.map(r => r.rule_key));
+  const remaining = _slaPresets.filter(p => !existing.has(p.key));
+
+  if(!remaining.length){
+    wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;">All presets in use — use + Add Rule for a custom one</div>';
+    return;
+  }
+  wrap.innerHTML =
+    '<div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;width:100%;margin-bottom:4px;">Quick add</div>' +
+    remaining.map(p => `
+      <button class="btn btn-ghost js-sla-preset" data-key="${esc(p.key)}"
+              style="padding:6px 12px;font-size:12px;">+ ${esc(p.label)}</button>
+    `).join('');
+
+  wrap.querySelectorAll('.js-sla-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const preset = _slaPresets.find(p => p.key === btn.dataset.key);
+      if(!preset) return;
+      // Add a draft row (unsaved) so the user can fill in the value.
+      _slaRules.push({
+        id: null, rule_key: preset.key, rule_label: preset.label,
+        rule_value: '', unit: preset.unit, notes: '', _draft: true,
+        _placeholder: preset.placeholder,
+      });
+      renderSlaRulePresets();
+      renderSlaRulesBody();
+    });
+  });
+}
+
+function addCustomSlaRule(){
+  // Generate a unique key for the custom rule
+  const key = 'custom_' + Date.now().toString(36);
+  _slaRules.push({
+    id: null, rule_key: key, rule_label: '', rule_value: '',
+    unit: '', notes: '', _draft: true, _custom: true,
+  });
+  renderSlaRulesBody();
+}
+
+function renderSlaRulesBody(){
+  const body = document.getElementById('cliRulesBody');
+  if(!_slaRules.length){
+    body.innerHTML = '<div class="empty-state" style="padding:24px;text-align:center;">No SLA rules yet — add one above</div>';
+    return;
+  }
+
+  body.innerHTML = `
+    <table class="data-table" style="margin:0;">
+      <thead>
+        <tr>
+          <th style="width:30%;">Rule</th>
+          <th style="width:25%;">Value</th>
+          <th style="width:15%;">Unit</th>
+          <th>Notes</th>
+          <th style="width:160px;text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${_slaRules.map((r, i) => {
+          const draft = r._draft;
+          const labelInput = r._custom
+            ? `<input class="form-input js-sla-label" data-idx="${esc(i)}" value="${esc(r.rule_label || '')}" placeholder="Custom rule name" style="width:100%;padding:6px 8px;font-size:13px;">`
+            : `<div style="font-weight:600;font-size:13px;">${esc(r.rule_label || '')}</div>`;
+          return `
+            <tr>
+              <td>${labelInput}</td>
+              <td>
+                <input class="form-input js-sla-value" data-idx="${esc(i)}"
+                       value="${esc(r.rule_value || '')}"
+                       placeholder="${esc(r._placeholder || '')}"
+                       style="width:100%;padding:6px 8px;font-size:13px;">
+              </td>
+              <td>
+                <input class="form-input js-sla-unit" data-idx="${esc(i)}"
+                       value="${esc(r.unit || '')}"
+                       style="width:100%;padding:6px 8px;font-size:13px;">
+              </td>
+              <td>
+                <input class="form-input js-sla-notes" data-idx="${esc(i)}"
+                       value="${esc(r.notes || '')}"
+                       style="width:100%;padding:6px 8px;font-size:13px;">
+              </td>
+              <td style="text-align:right;">
+                <button class="btn btn-primary js-sla-save" data-idx="${esc(i)}"
+                        style="padding:4px 12px;font-size:12px;">${draft ? 'Save' : 'Update'}</button>
+                <button class="btn btn-ghost js-sla-rm" data-idx="${esc(i)}"
+                        style="padding:4px 10px;font-size:12px;color:var(--red);">✕</button>
+              </td>
+            </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+
+  // Sync edits into the working set
+  body.querySelectorAll('.js-sla-label').forEach(inp => inp.addEventListener('input', e =>
+    _slaRules[parseInt(e.target.dataset.idx)].rule_label = e.target.value));
+  body.querySelectorAll('.js-sla-value').forEach(inp => inp.addEventListener('input', e =>
+    _slaRules[parseInt(e.target.dataset.idx)].rule_value = e.target.value));
+  body.querySelectorAll('.js-sla-unit').forEach(inp => inp.addEventListener('input', e =>
+    _slaRules[parseInt(e.target.dataset.idx)].unit = e.target.value));
+  body.querySelectorAll('.js-sla-notes').forEach(inp => inp.addEventListener('input', e =>
+    _slaRules[parseInt(e.target.dataset.idx)].notes = e.target.value));
+
+  body.querySelectorAll('.js-sla-save').forEach(btn => btn.addEventListener('click', () =>
+    saveSlaRule(parseInt(btn.dataset.idx))));
+  body.querySelectorAll('.js-sla-rm').forEach(btn => btn.addEventListener('click', () =>
+    deleteSlaRule(parseInt(btn.dataset.idx))));
+}
+
+async function saveSlaRule(idx){
+  const r = _slaRules[idx];
+  if(!r) return;
+  if(!r.rule_label || !r.rule_label.trim()){
+    alert('Rule name is required');
+    return;
+  }
+  // For custom rules, regenerate rule_key from the label so it's stable
+  if(r._custom && r.rule_key.startsWith('custom_')){
+    r.rule_key = 'custom_' + r.rule_label.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40);
+  }
+  try {
+    const res = await fetch(`${API}/clients/${_currentClient.id}/sla-rules`, {
+      method:'POST', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+      body: JSON.stringify({
+        rule_key:       r.rule_key,
+        rule_label:     r.rule_label,
+        rule_value:     r.rule_value,
+        unit:           r.unit,
+        notes:          r.notes,
+        display_order:  idx,
+      }),
+    });
+    const d = await res.json();
+    if(!res.ok){ alert(d.error || 'Save failed'); return; }
+    // Reload from server so we get the canonical row + clear _draft flags
+    await loadClientRulesTab();
+  } catch(e){ alert('Network error'); }
+}
+
+async function deleteSlaRule(idx){
+  const r = _slaRules[idx];
+  if(!r) return;
+  // Drafts that haven't been saved yet — just remove locally
+  if(!r.id){
+    _slaRules.splice(idx, 1);
+    renderSlaRulePresets();
+    renderSlaRulesBody();
+    return;
+  }
+  if(!confirm(`Remove SLA rule "${r.rule_label}"?`)) return;
+  try {
+    const res = await fetch(`${API}/clients/${_currentClient.id}/sla-rules/${r.id}`, {
+      method:'DELETE', headers:{'Authorization':`Bearer ${T}`},
+    });
+    if(!res.ok){
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || 'Delete failed');
+      return;
+    }
+    await loadClientRulesTab();
+  } catch(e){ alert('Network error'); }
 }
