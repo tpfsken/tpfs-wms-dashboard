@@ -1122,35 +1122,25 @@
         <div class="cb-wrap" id="itemClientWrap"></div>
       </div>
       <div class="form-row form-row-2">
-        <div class="form-group"><label class="form-label">SKU Code *</label><input class="form-input" id="itemCode" placeholder="ACM-1234"></div>
+        <div class="form-group"><label class="form-label">Base SKU Code *</label><input class="form-input" id="itemCode" placeholder="ACM-1234 (used to auto-fill level codes below)"></div>
         <div class="form-group"><label class="form-label">UPC / Barcode</label><input class="form-input" id="itemUpc" placeholder="012345678905"></div>
       </div>
       <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="itemName" placeholder="e.g. Vitamin C 500mg, 60-count bottle"></div>
       <div class="form-group"><label class="form-label">Description</label><textarea class="form-input" id="itemDescription" rows="2" placeholder="Long-form description (optional)"></textarea></div>
-      <div class="form-row form-row-3">
-        <div class="form-group"><label class="form-label">UOM</label><div class="cb-wrap" id="itemUomWrap"></div></div>
-        <div class="form-group"><label class="form-label">SKU Type</label><div class="cb-wrap" id="itemTypeWrap"></div></div>
-        <div class="form-group"><label class="form-label">Units / Case</label><input class="form-input" id="itemUnitsPerCase" type="number" min="0" step="1" placeholder="e.g. 24"></div>
-      </div>
+      <div class="form-group"><label class="form-label">UOM</label><div class="cb-wrap" id="itemUomWrap"></div></div>
 
-      <!-- Physical + Freight -->
+      <!-- Handling Units — one or more levels (Each / Inner Pack / Case /
+           Pallet, or custom). Each level has its own dimensions, weight,
+           NMFC, freight class. Saves to skus rows linked by parent_sku_id. -->
       <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:14px;">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-          <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Physical &amp; Freight</div>
+          <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Handling Units</div>
+          <div style="font-size:11px;color:var(--muted);">Add a level for each handling unit you stock — each gets its own dimensions, weight, NMFC, and freight class</div>
           <div style="flex:1"></div>
-          <span id="itemDensityReadout" style="font-size:11px;color:var(--text2);"></span>
-          <button type="button" class="btn btn-ghost" id="itemFreightCalcBtn" style="padding:4px 10px;font-size:12px;color:var(--blue);">⚡ Calc class from density</button>
+          <button type="button" class="btn btn-ghost" id="itemHuAddBtn" style="padding:4px 12px;font-size:12px;color:var(--blue);">+ Add Level</button>
         </div>
-        <div class="form-row form-row-4">
-          <div class="form-group"><label class="form-label">Length (in)</label><input class="form-input" id="itemLength" type="number" min="0" step="0.01"></div>
-          <div class="form-group"><label class="form-label">Width (in)</label><input class="form-input" id="itemWidth" type="number" min="0" step="0.01"></div>
-          <div class="form-group"><label class="form-label">Height (in)</label><input class="form-input" id="itemHeight" type="number" min="0" step="0.01"></div>
-          <div class="form-group"><label class="form-label">Weight (lbs)</label><input class="form-input" id="itemWeight" type="number" min="0" step="0.01"></div>
-        </div>
-        <div class="form-row form-row-2">
-          <div class="form-group"><label class="form-label">NMFC Code</label><input class="form-input" id="itemNmfc" placeholder="e.g. 156600.04"></div>
-          <div class="form-group"><label class="form-label">Freight Class</label><input class="form-input" id="itemFreightClass" placeholder="e.g. 60, 77.5, 125"></div>
-        </div>
+        <div id="itemHuList"></div>
+        <div id="itemHuEditNote" style="display:none;font-size:11px;color:var(--text2);margin-top:6px;">Editing a single SKU — to add or remove handling-unit levels, save and use the Item Master tab.</div>
       </div>
 
       <!-- Pricing -->

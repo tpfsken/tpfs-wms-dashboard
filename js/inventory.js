@@ -248,6 +248,13 @@ let _itemPendingSds = null;    // File staged from "Read SDS"; uploaded as
 let _itemPendingDocs = [];     // Files staged in create mode via the
                                // Documents section. Uploaded as
                                // sku_attachments after the SKU is saved.
+let _itemHandlingUnits = [];   // Working set of handling-unit levels for
+                               // the modal. Each entry: { sku_type,
+                               // sku_code, pack_qty, length_in, width_in,
+                               // height_in, weight_lbs, nmfc_code,
+                               // freight_class }. On save, sent as the
+                               // handlingUnits array to POST /items.
+const SKU_TYPE_SUFFIX = { EACH:'EA', INNER_PACK:'IP', CASE:'CS', PALLET:'PL' };
 
 // Baseline UOMs always shown in the dropdown. Anything ops has added
 // to existing SKUs gets merged in on top of this via /uoms (so the
@@ -325,12 +332,8 @@ async function openItemFormModal(skuId){
     ),
     {placeholder:'— Pick a client —', onChange: () => onItemClientChange()}
   );
-  const [uomOptions, typeOptions] = await Promise.all([
-    buildItemUomOptions(),
-    buildItemTypeOptions(),
-  ]);
+  const uomOptions = await buildItemUomOptions();
   initCombo('itemUomWrap',           uomOptions,       {placeholder:'EA', value:'EA', allowCustom:true});
-  initCombo('itemTypeWrap',          typeOptions,      {placeholder:'Each', value:'EACH', allowCustom:true});
   initCombo('itemPackingGroupWrap',  PACKING_GROUPS,   {placeholder:'— None —'});
 
   // Wire hazmat checkbox to reveal block (idempotent)
@@ -342,19 +345,19 @@ async function openItemFormModal(skuId){
     });
   }
 
-  // Wire freight-class density calculator + live density readout
-  const calcBtn = document.getElementById('itemFreightCalcBtn');
-  if(calcBtn && !calcBtn._wired){
-    calcBtn._wired = true;
-    calcBtn.addEventListener('click', () => calcFreightClassFromDensity());
+  // Wire + Add Level — only meaningful in create mode (edit mode shows
+  // a single locked SKU; multi-level changes go through Item Master).
+  const huAddBtn = document.getElementById('itemHuAddBtn');
+  if(huAddBtn && !huAddBtn._wired){
+    huAddBtn._wired = true;
+    huAddBtn.addEventListener('click', () => {
+      if(_editingItemId) return; // disabled in edit mode anyway
+      // Pick the next conventional level the user hasn't added yet
+      const used = new Set(_itemHandlingUnits.map(h => h.sku_type));
+      const next = ['EACH','INNER_PACK','CASE','PALLET'].find(t => !used.has(t)) || 'EACH';
+      addHandlingUnit(next);
+    });
   }
-  ['itemLength','itemWidth','itemHeight','itemWeight'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el && !el._densityWired){
-      el._densityWired = true;
-      el.addEventListener('input', updateDensityReadout);
-    }
-  });
 
   // Wire "Read SDS to auto-fill" — runs Claude on the PDF and pre-fills
   // the hazmat fields. The file is also staged for upload as an
@@ -400,6 +403,9 @@ async function openItemFormModal(skuId){
     });
   }
 
+  // Reset working set every open
+  _itemHandlingUnits = [];
+
   if(skuId){
     // Edit mode — fetch and populate
     const sku = await apiGet(`/skus/${skuId}`);
@@ -407,17 +413,10 @@ async function openItemFormModal(skuId){
     cbSet('itemClientWrap', String(sku.client_id),
       (clientsCache.find(c => c.id === sku.client_id)?.code || '') + ' — ' +
       (clientsCache.find(c => c.id === sku.client_id)?.name || ''));
-    document.getElementById('itemCode').value         = sku.sku_code || '';
     document.getElementById('itemUpc').value          = sku.upc || '';
     document.getElementById('itemName').value         = sku.name || '';
     document.getElementById('itemDescription').value  = sku.description || '';
     cbSet('itemUomWrap',  sku.uom || 'EA');
-    cbSet('itemTypeWrap', sku.sku_type || 'EACH');
-    document.getElementById('itemUnitsPerCase').value = sku.units_per_case ?? '';
-    document.getElementById('itemLength').value       = sku.length_in ?? '';
-    document.getElementById('itemWidth').value        = sku.width_in ?? '';
-    document.getElementById('itemHeight').value       = sku.height_in ?? '';
-    document.getElementById('itemWeight').value       = sku.weight_lbs ?? '';
     document.getElementById('itemUnitCost').value     = sku.unit_cost ?? '';
     document.getElementById('itemUnitPrice').value    = sku.unit_price ?? '';
     document.getElementById('itemLotTracked').checked    = !!sku.is_lot_tracked;
@@ -431,29 +430,50 @@ async function openItemFormModal(skuId){
     document.getElementById('itemLimitedQty').checked = !!sku.is_limited_qty;
     document.getElementById('itemHazmatNotes').value  = sku.hazmat_notes || '';
     document.getElementById('itemSpecialHandling').value = sku.special_handling_instructions || '';
-    document.getElementById('itemNmfc').value         = sku.nmfc_code || '';
-    document.getElementById('itemFreightClass').value = sku.freight_class || '';
     document.getElementById('itemHazmatBlock').style.display = sku.is_hazmat ? 'block' : 'none';
     document.getElementById('itemSdsExtractStatus').textContent = '';
-    updateDensityReadout();
-    // Edit mode — load attachments list so ops can manage docs
+
+    // Edit mode shows just THIS SKU as one row; multi-level edit goes
+    // through Item Master + create a sibling SKU.
+    _itemHandlingUnits.push({
+      sku_type:      sku.sku_type || 'EACH',
+      sku_code:      sku.sku_code || '',
+      pack_qty:      sku.units_per_case ?? null,
+      length_in:     sku.length_in ?? null,
+      width_in:      sku.width_in ?? null,
+      height_in:     sku.height_in ?? null,
+      weight_lbs:    sku.weight_lbs ?? null,
+      nmfc_code:     sku.nmfc_code || '',
+      freight_class: sku.freight_class || '',
+    });
+    huAddBtn.style.display = 'none';
+    document.getElementById('itemHuEditNote').style.display = 'block';
     loadItemAttachmentsList(skuId);
   } else {
-    // Create mode — reset form
+    // Create mode — reset everything
     [
-      'itemCode','itemUpc','itemName','itemDescription','itemUnitsPerCase',
-      'itemLength','itemWidth','itemHeight','itemWeight','itemUnitCost','itemUnitPrice',
+      'itemUpc','itemName','itemDescription','itemUnitCost','itemUnitPrice',
       'itemUnNumber','itemHazardClass','itemProperShippingName','itemHazmatNotes',
-      'itemSpecialHandling','itemNmfc','itemFreightClass',
+      'itemSpecialHandling',
     ].forEach(id => { document.getElementById(id).value = ''; });
     ['itemLotTracked','itemExpiryTracked','itemHazmat','itemGroundOnly','itemLimitedQty']
       .forEach(id => { document.getElementById(id).checked = false; });
     document.getElementById('itemHazmatBlock').style.display = 'none';
     document.getElementById('itemSdsExtractStatus').textContent = '';
-    cbReset('itemClientWrap'); cbSet('itemUomWrap','EA'); cbSet('itemTypeWrap','EACH');
+    cbReset('itemClientWrap'); cbSet('itemUomWrap','EA');
     cbReset('itemPackingGroupWrap');
-    document.getElementById('itemDensityReadout').textContent = '';
+
+    // Create mode starts with one default level (EACH); ops can add more
+    _itemHandlingUnits.push({
+      sku_type:'EACH', sku_code:'', pack_qty:1,
+      length_in:null, width_in:null, height_in:null, weight_lbs:null,
+      nmfc_code:'', freight_class:'',
+    });
+    huAddBtn.style.display = '';
+    document.getElementById('itemHuEditNote').style.display = 'none';
   }
+  await renderHandlingUnits();
+  _wireBaseCodeAutofill();
 
   // Reset staging before rendering so a previous modal open doesn't leak
   // files into a fresh New Item form.
@@ -482,66 +502,117 @@ async function submitItemForm(){
     return v === '' ? null : Number(v);
   };
 
-  const body = {
-    clientId:           cbVal('itemClientWrap'),
-    skuCode:            document.getElementById('itemCode').value.trim().toUpperCase(),
-    upc:                document.getElementById('itemUpc').value.trim() || null,
-    name:               document.getElementById('itemName').value.trim(),
-    description:        document.getElementById('itemDescription').value.trim() || null,
-    uom:                cbVal('itemUomWrap') || 'EA',
-    skuType:            cbVal('itemTypeWrap') || 'STANDARD',
-    unitsPerCase:       numOrNull('itemUnitsPerCase'),
-    lengthIn:           numOrNull('itemLength'),
-    widthIn:            numOrNull('itemWidth'),
-    heightIn:           numOrNull('itemHeight'),
-    weightLbs:          numOrNull('itemWeight'),
-    unitCost:           numOrNull('itemUnitCost'),
-    unitPrice:          numOrNull('itemUnitPrice'),
-    isLotTracked:       document.getElementById('itemLotTracked').checked,
-    isExpiryTracked:    document.getElementById('itemExpiryTracked').checked,
-    isHazmat:           document.getElementById('itemHazmat').checked,
+  const clientId = cbVal('itemClientWrap');
+  const baseCode = document.getElementById('itemCode').value.trim().toUpperCase();
+  const name     = document.getElementById('itemName').value.trim();
+
+  if(!clientId)  { err.textContent = 'Client is required'; return; }
+  if(!baseCode)  { err.textContent = 'Base SKU code is required'; return; }
+  if(!name)      { err.textContent = 'Name is required'; return; }
+  if(!_itemHandlingUnits.length){ err.textContent = 'Add at least one handling unit'; return; }
+
+  // Validate each handling unit — sku_code required, sku_type required.
+  for(const hu of _itemHandlingUnits){
+    if(!hu.sku_code || !hu.sku_code.trim()){
+      err.textContent = `Each handling unit needs a SKU code (level: ${hu.sku_type})`;
+      return;
+    }
+    if(!hu.sku_type){
+      err.textContent = 'Each handling unit needs a level type';
+      return;
+    }
+  }
+
+  // Common attributes shared across all levels of this item
+  const common = {
+    clientId,
+    name,
+    description:     document.getElementById('itemDescription').value.trim() || null,
+    upc:             document.getElementById('itemUpc').value.trim() || null,
+    uom:             cbVal('itemUomWrap') || 'EA',
+    unitCost:        numOrNull('itemUnitCost'),
+    unitPrice:       numOrNull('itemUnitPrice'),
+    isLotTracked:    document.getElementById('itemLotTracked').checked,
+    isExpiryTracked: document.getElementById('itemExpiryTracked').checked,
+    isHazmat:        document.getElementById('itemHazmat').checked,
     specialHandlingInstructions: document.getElementById('itemSpecialHandling').value.trim() || null,
-    nmfcCode:           document.getElementById('itemNmfc').value.trim() || null,
-    freightClass:       document.getElementById('itemFreightClass').value.trim() || null,
   };
 
-  if(!body.clientId){ err.textContent = 'Client is required'; return; }
-  if(!body.skuCode) { err.textContent = 'SKU code is required'; return; }
-  if(!body.name)    { err.textContent = 'Name is required'; return; }
-
-  if(body.isHazmat){
-    body.unNumber           = document.getElementById('itemUnNumber').value.trim();
-    body.hazardClass        = document.getElementById('itemHazardClass').value.trim();
-    body.properShippingName = document.getElementById('itemProperShippingName').value.trim() || null;
-    body.packingGroup       = cbVal('itemPackingGroupWrap') || null;
-    body.isGroundOnly       = document.getElementById('itemGroundOnly').checked;
-    body.isLimitedQty       = document.getElementById('itemLimitedQty').checked;
-    body.hazmatNotes        = document.getElementById('itemHazmatNotes').value.trim() || null;
-    if(!body.unNumber)   { err.textContent = 'UN Number is required for hazmat items'; return; }
-    if(!body.hazardClass){ err.textContent = 'Hazard Class is required for hazmat items'; return; }
+  if(common.isHazmat){
+    common.unNumber           = document.getElementById('itemUnNumber').value.trim();
+    common.hazardClass        = document.getElementById('itemHazardClass').value.trim();
+    common.properShippingName = document.getElementById('itemProperShippingName').value.trim() || null;
+    common.packingGroup       = cbVal('itemPackingGroupWrap') || null;
+    common.isGroundOnly       = document.getElementById('itemGroundOnly').checked;
+    common.isLimitedQty       = document.getElementById('itemLimitedQty').checked;
+    common.hazmatNotes        = document.getElementById('itemHazmatNotes').value.trim() || null;
+    if(!common.unNumber)   { err.textContent = 'UN Number is required for hazmat items'; return; }
+    if(!common.hazardClass){ err.textContent = 'Hazard Class is required for hazmat items'; return; }
   }
 
   const submitBtn = document.getElementById('itemFormSubmitBtn');
   submitBtn.disabled = true;
   try {
-    const url    = _editingItemId ? `${API}/skus/${_editingItemId}` : `${API}/skus`;
-    const method = _editingItemId ? 'PATCH' : 'POST';
-    const r = await fetch(url, {
-      method, headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
-      body: JSON.stringify(body),
-    });
-    const d = await r.json();
+    let r, d;
+    if(_editingItemId){
+      // EDIT MODE — single SKU update via PATCH /skus/:id. The handling
+      // unit array always has one row in this mode (by design).
+      const hu = _itemHandlingUnits[0];
+      const patchBody = Object.assign({}, common, {
+        skuCode:       hu.sku_code.trim().toUpperCase(),
+        skuType:       hu.sku_type,
+        unitsPerCase:  hu.pack_qty,
+        lengthIn:      hu.length_in,
+        widthIn:       hu.width_in,
+        heightIn:      hu.height_in,
+        weightLbs:     hu.weight_lbs,
+        nmfcCode:      hu.nmfc_code || null,
+        freightClass:  hu.freight_class || null,
+      });
+      r = await fetch(`${API}/skus/${_editingItemId}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+        body: JSON.stringify(patchBody),
+      });
+      d = await r.json();
+    } else {
+      // CREATE MODE — POST /items handles both single-level and multi-
+      // level. Server creates parent + linked children in order.
+      const createBody = Object.assign({}, common, {
+        handlingUnits: _itemHandlingUnits.map(hu => ({
+          sku_type:      hu.sku_type,
+          sku_code:      hu.sku_code.trim().toUpperCase(),
+          pack_qty:      hu.pack_qty,
+          length_in:     hu.length_in,
+          width_in:      hu.width_in,
+          height_in:     hu.height_in,
+          weight_lbs:    hu.weight_lbs,
+          nmfc_code:     hu.nmfc_code || null,
+          freight_class: hu.freight_class || null,
+        })),
+      });
+      r = await fetch(`${API}/items`, {
+        method:'POST', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+        body: JSON.stringify(createBody),
+      });
+      d = await r.json();
+    }
     if(!r.ok){ err.textContent = d.error || 'Save failed'; return; }
+    // For multi-level create, .items[0] is the biggest level (PALLET if
+    // present). Use the LAST one (smallest) as the "primary" id for
+    // attachment uploads — that's typically the EACH SKU.
+    const primaryId = _editingItemId
+      || (Array.isArray(d.items) ? d.items[d.items.length - 1].id : (d.id || null));
 
     // If the user used "Read SDS to auto-fill" before saving, that PDF
     // is staged in _itemPendingSds — upload it now as a sku attachment
-    // tagged SDS so it stays with the item.
-    if(_itemPendingSds){
+    // tagged SDS. We attach it to the "primary" (smallest / EACH) SKU
+    // since that's the canonical sellable unit; documents bind there.
+    if(_itemPendingSds && primaryId){
       try {
         const fd = new FormData();
         fd.append('file', _itemPendingSds);
         fd.append('attachment_type', 'SDS');
-        await fetch(`${API}/skus/${d.id}/attachments`, {
+        await fetch(`${API}/skus/${primaryId}/attachments`, {
           method:'POST',
           headers:{'Authorization':`Bearer ${T}`},
           body: fd,
@@ -552,13 +623,13 @@ async function submitItemForm(){
 
     // Any other documents the user staged via 📎 Attach File before
     // Save — upload them now too.
-    if(_itemPendingDocs.length){
+    if(_itemPendingDocs.length && primaryId){
       for(const f of _itemPendingDocs){
         try {
           const fd = new FormData();
           fd.append('file', f);
           if(/sds|safety.*data/i.test(f.name)) fd.append('attachment_type', 'SDS');
-          await fetch(`${API}/skus/${d.id}/attachments`, {
+          await fetch(`${API}/skus/${primaryId}/attachments`, {
             method:'POST',
             headers:{'Authorization':`Bearer ${T}`},
             body: fd,
@@ -578,45 +649,21 @@ async function submitItemForm(){
 }
 
 // =============================================================================
-// FREIGHT CLASS — density-based suggestion. NMTA freight classes map to
-// density brackets (lbs per cubic foot). Manual override always wins.
+// HANDLING UNITS — multi-level handling for the New Item modal.
 // =============================================================================
+// Each item can be stocked at one or more handling-unit levels (Each,
+// Inner Pack, Case, Pallet, or any custom type). Each level has its own
+// dimensions, weight, NMFC, freight class. On save the rows are inserted
+// as separate skus rows linked via parent_sku_id.
 
-// Density (lbs/ft³) -> freight class. Brackets per the NMTA Density-
-// Based Density Guidelines. We pick the lowest class whose floor density
-// is <= the item's density (i.e. denser items are cheaper to ship).
+// NMTA density brackets (lbs/ft³) -> freight class. Densest items get
+// the lowest class (= cheapest to ship). Manual override always wins.
 const FREIGHT_DENSITY_BRACKETS = [
-  // [min density (lbs/cuft), freight class]
-  [50,    50  ],
-  [35,    55  ],
-  [30,    60  ],
-  [22.5,  65  ],
-  [15,    70  ],
-  [13.5,  77.5],
-  [12,    85  ],
-  [10.5,  92.5],
-  [9,    100  ],
-  [8,    110  ],
-  [7,    125  ],
-  [6,    150  ],
-  [5,    175  ],
-  [4,    200  ],
-  [3,    250  ],
-  [2,    300  ],
-  [1,    400  ],
-  [0,    500  ],
+  [50, 50  ], [35, 55  ], [30, 60  ], [22.5, 65 ], [15, 70  ],
+  [13.5, 77.5], [12, 85 ], [10.5, 92.5], [9, 100 ], [8, 110  ],
+  [7, 125 ], [6, 150 ], [5, 175 ], [4, 200 ], [3, 250 ],
+  [2, 300 ], [1, 400 ], [0, 500 ],
 ];
-
-function computeDensityLbsPerCuFt(){
-  const L = Number(document.getElementById('itemLength').value);
-  const W = Number(document.getElementById('itemWidth').value);
-  const H = Number(document.getElementById('itemHeight').value);
-  const wt = Number(document.getElementById('itemWeight').value);
-  if(!(L > 0 && W > 0 && H > 0 && wt > 0)) return null;
-  const cuFt = (L * W * H) / 1728; // in³ to ft³
-  if(cuFt <= 0) return null;
-  return wt / cuFt;
-}
 
 function densityToFreightClass(d){
   if(d == null) return null;
@@ -626,24 +673,149 @@ function densityToFreightClass(d){
   return 500;
 }
 
-function updateDensityReadout(){
-  const d = computeDensityLbsPerCuFt();
-  const out = document.getElementById('itemDensityReadout');
-  if(!out) return;
-  if(d == null){ out.textContent = ''; return; }
-  const cls = densityToFreightClass(d);
-  out.textContent = `${d.toFixed(2)} lbs/ft³ → suggests Class ${cls}`;
-  out.style.color = 'var(--text2)';
+function computeDensity(L, W, H, wt){
+  L = Number(L); W = Number(W); H = Number(H); wt = Number(wt);
+  if(!(L > 0 && W > 0 && H > 0 && wt > 0)) return null;
+  const cuFt = (L * W * H) / 1728;
+  if(cuFt <= 0) return null;
+  return wt / cuFt;
 }
 
-function calcFreightClassFromDensity(){
-  const d = computeDensityLbsPerCuFt();
-  if(d == null){
-    alert('Need length, width, height, and weight all > 0 to compute density.');
+function addHandlingUnit(skuType){
+  const baseCode = document.getElementById('itemCode').value.trim();
+  const suffix = SKU_TYPE_SUFFIX[skuType] || (skuType ? skuType.slice(0, 3).toUpperCase() : 'X');
+  _itemHandlingUnits.push({
+    sku_type:      skuType,
+    sku_code:      baseCode ? `${baseCode}-${suffix}` : '',
+    pack_qty:      skuType === 'EACH' ? 1 : null,
+    length_in:     null, width_in: null, height_in: null, weight_lbs: null,
+    nmfc_code:     '',
+    freight_class: '',
+  });
+  renderHandlingUnits();
+}
+
+async function renderHandlingUnits(){
+  const wrap = document.getElementById('itemHuList');
+  if(!wrap) return;
+  if(!_itemHandlingUnits.length){
+    wrap.innerHTML = '<div class="empty-state" style="padding:14px;font-size:13px;">No handling units yet — click + Add Level to add one</div>';
     return;
   }
-  const cls = densityToFreightClass(d);
-  document.getElementById('itemFreightClass').value = String(cls);
+  const typeOptions = await buildItemTypeOptions();
+  const editing = !!_editingItemId;
+
+  wrap.innerHTML = _itemHandlingUnits.map((hu, i) => `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div style="min-width:150px;">
+          <label class="form-label">Level</label>
+          <div class="cb-wrap" id="huType_${esc(i)}"></div>
+        </div>
+        <div style="flex:1;min-width:200px;">
+          <label class="form-label">SKU Code *</label>
+          <input class="form-input js-hu-code" data-idx="${esc(i)}" value="${esc(hu.sku_code || '')}" placeholder="auto-filled from base code">
+        </div>
+        <div style="width:110px;">
+          <label class="form-label">Pack Qty</label>
+          <input class="form-input js-hu-pack" data-idx="${esc(i)}" type="number" min="0" step="1" value="${hu.pack_qty == null ? '' : esc(hu.pack_qty)}" placeholder="e.g. 24">
+        </div>
+        ${editing ? '' : `<button type="button" class="btn btn-ghost js-hu-rm" data-idx="${esc(i)}" style="color:var(--red);padding:6px 10px;font-size:14px;" title="Remove this level">✕</button>`}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <div style="width:90px;"><label class="form-label" style="font-size:11px;">L (in)</label><input class="form-input js-hu-len" data-idx="${esc(i)}" type="number" min="0" step="0.01" value="${hu.length_in == null ? '' : esc(hu.length_in)}"></div>
+        <div style="width:90px;"><label class="form-label" style="font-size:11px;">W (in)</label><input class="form-input js-hu-wid" data-idx="${esc(i)}" type="number" min="0" step="0.01" value="${hu.width_in == null ? '' : esc(hu.width_in)}"></div>
+        <div style="width:90px;"><label class="form-label" style="font-size:11px;">H (in)</label><input class="form-input js-hu-hgt" data-idx="${esc(i)}" type="number" min="0" step="0.01" value="${hu.height_in == null ? '' : esc(hu.height_in)}"></div>
+        <div style="width:110px;"><label class="form-label" style="font-size:11px;">Weight (lbs)</label><input class="form-input js-hu-wt" data-idx="${esc(i)}" type="number" min="0" step="0.01" value="${hu.weight_lbs == null ? '' : esc(hu.weight_lbs)}"></div>
+        <div style="width:140px;"><label class="form-label" style="font-size:11px;">NMFC</label><input class="form-input js-hu-nmfc" data-idx="${esc(i)}" value="${esc(hu.nmfc_code || '')}" placeholder="156600"></div>
+        <div style="width:90px;"><label class="form-label" style="font-size:11px;">Class</label><input class="form-input js-hu-fc" data-idx="${esc(i)}" value="${esc(hu.freight_class || '')}" placeholder="60"></div>
+        <div style="display:flex;flex-direction:column;justify-content:flex-end;gap:2px;">
+          <button type="button" class="btn btn-ghost js-hu-calc" data-idx="${esc(i)}" style="padding:6px 10px;font-size:11px;color:var(--blue);" title="Calc class from density">⚡ Calc</button>
+          <span class="js-hu-density" data-idx="${esc(i)}" style="font-size:10px;color:var(--text2);text-align:center;"></span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  // Init level combo for each row
+  for(let i = 0; i < _itemHandlingUnits.length; i++){
+    initCombo(`huType_${i}`, typeOptions, {
+      placeholder:'Each',
+      value: _itemHandlingUnits[i].sku_type,
+      allowCustom: true,
+      onChange: (v) => { _itemHandlingUnits[i].sku_type = v; },
+    });
+  }
+
+  // Wire input changes
+  wrap.querySelectorAll('.js-hu-code').forEach(inp => inp.addEventListener('input', e =>
+    _itemHandlingUnits[+e.target.dataset.idx].sku_code = e.target.value));
+  wrap.querySelectorAll('.js-hu-pack').forEach(inp => inp.addEventListener('input', e => {
+    const v = e.target.value.trim();
+    _itemHandlingUnits[+e.target.dataset.idx].pack_qty = v === '' ? null : Number(v);
+  }));
+  const dimWire = (cls, field) => wrap.querySelectorAll(cls).forEach(inp => inp.addEventListener('input', e => {
+    const v = e.target.value.trim();
+    const i = +e.target.dataset.idx;
+    _itemHandlingUnits[i][field] = v === '' ? null : Number(v);
+    updateHuDensity(i);
+  }));
+  dimWire('.js-hu-len', 'length_in');
+  dimWire('.js-hu-wid', 'width_in');
+  dimWire('.js-hu-hgt', 'height_in');
+  dimWire('.js-hu-wt',  'weight_lbs');
+  wrap.querySelectorAll('.js-hu-nmfc').forEach(inp => inp.addEventListener('input', e =>
+    _itemHandlingUnits[+e.target.dataset.idx].nmfc_code = e.target.value));
+  wrap.querySelectorAll('.js-hu-fc').forEach(inp => inp.addEventListener('input', e =>
+    _itemHandlingUnits[+e.target.dataset.idx].freight_class = e.target.value));
+
+  // Per-row class-from-density button
+  wrap.querySelectorAll('.js-hu-calc').forEach(btn => btn.addEventListener('click', () => {
+    const i  = +btn.dataset.idx;
+    const hu = _itemHandlingUnits[i];
+    const d  = computeDensity(hu.length_in, hu.width_in, hu.height_in, hu.weight_lbs);
+    if(d == null){ alert('Need L, W, H, and weight all > 0 on this row to compute density.'); return; }
+    hu.freight_class = String(densityToFreightClass(d));
+    renderHandlingUnits();
+  }));
+
+  // Remove button (create mode only — editing locks to one row)
+  wrap.querySelectorAll('.js-hu-rm').forEach(btn => btn.addEventListener('click', () => {
+    if(_itemHandlingUnits.length <= 1){ alert('Need at least one handling unit.'); return; }
+    _itemHandlingUnits.splice(+btn.dataset.idx, 1);
+    renderHandlingUnits();
+  }));
+
+  // Initial density readouts
+  for(let i = 0; i < _itemHandlingUnits.length; i++) updateHuDensity(i);
+}
+
+function updateHuDensity(i){
+  const hu = _itemHandlingUnits[i];
+  const d  = computeDensity(hu.length_in, hu.width_in, hu.height_in, hu.weight_lbs);
+  const span = document.querySelector(`.js-hu-density[data-idx="${i}"]`);
+  if(!span) return;
+  if(d == null){ span.textContent = ''; return; }
+  span.textContent = `${d.toFixed(1)} lb/ft³`;
+}
+
+// Optional convenience: when ops types in the Base SKU Code field, fill
+// in any per-level sku_codes that are still blank or still match the
+// previous derived pattern.
+function _wireBaseCodeAutofill(){
+  const baseInp = document.getElementById('itemCode');
+  if(!baseInp || baseInp._huWired) return;
+  baseInp._huWired = true;
+  baseInp.addEventListener('input', () => {
+    const base = baseInp.value.trim();
+    let mutated = false;
+    for(const hu of _itemHandlingUnits){
+      const suffix = SKU_TYPE_SUFFIX[hu.sku_type] || (hu.sku_type ? hu.sku_type.slice(0,3).toUpperCase() : 'X');
+      const expected = base ? `${base}-${suffix}` : '';
+      if(!hu.sku_code) { hu.sku_code = expected; mutated = true; }
+    }
+    if(mutated) renderHandlingUnits();
+  });
 }
 
 // =============================================================================
