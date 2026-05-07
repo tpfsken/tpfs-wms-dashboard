@@ -235,3 +235,193 @@ async function submitCaseBreak(){
     document.getElementById('cbSubmitBtn').disabled = false;
   }
 }
+
+// =============================================================================
+// NEW / EDIT ITEM (SKU) MODAL — same modal handles both create and edit.
+// =============================================================================
+
+let _editingItemId = null;   // null = create, string = edit
+let _itemClientHazmatMap = {}; // {clientId -> hazmat_enabled} for prompting
+
+const ITEM_UOMS = [
+  {value:'EA',  label:'EA — Each'},
+  {value:'CS',  label:'CS — Case'},
+  {value:'PL',  label:'PL — Pallet'},
+  {value:'LB',  label:'LB — Pound'},
+  {value:'KG',  label:'KG — Kilogram'},
+  {value:'OZ',  label:'OZ — Ounce'},
+  {value:'GAL', label:'GAL — Gallon'},
+];
+
+const ITEM_TYPES = [
+  {value:'STANDARD', label:'Standard'},
+  {value:'EACH',     label:'Each (case-break child)'},
+  {value:'CASE',     label:'Case'},
+  {value:'KIT',      label:'Kit'},
+  {value:'BUNDLE',   label:'Bundle'},
+];
+
+const PACKING_GROUPS = [
+  {value:'',    label:'— None —'},
+  {value:'I',   label:'I (high danger)'},
+  {value:'II',  label:'II (medium danger)'},
+  {value:'III', label:'III (low danger)'},
+];
+
+async function openItemFormModal(skuId){
+  _editingItemId = skuId || null;
+  document.getElementById('itemFormTitle').textContent     = skuId ? 'Edit Item' : 'New Item';
+  document.getElementById('itemFormSubmitBtn').textContent = skuId ? 'Save Changes' : 'Create Item';
+  document.getElementById('itemFormError').textContent     = '';
+
+  // Make sure clientsCache is populated for the dropdown
+  await loadCC();
+
+  // Build clientId -> hazmat_enabled map so onChange we can prompt
+  _itemClientHazmatMap = {};
+  for(const c of clientsCache){
+    _itemClientHazmatMap[c.id] = !!c.hazmat_enabled;
+  }
+
+  // Init combos
+  initCombo('itemClientWrap',
+    [{value:'', label:'— Pick a client —'}].concat(
+      clientsCache.map(c => ({value:String(c.id), label:`${c.code} — ${c.name}`}))
+    ),
+    {placeholder:'— Pick a client —', onChange: () => onItemClientChange()}
+  );
+  initCombo('itemUomWrap',           ITEM_UOMS,        {placeholder:'EA', value:'EA'});
+  initCombo('itemTypeWrap',          ITEM_TYPES,       {placeholder:'Standard', value:'STANDARD'});
+  initCombo('itemPackingGroupWrap',  PACKING_GROUPS,   {placeholder:'— None —'});
+
+  // Wire hazmat checkbox to reveal block (idempotent)
+  const haz = document.getElementById('itemHazmat');
+  if(!haz._wired){
+    haz._wired = true;
+    haz.addEventListener('change', () => {
+      document.getElementById('itemHazmatBlock').style.display = haz.checked ? 'block' : 'none';
+    });
+  }
+
+  if(skuId){
+    // Edit mode — fetch and populate
+    const sku = await apiGet(`/skus/${skuId}`);
+    if(!sku){ document.getElementById('itemFormError').textContent = 'Could not load item'; return; }
+    cbSet('itemClientWrap', String(sku.client_id),
+      (clientsCache.find(c => c.id === sku.client_id)?.code || '') + ' — ' +
+      (clientsCache.find(c => c.id === sku.client_id)?.name || ''));
+    document.getElementById('itemCode').value         = sku.sku_code || '';
+    document.getElementById('itemUpc').value          = sku.upc || '';
+    document.getElementById('itemName').value         = sku.name || '';
+    document.getElementById('itemDescription').value  = sku.description || '';
+    cbSet('itemUomWrap',  sku.uom || 'EA');
+    cbSet('itemTypeWrap', sku.sku_type || 'STANDARD');
+    document.getElementById('itemUnitsPerCase').value = sku.units_per_case ?? '';
+    document.getElementById('itemLength').value       = sku.length_in ?? '';
+    document.getElementById('itemWidth').value        = sku.width_in ?? '';
+    document.getElementById('itemHeight').value       = sku.height_in ?? '';
+    document.getElementById('itemWeight').value       = sku.weight_lbs ?? '';
+    document.getElementById('itemUnitCost').value     = sku.unit_cost ?? '';
+    document.getElementById('itemUnitPrice').value    = sku.unit_price ?? '';
+    document.getElementById('itemLotTracked').checked    = !!sku.is_lot_tracked;
+    document.getElementById('itemExpiryTracked').checked = !!sku.is_expiry_tracked;
+    document.getElementById('itemHazmat').checked        = !!sku.is_hazmat;
+    document.getElementById('itemUnNumber').value             = sku.un_number || '';
+    document.getElementById('itemHazardClass').value          = sku.hazard_class || '';
+    document.getElementById('itemProperShippingName').value   = sku.proper_shipping_name || '';
+    cbSet('itemPackingGroupWrap', sku.packing_group || '');
+    document.getElementById('itemGroundOnly').checked = !!sku.is_ground_only;
+    document.getElementById('itemLimitedQty').checked = !!sku.is_limited_qty;
+    document.getElementById('itemHazmatNotes').value  = sku.hazmat_notes || '';
+    document.getElementById('itemHazmatBlock').style.display = sku.is_hazmat ? 'block' : 'none';
+  } else {
+    // Create mode — reset form
+    [
+      'itemCode','itemUpc','itemName','itemDescription','itemUnitsPerCase',
+      'itemLength','itemWidth','itemHeight','itemWeight','itemUnitCost','itemUnitPrice',
+      'itemUnNumber','itemHazardClass','itemProperShippingName','itemHazmatNotes',
+    ].forEach(id => { document.getElementById(id).value = ''; });
+    ['itemLotTracked','itemExpiryTracked','itemHazmat','itemGroundOnly','itemLimitedQty']
+      .forEach(id => { document.getElementById(id).checked = false; });
+    document.getElementById('itemHazmatBlock').style.display = 'none';
+    cbReset('itemClientWrap'); cbSet('itemUomWrap','EA'); cbSet('itemTypeWrap','STANDARD');
+    cbReset('itemPackingGroupWrap');
+  }
+
+  document.getElementById('itemHazmatHint').style.display = 'none';
+  document.getElementById('itemFormModal').style.display  = 'flex';
+}
+
+// When a client is picked, surface a hint if that client has hazmat
+// enabled at the company level — nudges ops to flip the per-item
+// hazmat checkbox if relevant.
+function onItemClientChange(){
+  const cid  = cbVal('itemClientWrap');
+  const hint = document.getElementById('itemHazmatHint');
+  hint.style.display = (cid && _itemClientHazmatMap[cid]) ? 'block' : 'none';
+}
+
+async function submitItemForm(){
+  const err = document.getElementById('itemFormError');
+  err.textContent = '';
+
+  const numOrNull = (id) => {
+    const v = document.getElementById(id).value.trim();
+    return v === '' ? null : Number(v);
+  };
+
+  const body = {
+    clientId:           cbVal('itemClientWrap'),
+    skuCode:            document.getElementById('itemCode').value.trim().toUpperCase(),
+    upc:                document.getElementById('itemUpc').value.trim() || null,
+    name:               document.getElementById('itemName').value.trim(),
+    description:        document.getElementById('itemDescription').value.trim() || null,
+    uom:                cbVal('itemUomWrap') || 'EA',
+    skuType:            cbVal('itemTypeWrap') || 'STANDARD',
+    unitsPerCase:       numOrNull('itemUnitsPerCase'),
+    lengthIn:           numOrNull('itemLength'),
+    widthIn:            numOrNull('itemWidth'),
+    heightIn:           numOrNull('itemHeight'),
+    weightLbs:          numOrNull('itemWeight'),
+    unitCost:           numOrNull('itemUnitCost'),
+    unitPrice:          numOrNull('itemUnitPrice'),
+    isLotTracked:       document.getElementById('itemLotTracked').checked,
+    isExpiryTracked:    document.getElementById('itemExpiryTracked').checked,
+    isHazmat:           document.getElementById('itemHazmat').checked,
+  };
+
+  if(!body.clientId){ err.textContent = 'Client is required'; return; }
+  if(!body.skuCode) { err.textContent = 'SKU code is required'; return; }
+  if(!body.name)    { err.textContent = 'Name is required'; return; }
+
+  if(body.isHazmat){
+    body.unNumber           = document.getElementById('itemUnNumber').value.trim();
+    body.hazardClass        = document.getElementById('itemHazardClass').value.trim();
+    body.properShippingName = document.getElementById('itemProperShippingName').value.trim() || null;
+    body.packingGroup       = cbVal('itemPackingGroupWrap') || null;
+    body.isGroundOnly       = document.getElementById('itemGroundOnly').checked;
+    body.isLimitedQty       = document.getElementById('itemLimitedQty').checked;
+    body.hazmatNotes        = document.getElementById('itemHazmatNotes').value.trim() || null;
+    if(!body.unNumber)   { err.textContent = 'UN Number is required for hazmat items'; return; }
+    if(!body.hazardClass){ err.textContent = 'Hazard Class is required for hazmat items'; return; }
+  }
+
+  const submitBtn = document.getElementById('itemFormSubmitBtn');
+  submitBtn.disabled = true;
+  try {
+    const url    = _editingItemId ? `${API}/skus/${_editingItemId}` : `${API}/skus`;
+    const method = _editingItemId ? 'PATCH' : 'POST';
+    const r = await fetch(url, {
+      method, headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if(!r.ok){ err.textContent = d.error || 'Save failed'; return; }
+    closeModal('itemFormModal');
+    loadInventory();
+  } catch(e){
+    err.textContent = 'Network error';
+  } finally {
+    submitBtn.disabled = false;
+  }
+}

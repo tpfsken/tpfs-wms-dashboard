@@ -115,7 +115,7 @@
   </div>
 
   <div class="page" id="page-inventory">
-    <div class="page-header"><button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><input type="text" class="form-input" id="invSearch" placeholder="Search SKU or lot..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadInventory()">Refresh</button><button class="btn btn-primary ops-only" onclick="showCaseBreakModal()">⊞ Case Break</button></div>
+    <div class="page-header"><button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><input type="text" class="form-input" id="invSearch" placeholder="Search SKU or lot..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadInventory()">Refresh</button><button class="btn btn-primary ops-only" onclick="openItemFormModal()">+ New Item</button><button class="btn btn-primary ops-only" onclick="showCaseBreakModal()">⊞ Case Break</button></div>
     <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;"><div style="flex:1;overflow:auto;"><table class="data-table"><thead><tr><th>SKU</th><th>Description</th><th>Client</th><th>Type</th><th>Lot</th><th>Location</th><th>LP</th><th class="right">Qty</th><th>Status</th><th style="width:70px;"></th></tr></thead><tbody id="invBody"></tbody></table></div></div>
   </div>
 
@@ -1073,6 +1073,106 @@
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeModal('clientFormModal')">Cancel</button>
       <button class="btn btn-primary" id="cfSubmitBtn" onclick="submitClientForm()">Create Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW / EDIT ITEM (SKU) MODAL -->
+<div id="itemFormModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div class="modal" style="max-width:820px;">
+    <div class="modal-head">
+      <div class="modal-title" id="itemFormTitle">New Item</div>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="closeModal('itemFormModal')" style="padding:6px 12px;">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Basics -->
+      <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-bottom:8px;">Basics</div>
+      <div class="form-group">
+        <label class="form-label">Client *</label>
+        <div class="cb-wrap" id="itemClientWrap"></div>
+      </div>
+      <div class="form-row form-row-2">
+        <div class="form-group"><label class="form-label">SKU Code *</label><input class="form-input" id="itemCode" placeholder="ACM-1234"></div>
+        <div class="form-group"><label class="form-label">UPC / Barcode</label><input class="form-input" id="itemUpc" placeholder="012345678905"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="itemName" placeholder="e.g. Vitamin C 500mg, 60-count bottle"></div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-input" id="itemDescription" rows="2" placeholder="Long-form description (optional)"></textarea></div>
+      <div class="form-row form-row-3">
+        <div class="form-group"><label class="form-label">UOM</label><div class="cb-wrap" id="itemUomWrap"></div></div>
+        <div class="form-group"><label class="form-label">SKU Type</label><div class="cb-wrap" id="itemTypeWrap"></div></div>
+        <div class="form-group"><label class="form-label">Units / Case</label><input class="form-input" id="itemUnitsPerCase" type="number" min="0" step="1" placeholder="e.g. 24"></div>
+      </div>
+
+      <!-- Physical -->
+      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:14px;">
+        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-bottom:8px;">Physical</div>
+        <div class="form-row form-row-4">
+          <div class="form-group"><label class="form-label">Length (in)</label><input class="form-input" id="itemLength" type="number" min="0" step="0.01"></div>
+          <div class="form-group"><label class="form-label">Width (in)</label><input class="form-input" id="itemWidth" type="number" min="0" step="0.01"></div>
+          <div class="form-group"><label class="form-label">Height (in)</label><input class="form-input" id="itemHeight" type="number" min="0" step="0.01"></div>
+          <div class="form-group"><label class="form-label">Weight (lbs)</label><input class="form-input" id="itemWeight" type="number" min="0" step="0.01"></div>
+        </div>
+      </div>
+
+      <!-- Pricing -->
+      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:14px;">
+        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-bottom:8px;">Pricing</div>
+        <div class="form-row form-row-2">
+          <div class="form-group"><label class="form-label">Unit Cost ($)</label><input class="form-input" id="itemUnitCost" type="number" min="0" step="0.0001"></div>
+          <div class="form-group"><label class="form-label">Unit Price ($)</label><input class="form-input" id="itemUnitPrice" type="number" min="0" step="0.0001"></div>
+        </div>
+      </div>
+
+      <!-- Tracking -->
+      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:14px;">
+        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-bottom:8px;">Tracking</div>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="itemLotTracked" style="width:16px;height:16px;">Lot tracked
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="itemExpiryTracked" style="width:16px;height:16px;">Expiry tracked
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:600;color:var(--amber);">
+            <input type="checkbox" id="itemHazmat" style="width:16px;height:16px;">⚠ Hazmat
+          </label>
+        </div>
+        <div id="itemHazmatHint" style="display:none;margin-top:8px;font-size:11px;color:var(--amber);">
+          Selected client has hazmat enabled — turn this on if this item is hazardous.
+        </div>
+      </div>
+
+      <!-- Hazmat fields — only when itemHazmat is checked -->
+      <div id="itemHazmatBlock" style="display:none;border:1px solid var(--amber);border-radius:8px;padding:14px;margin-top:14px;background:var(--bg);">
+        <div style="font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-bottom:8px;">⚠ Hazmat Details</div>
+        <div class="form-row form-row-2">
+          <div class="form-group"><label class="form-label">UN Number *</label><input class="form-input" id="itemUnNumber" placeholder="e.g. UN1090"></div>
+          <div class="form-group"><label class="form-label">Hazard Class *</label><input class="form-input" id="itemHazardClass" placeholder="e.g. 3, 9, 1.4G"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Proper Shipping Name</label><input class="form-input" id="itemProperShippingName" placeholder="e.g. Acetone"></div>
+        <div class="form-row form-row-2">
+          <div class="form-group"><label class="form-label">Packing Group</label><div class="cb-wrap" id="itemPackingGroupWrap"></div></div>
+          <div class="form-group" style="display:flex;align-items:flex-end;">
+            <div style="display:flex;gap:14px;flex-wrap:wrap;">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+                <input type="checkbox" id="itemGroundOnly" style="width:16px;height:16px;">Ground-only
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+                <input type="checkbox" id="itemLimitedQty" style="width:16px;height:16px;">Limited Quantity
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;"><label class="form-label">Hazmat Notes</label><textarea class="form-input" id="itemHazmatNotes" rows="2"></textarea></div>
+      </div>
+
+      <div id="itemFormError" style="color:var(--red);font-size:13px;margin-top:8px;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('itemFormModal')">Cancel</button>
+      <button class="btn btn-primary" id="itemFormSubmitBtn" onclick="submitItemForm()">Create Item</button>
     </div>
   </div>
 </div>
