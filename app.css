@@ -168,3 +168,8 @@ body.portal-mode .nav-ops-only{display:none}
 body.portal-mode .nav-portal-only{display:block}
 body.portal-mode .ops-only{display:none !important}
 body.portal-mode .btn.portal-only{display:inline-flex !important}
+/* Defensive: if a portal user ever lands on page-dashboard (e.g. browser
+   back/forward, hand-typed nav), keep the ops Dashboard widgets — KPIs,
+   Pick Waves, Performance, Alerts, Dock Schedule, etc. — completely hidden.
+   The page is also kept inert because portal-mode never calls loadDashboard. */
+body.portal-mode #page-dashboard{display:none !important}

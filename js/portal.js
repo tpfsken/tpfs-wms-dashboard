@@ -27,13 +27,22 @@ function isPortalMode(){
 function bootPortal(){
   document.body.classList.add('portal-mode');
 
+  // Client name from JWT (login query LEFT JOINs clients). Falls back to
+  // clientCode then a generic "Customer" so the UI never shows "client".
+  const clientLabel = (U && (U.clientName || U.clientCode)) || 'Customer';
+
   if(U){
     document.getElementById('userAvatar').textContent =
       (U.fullName || U.email || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
     document.getElementById('userName').textContent = U.fullName || U.email;
     const role = document.querySelector('.topbar-user-info .role');
-    if(role) role.textContent = 'Client Portal';
+    if(role) role.textContent = clientLabel;
   }
+
+  // Replace the generic "Customer Portal" page-title with the client name so
+  // the user sees their company branding when they land on the home.
+  const portalTitle = document.querySelector('#page-portalHome .page-title');
+  if(portalTitle) portalTitle.textContent = clientLabel;
 
   // Stub the page-level filter combos that inventory.js / orders.js read on
   // every load. The combos themselves are hidden in portal mode (.ops-only on
