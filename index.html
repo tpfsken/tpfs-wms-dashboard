@@ -384,7 +384,63 @@
     </div>
   </div>
 
-  <div class="page" id="page-clients"><div class="page-header"><div><div class="page-title">Clients</div><div class="page-subtitle">3PL client management</div></div><div style="flex:1"></div><button class="btn btn-ghost" onclick="loadClients()">Refresh</button></div><div class="card"><div style="overflow:auto;"><table class="data-table"><thead><tr><th>Code</th><th>Name</th><th>Contact</th><th>Type</th><th>Onboarded</th><th>Status</th></tr></thead><tbody id="clientBody"></tbody></table></div></div></div>
+  <div class="page" id="page-clients">
+    <!-- LIST VIEW -->
+    <div id="cliListView">
+      <div class="page-header">
+        <div><div class="page-title">Clients</div><div class="page-subtitle">3PL client management — click a row to edit KPI / SLA targets</div></div>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" onclick="loadClients()">Refresh</button>
+      </div>
+      <div class="card">
+        <div style="overflow:auto;">
+          <table class="data-table">
+            <thead><tr><th>Code</th><th>Name</th><th>Contact</th><th>Type</th><th>Onboarded</th><th>Status</th></tr></thead>
+            <tbody id="clientBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- DETAIL VIEW (hidden until a row is clicked) -->
+    <div id="cliDetailView" style="display:none;">
+      <div class="page-header">
+        <button class="btn btn-ghost" onclick="closeClientDetail()" style="padding:6px 12px;">← Clients</button>
+        <div><div class="page-title" id="cliDetailTitle">—</div><div class="page-subtitle" id="cliDetailSub">—</div></div>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" onclick="reloadClientDetail()">Refresh</button>
+      </div>
+      <!-- Tab strip -->
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;">
+        <button class="cli-tab" data-tab="profile" style="padding:10px 18px;border:none;background:none;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--blue);">Profile</button>
+        <button class="cli-tab" data-tab="kpi" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">KPI / SLA Settings</button>
+        <button class="cli-tab" data-tab="performance" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">Current Performance</button>
+      </div>
+      <!-- Tab panels -->
+      <div class="cli-panel" data-tab="profile" style="display:block;">
+        <div class="card"><div class="card-head"><div class="card-title">Profile</div></div><div style="padding:20px;" id="cliProfileBody"></div></div>
+      </div>
+      <div class="cli-panel" data-tab="kpi" style="display:none;">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">KPI / SLA Settings</div>
+            <div style="font-size:12px;color:var(--text2);margin-left:12px;">Toggle metrics on/off and set target + warning thresholds for this client</div>
+            <div style="flex:1"></div>
+            <button class="btn btn-ghost" id="cliKpiSeedBtn">Reset to defaults</button>
+            <button class="btn btn-primary" id="cliKpiSaveBtn">Save</button>
+          </div>
+          <div id="cliKpiBody" style="padding:20px;"></div>
+          <div id="cliKpiStatus" style="padding:0 20px 16px;font-size:13px;"></div>
+        </div>
+      </div>
+      <div class="cli-panel" data-tab="performance" style="display:none;">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Current Performance</div><div style="flex:1"></div><button class="btn btn-ghost" onclick="loadClientPerformanceTab()">Refresh</button></div>
+          <div id="cliPerformanceBody" style="padding:20px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
   <div class="page" id="page-billing">
     <div id="billListView">
       <div class="page-header">
