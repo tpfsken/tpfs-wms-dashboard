@@ -55,6 +55,26 @@ function pickerHaptic(kind){
 
 async function openMobilePicker(orderId){
   if(!orderId){ alert('No order selected'); return; }
+
+  // Pessimistic lock — claim the order before opening the picker so two
+  // pickers can't grab the same order. Server returns 409 if someone
+  // else holds a fresh lock; older locks (>30 min) auto-steal.
+  try {
+    const r = await fetch(`${API}/orders/${orderId}/claim`, {
+      method:'POST', headers:{ 'Authorization': `Bearer ${T}` },
+    });
+    if(r.status === 409){
+      const d = await r.json().catch(() => ({}));
+      alert(`🔒 ${d.error || 'Order is being picked by another user'}`);
+      return;
+    }
+    if(!r.ok){
+      const d = await r.json().catch(() => ({}));
+      alert(d.error || 'Could not claim order');
+      return;
+    }
+  } catch(_) { /* network error — let the order load attempt fail loudly */ }
+
   // Load order + override-required config in parallel. The config drives
   // whether the picker can confirm without a photo at all.
   const [orderRes, cfgRes] = await Promise.all([
@@ -128,6 +148,16 @@ function exitMobilePicker(){
   document.getElementById('pickerShell').style.display = 'none';
   document.body.style.overflow = '';
   releasePickerWakeLock();
+
+  // Release the pessimistic lock on the order so other pickers can
+  // grab it. Fire-and-forget — if the network call fails the 30-min
+  // server-side stale window catches it.
+  if(_pickerOrder?.id){
+    fetch(`${API}/orders/${_pickerOrder.id}/release`, {
+      method:'POST', headers:{ 'Authorization': `Bearer ${T}` },
+    }).catch(() => {});
+  }
+
   // If we just finished an order, refresh its detail view if open
   if(typeof COI !== 'undefined' && COI && _pickerOrder && COI === _pickerOrder.id) {
     if(typeof openOrderDetail === 'function') openOrderDetail(COI);

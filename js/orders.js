@@ -68,6 +68,33 @@ async function openOrderDetail(id){
   stEl.textContent = st.l;
   stEl.className = 'chip ' + st.c;
 
+  // Pessimistic lock banner — show when another picker is actively
+  // working this order. Disables the Pick on Tablet button and the
+  // status transition buttons further down so ops doesn't re-allocate
+  // mid-pick. Lock auto-releases server-side after 30 minutes.
+  const lockedAt = d.picking_started_at ? new Date(d.picking_started_at) : null;
+  const lockFresh = lockedAt && (Date.now() - lockedAt.getTime() < 30 * 60 * 1000);
+  const myId = (typeof U !== 'undefined' && U) ? U.id : null;
+  const lockedByOther = d.picking_user_id && d.picking_user_id !== myId && lockFresh;
+
+  // Wipe any prior lock banner from previous detail loads
+  document.querySelectorAll('.js-ord-lock-banner').forEach(el => el.remove());
+  if(lockedByOther){
+    const banner = document.createElement('div');
+    banner.className = 'js-ord-lock-banner';
+    banner.style.cssText = 'background:var(--amber-bg);color:var(--amber);padding:12px 16px;border-radius:8px;border-left:4px solid var(--amber);margin-bottom:14px;font-size:13px;font-weight:600;';
+    const elapsed = Math.round((Date.now() - lockedAt.getTime()) / 60000);
+    banner.innerHTML = `🔒 Order is currently being picked by <strong>${esc(d.picking_user_name || 'another user')}</strong> — started ${elapsed}m ago. Wait for them to finish or auto-release at 30m.`;
+    const detailView = document.getElementById('ordDetailView');
+    detailView.insertBefore(banner, detailView.children[1] || detailView.firstChild?.nextSibling || null);
+  }
+  // Disable Pick on Tablet + transition buttons when locked by someone else
+  document.querySelectorAll('button[onclick*="openMobilePicker"]').forEach(b => {
+    b.disabled = !!lockedByOther;
+    b.style.opacity = lockedByOther ? '0.5' : '';
+    b.title = lockedByOther ? `Locked by ${d.picking_user_name}` : '';
+  });
+
   const fields = [
     {l:'Order #',  v:d.order_number},
     {l:'External', v:d.external_order_number || '—'},

@@ -118,6 +118,10 @@ async function loadFloorPickList(){
 
   const today = new Date(); today.setHours(0,0,0,0);
 
+  // Get the current user id from the JWT-derived U so we can tell
+  // "locked by me" vs "locked by someone else".
+  const myId = (typeof U !== 'undefined' && U) ? U.id : null;
+
   body.innerHTML = rows.map(o => {
     const ship = o.required_ship_date ? new Date(o.required_ship_date) : null;
     const overdue = ship && ship < today;
@@ -128,24 +132,44 @@ async function loadFloorPickList(){
       : '';
     const lineCount = o.line_count || 0;
     const totalUnits = o.total_units || 0;
+
+    // Lock check: held by someone else AND fresh (<30 min) → disable
+    const lockedAt = o.picking_started_at ? new Date(o.picking_started_at) : null;
+    const lockFresh = lockedAt && (Date.now() - lockedAt.getTime() < 30 * 60 * 1000);
+    const lockedByOther = o.picking_user_id && o.picking_user_id !== myId && lockFresh;
+    const lockedByMe    = o.picking_user_id && o.picking_user_id === myId && lockFresh;
+
+    const lockBanner = lockedByOther
+      ? `<div style="margin-top:8px;padding:6px 10px;background:#3a2c00;color:#ffd591;border-radius:6px;font-size:12px;font-weight:600;">🔒 Picking by ${esc(o.picking_user_name || 'another user')}</div>`
+      : lockedByMe
+        ? `<div style="margin-top:8px;padding:6px 10px;background:#1f4d2e;color:#a3ffb3;border-radius:6px;font-size:12px;font-weight:600;">▶ You're picking this — tap to resume</div>`
+        : '';
+
+    const opacity = lockedByOther ? 0.55 : 1;
     return `
-      <button class="js-floor-pick-row" data-id="${esc(o.id)}" style="display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;color:var(--text);cursor:pointer;">
+      <button class="js-floor-pick-row" data-id="${esc(o.id)}" data-locked="${lockedByOther ? '1' : '0'}" style="display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;color:var(--text);cursor:${lockedByOther ? 'not-allowed' : 'pointer'};opacity:${opacity};">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
           <div style="font-size:15px;font-weight:700;color:var(--blue);">${esc(o.order_number || '')}</div>
           <span class="chip ${o.status === 'PICKING' ? 'chip-active' : 'chip-warning'}" style="font-size:10px;">${esc(o.status)}</span>
           <div style="flex:1"></div>
-          <div style="font-size:18px;color:var(--text2);">›</div>
+          <div style="font-size:18px;color:var(--text2);">${lockedByOther ? '🔒' : '›'}</div>
         </div>
         <div style="font-size:13px;color:var(--text2);margin-bottom:4px;">${esc(o.customer_name || o.client_name || '')}</div>
         <div style="font-size:12px;color:var(--text2);display:flex;gap:10px;flex-wrap:wrap;">
           <span>${esc(lineCount)} ${lineCount === 1 ? 'line' : 'lines'} · ${esc(totalUnits)} units</span>
           ${dueLabel ? `<span>· ${dueLabel}</span>` : ''}
         </div>
+        ${lockBanner}
       </button>`;
   }).join('');
 
   body.querySelectorAll('.js-floor-pick-row').forEach(row => {
     row.addEventListener('click', () => {
+      if(row.dataset.locked === '1'){
+        // Locked by someone else — bounce with a buzz
+        if('vibrate' in navigator) navigator.vibrate([60, 60, 60]);
+        return;
+      }
       // Re-uses the existing mobile picker — same UI everyone tested
       openMobilePicker(row.dataset.id);
     });
