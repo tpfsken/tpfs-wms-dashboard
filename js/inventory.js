@@ -1209,18 +1209,50 @@ function renderSdsExtractResult(ext, doc){
     ${reviewLink}
   `;
 
-  // If auto-applied, refresh the form so the user sees the new values
-  // pulled into the visible inputs.
+  // If auto-applied, refresh both the inventory list AND the open edit
+  // form so the user immediately sees the values flow into hazmat
+  // checkbox, special handling, hazmat notes, etc.
   if(band === 'auto_applied'){
     setTimeout(() => {
       if(typeof loadInventory === 'function') loadInventory();
     }, 800);
+    if(_editingItemId && typeof refreshOpenSkuForm === 'function'){
+      refreshOpenSkuForm(_editingItemId);
+    }
   }
-  // Refresh the Current SDS card so the user sees the new version
-  // alongside the result panel.
-  if(_editingItemId && typeof loadSkuCurrentSds === 'function'){
-    loadSkuCurrentSds(_editingItemId);
+  // Always refresh the Current SDS card + audit panel so the user sees
+  // the new version + new audit entries alongside the result panel.
+  if(_editingItemId){
+    if(typeof loadSkuCurrentSds === 'function')      loadSkuCurrentSds(_editingItemId);
+    if(typeof loadSkuComplianceAudit === 'function') loadSkuComplianceAudit(_editingItemId);
   }
+}
+
+// Re-fetch a SKU and write its compliance/safety values back into the
+// open Edit Item form. Called after auto-apply or reviewer accept so
+// fields the user can see (Hazmat checkbox, UN Number, Special Handling
+// Instructions, Hazmat Notes, etc.) reflect the latest state without
+// the user closing and reopening the modal.
+async function refreshOpenSkuForm(skuId){
+  if(!skuId) return;
+  const sku = await apiGet(`/skus/${skuId}`);
+  if(!sku) return;
+  // Hazmat checkbox + reveal block. Hazmat-block fields only make sense
+  // when checked, so the toggle drives display.
+  const haz = !!sku.is_hazmat;
+  document.getElementById('itemHazmat').checked = haz;
+  document.getElementById('itemHazmatBlock').style.display = haz ? 'block' : 'none';
+  // Hazmat-block fields
+  document.getElementById('itemUnNumber').value           = sku.un_number || '';
+  document.getElementById('itemHazardClass').value        = sku.hazard_class || '';
+  document.getElementById('itemProperShippingName').value = sku.proper_shipping_name || '';
+  document.getElementById('itemGroundOnly').checked       = !!sku.is_ground_only;
+  document.getElementById('itemLimitedQty').checked       = !!sku.is_limited_qty;
+  document.getElementById('itemHazmatNotes').value        = sku.hazmat_notes || '';
+  // Combo for packing group needs cbSet (writes the inner display value)
+  if(typeof cbSet === 'function') cbSet('itemPackingGroupWrap', sku.packing_group || '');
+  // Always-visible safety field
+  document.getElementById('itemSpecialHandling').value    = sku.special_handling_instructions || '';
 }
 
 // =============================================================================
