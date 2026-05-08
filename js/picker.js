@@ -318,12 +318,27 @@ function renderAllDone(){
         </div>
       </div>`;
   } else {
+    // Diagnostic state when picker has nothing to do but order isn't
+    // truly done — counts every allocation status so we can debug
+    // "tapped order, immediately Exit" complaints.
+    const all = _pickerOrder.allocations || [];
+    const byStatus = {};
+    all.forEach(a => { byStatus[a.status || 'NULL'] = (byStatus[a.status || 'NULL'] || 0) + 1; });
+    const breakdown = Object.entries(byStatus).map(([s, n]) => `${s}: ${n}`).join(' · ') || 'no allocations on this order';
     body = `
-      <div style="text-align:center;padding:48px 16px;">
+      <div style="text-align:center;padding:32px 16px;">
         <div style="font-size:64px;line-height:1;margin-bottom:16px;">${done >= total ? '✓' : '⏸'}</div>
-        <div style="font-size:24px;font-weight:700;margin-bottom:8px;">${done >= total ? 'All Done' : 'Nothing Left to Pick'}</div>
-        <div style="font-size:14px;opacity:.7;margin-bottom:24px;">${esc(done)} of ${esc(total)} allocations picked on order ${esc(_pickerOrder.order_number || '')}</div>
-        <button onclick="exitMobilePicker()" style="background:${done >= total ? '#28a745' : '#444'};color:#fff;border:none;padding:18px 36px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">${done >= total ? 'Exit Picker' : 'Exit'}</button>
+        <div style="font-size:22px;font-weight:700;margin-bottom:8px;">${done >= total ? 'All Done' : 'Nothing to Pick'}</div>
+        <div style="font-size:13px;opacity:.7;margin-bottom:14px;">Order ${esc(_pickerOrder.order_number || '')} · status <strong>${esc(_pickerOrder.status || '?')}</strong></div>
+        <div style="background:#2a2a2a;border-radius:10px;padding:12px;margin-bottom:18px;font-size:11px;color:#9ad;">
+          <div style="font-size:10px;text-transform:uppercase;opacity:.6;margin-bottom:4px;">Allocations on this order</div>
+          <div style="font-family:ui-monospace,Menlo,monospace;">${esc(breakdown)}</div>
+          <div style="margin-top:6px;opacity:.7;">Lines: ${esc((_pickerOrder.lines || []).length)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <button onclick="reloadMobilePicker()" style="background:#2c7be5;color:#fff;border:none;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">↻ Refresh</button>
+          <button onclick="exitMobilePicker()" style="background:${done >= total ? '#28a745' : '#444'};color:#fff;border:none;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">${done >= total ? 'Exit Picker' : 'Exit'}</button>
+        </div>
       </div>`;
   }
   document.getElementById('pickerBody').innerHTML = body;

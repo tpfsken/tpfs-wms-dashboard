@@ -1260,7 +1260,202 @@ function openEditOrderModal(){
   document.getElementById('eoNotes').value       = COD.notes || '';
   document.getElementById('eoError').textContent = '';
 
+  // Render the line items list
+  renderEditOrderLines();
+  // Wire add-line buttons (idempotent)
+  wireEditOrderLineHandlers();
+
   document.getElementById('editOrderModal').style.display = 'flex';
+}
+
+// ---- Edit Order: line item editor ----------------------------------
+
+function renderEditOrderLines(){
+  const body = document.getElementById('eoLinesBody');
+  const lines = COD?.lines || [];
+  if(!lines.length){
+    body.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0;">No line items. Add one →</div>';
+    return;
+  }
+  body.innerHTML = lines.map(l => {
+    const allocated = Number(l.allocated_qty || 0);
+    const hasAlloc  = allocated > 0;
+    const lockHint  = hasAlloc
+      ? `<div style="font-size:10px;color:var(--amber);margin-top:2px;">${allocated} already allocated — PIN to reduce or remove</div>`
+      : '';
+    return `
+      <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
+        <div style="flex:1;">
+          <div style="font-weight:600;color:var(--blue);font-family:ui-monospace,Menlo,monospace;">${esc(l.sku_code || '')}</div>
+          <div style="font-size:12px;color:var(--text2);">${esc(l.sku_name || '')}</div>
+          ${lockHint}
+        </div>
+        <div style="width:90px;">
+          <input type="number" class="form-input js-eo-line-qty" data-line-id="${esc(l.id)}" data-original="${esc(l.ordered_qty)}" min="${esc(allocated)}" step="1" value="${esc(l.ordered_qty || 0)}" style="padding:6px 8px;font-size:13px;text-align:right;">
+        </div>
+        <div style="font-size:11px;color:var(--text2);align-self:center;">${esc(l.sku_uom || l.uom || 'EA')}</div>
+        <button type="button" class="btn btn-ghost js-eo-line-rm" data-line-id="${esc(l.id)}" data-has-alloc="${hasAlloc ? '1' : '0'}" style="padding:4px 10px;font-size:12px;color:var(--red);">✕</button>
+      </div>`;
+  }).join('');
+
+  // Wire qty inputs to save on blur (PIN prompted when needed by server)
+  body.querySelectorAll('.js-eo-line-qty').forEach(inp => {
+    inp.addEventListener('change', e => saveEditedLineQty(e.target));
+  });
+  body.querySelectorAll('.js-eo-line-rm').forEach(btn => {
+    btn.addEventListener('click', () => removeOrderLine(btn.dataset.lineId, btn.dataset.hasAlloc === '1'));
+  });
+}
+
+function wireEditOrderLineHandlers(){
+  const addBtn  = document.getElementById('eoAddLineBtn');
+  const saveBtn = document.getElementById('eoSaveLineBtn');
+  const cancelBtn = document.getElementById('eoCancelLineBtn');
+  const search  = document.getElementById('eoNewSkuSearch');
+  if(addBtn && !addBtn._wired){
+    addBtn._wired = true;
+    addBtn.addEventListener('click', () => {
+      document.getElementById('eoAddLineForm').style.display = 'block';
+      document.getElementById('eoNewSkuSearch').value = '';
+      document.getElementById('eoNewSkuId').value = '';
+      document.getElementById('eoNewQty').value = '';
+      document.getElementById('eoNewUom').value = 'EACH';
+      setTimeout(() => search.focus(), 50);
+    });
+  }
+  if(cancelBtn && !cancelBtn._wired){
+    cancelBtn._wired = true;
+    cancelBtn.addEventListener('click', () => {
+      document.getElementById('eoAddLineForm').style.display = 'none';
+    });
+  }
+  if(saveBtn && !saveBtn._wired){
+    saveBtn._wired = true;
+    saveBtn.addEventListener('click', addNewOrderLine);
+  }
+  if(search && !search._wired){
+    search._wired = true;
+    let timer = null;
+    search.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => searchEditOrderSkus(search.value.trim()), 300);
+    });
+  }
+}
+
+async function searchEditOrderSkus(term){
+  const results = document.getElementById('eoNewSkuResults');
+  if(!COD?.client_id){ return; }
+  let url = `/skus?clientId=${encodeURIComponent(COD.client_id)}&limit=10`;
+  if(term) url += `&search=${encodeURIComponent(term)}`;
+  const list = await apiGet(url);
+  const rows = Array.isArray(list) ? list : (list?.rows || list?.data || []);
+  if(!rows.length){
+    results.innerHTML = '<div style="padding:8px 12px;font-size:12px;color:var(--muted);">no matches</div>';
+    results.style.display = 'block';
+    return;
+  }
+  results.innerHTML = rows.map(r => `
+    <div class="js-eo-sku-pick" data-sku-id="${esc(r.id)}" data-sku-code="${esc(r.sku_code)}" data-sku-name="${esc(r.name || '')}" data-uom="${esc(r.uom || 'EACH')}" style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;">
+      <div style="font-weight:600;color:var(--blue);">${esc(r.sku_code)}</div>
+      <div style="color:var(--text2);">${esc(r.name || '')}</div>
+    </div>
+  `).join('');
+  results.style.display = 'block';
+  results.querySelectorAll('.js-eo-sku-pick').forEach(el => {
+    el.addEventListener('click', () => {
+      document.getElementById('eoNewSkuId').value = el.dataset.skuId;
+      document.getElementById('eoNewSkuSearch').value = `${el.dataset.skuCode} — ${el.dataset.skuName}`;
+      document.getElementById('eoNewUom').value = el.dataset.uom;
+      results.style.display = 'none';
+      document.getElementById('eoNewQty').focus();
+    });
+  });
+}
+
+async function addNewOrderLine(){
+  const skuId = document.getElementById('eoNewSkuId').value;
+  const qty   = Number(document.getElementById('eoNewQty').value);
+  const uom   = document.getElementById('eoNewUom').value.trim() || 'EACH';
+
+  if(!skuId){ alert('Pick a SKU first'); return; }
+  if(!qty || qty <= 0){ alert('Qty must be > 0'); return; }
+
+  // Server requires PIN if order has allocations — check first to know
+  // whether to prompt.
+  const needsPin = (COD?.allocations || []).some(a => a.status !== 'CANCELLED');
+  let pin = null;
+  if(needsPin){
+    pin = prompt('Order has allocations — supervisor PIN required to add a new line:');
+    if(pin == null) return;
+    if(!/^\d{4,8}$/.test(pin)){ alert('PIN must be 4–8 digits'); return; }
+  }
+
+  const r = await fetch(`${API}/orders/${COI}/lines`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+    body: JSON.stringify({ skuId, qty, uom, pin }),
+  });
+  const d = await r.json();
+  if(!r.ok){ alert(d.error || 'Add line failed'); return; }
+  document.getElementById('eoAddLineForm').style.display = 'none';
+  // Reload order detail to refresh COD.lines
+  const fresh = await apiGet(`/orders/${COI}`);
+  if(fresh){ COD = fresh; renderEditOrderLines(); }
+}
+
+async function saveEditedLineQty(input){
+  const lineId = input.dataset.lineId;
+  const newQty = Number(input.value);
+  const original = Number(input.dataset.original);
+  if(newQty === original) return; // no change
+  if(newQty <= 0){ alert('Qty must be > 0'); input.value = original; return; }
+
+  const needsPin = (COD?.allocations || []).some(a => a.status !== 'CANCELLED');
+  let pin = null;
+  if(needsPin){
+    pin = prompt(`Order has allocations — supervisor PIN required to change qty:`);
+    if(pin == null){ input.value = original; return; }
+    if(!/^\d{4,8}$/.test(pin)){ alert('PIN must be 4–8 digits'); input.value = original; return; }
+  }
+
+  const r = await fetch(`${API}/orders/${COI}/lines/${lineId}`, {
+    method:'PATCH',
+    headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+    body: JSON.stringify({ qty: newQty, pin }),
+  });
+  const d = await r.json();
+  if(!r.ok){ alert(d.error || 'Save failed'); input.value = original; return; }
+  input.dataset.original = newQty;
+  // Refresh order data so allocated_qty etc. stays in sync
+  const fresh = await apiGet(`/orders/${COI}`);
+  if(fresh){ COD = fresh; renderEditOrderLines(); }
+}
+
+async function removeOrderLine(lineId, hasAlloc){
+  if(hasAlloc){
+    alert('This line has active allocations. Unallocate first (on the order detail Allocations panel), then come back to remove the line.');
+    return;
+  }
+  if(!confirm('Remove this line from the order?')) return;
+
+  const needsPin = (COD?.allocations || []).some(a => a.status !== 'CANCELLED');
+  let pin = null;
+  if(needsPin){
+    pin = prompt('Order has other allocations — supervisor PIN required to remove a line:');
+    if(pin == null) return;
+    if(!/^\d{4,8}$/.test(pin)){ alert('PIN must be 4–8 digits'); return; }
+  }
+
+  const r = await fetch(`${API}/orders/${COI}/lines/${lineId}`, {
+    method:'DELETE',
+    headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+    body: JSON.stringify({ pin }),
+  });
+  const d = await r.json();
+  if(!r.ok){ alert(d.error || 'Remove failed'); return; }
+  const fresh = await apiGet(`/orders/${COI}`);
+  if(fresh){ COD = fresh; renderEditOrderLines(); }
 }
 
 async function submitEditOrder(){
