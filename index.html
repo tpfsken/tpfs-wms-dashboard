@@ -40,6 +40,7 @@
     </div>
   </div>
   <div class="side-footer">
+    <div class="nav-item ops-only" onclick="openOverridePinModal()" style="cursor:pointer;" title="Set / change the supervisor PIN that gates pick-mismatch overrides"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span class="nav-label">Settings</span></div>
     <button class="collapse-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 18l-6-6 6-6"/></svg><span class="nav-label">Collapse</span></button>
     <div class="nav-item js-signout" style="margin-top:4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="nav-label">Sign Out</span></div>
   </div>
@@ -1157,6 +1158,95 @@
   </div>
 
   <div id="pickerStatus" style="padding:0 16px 8px;font-size:13px;text-align:center;background:#222;"></div>
+
+  <!-- Two-step override overlay. Slides in over the picker shell when
+       picker tries to confirm an AI 'no' match. Step 1 = reason
+       category + detail. Step 2 = supervisor PIN. Both required. -->
+  <div id="pickerOverrideOverlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.85);z-index:10;flex-direction:column;backdrop-filter:blur(4px);">
+    <div style="background:#5a2c2c;color:#ffd591;padding:14px 18px;font-weight:700;font-size:15px;border-bottom:3px solid #d22;">
+      ⚠ Override AI Verification
+    </div>
+    <div style="flex:1 1 0;min-height:0;overflow-y:auto;padding:18px;">
+      <!-- STEP 1 -->
+      <div id="pickerOvStep1">
+        <div style="font-size:14px;line-height:1.5;margin-bottom:14px;color:#ffb3b3;">
+          Claude flagged this as the wrong product. To override, choose a reason and describe what you saw.
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;opacity:.8;margin-bottom:6px;">Reason category *</label>
+          <select id="pickerOvReasonCat" style="width:100%;padding:14px;font-size:16px;background:#1a1a1a;color:#fff;border:2px solid #444;border-radius:10px;">
+            <option value="">— Select a reason —</option>
+            <option value="ai_misread">AI misread label / packaging</option>
+            <option value="label_damaged">Label damaged or obscured</option>
+            <option value="customer_substitute">Customer-approved substitute</option>
+            <option value="qa_override">QA / supervisor approved this pick</option>
+            <option value="lot_typo">Spelling/typo in SKU master matched the product</option>
+            <option value="other">Other (specify below)</option>
+          </select>
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;opacity:.8;margin-bottom:6px;">What did you actually pull? *</label>
+          <textarea id="pickerOvReason" rows="3" placeholder="e.g. The label says PROPANE but the SKU master is misspelled PROPAINE — same product." style="width:100%;padding:14px;font-size:16px;background:#1a1a1a;color:#fff;border:2px solid #444;border-radius:10px;resize:vertical;min-height:80px;"></textarea>
+          <div style="font-size:11px;opacity:.6;margin-top:4px;">Minimum 10 characters. This is logged and audited.</div>
+        </div>
+        <button id="pickerOvNextBtn" style="width:100%;padding:18px;background:#d6a700;color:#000;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;">Continue → PIN</button>
+      </div>
+
+      <!-- STEP 2 -->
+      <div id="pickerOvStep2" style="display:none;">
+        <div style="font-size:14px;line-height:1.5;margin-bottom:14px;color:#ffb3b3;">
+          Supervisor PIN required. If you don't know the PIN, get a supervisor.
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;opacity:.8;margin-bottom:6px;">4-8 digit PIN *</label>
+          <input type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" id="pickerOvPin" maxlength="8" placeholder="••••" style="width:100%;padding:18px;font-size:32px;text-align:center;letter-spacing:0.6em;font-family:ui-monospace,Menlo,monospace;background:#1a1a1a;color:#fff;border:2px solid #444;border-radius:10px;">
+          <div id="pickerOvPinErr" style="display:none;font-size:13px;color:#ff8a8a;margin-top:6px;font-weight:600;"></div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button id="pickerOvBackBtn" style="flex:0 0 110px;padding:18px;background:#3a3a3a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;">← Back</button>
+          <button id="pickerOvSubmitBtn" style="flex:1;padding:18px;background:#d22;color:#fff;border:none;border-radius:10px;font-size:17px;font-weight:700;cursor:pointer;">⚠ Override &amp; Confirm</button>
+        </div>
+      </div>
+    </div>
+    <div style="padding:14px 18px;background:#222;border-top:1px solid #333;text-align:center;">
+      <button id="pickerOvCancelBtn" style="background:none;color:#aaa;border:none;padding:8px;font-size:14px;cursor:pointer;text-decoration:underline;">Cancel — retake the photo</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUPERVISOR OVERRIDE PIN MODAL — admin sets / rotates the PIN that
+     gates pick-mismatch overrides on the mobile picker. -->
+<div id="overridePinModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-head">
+      <div class="modal-title">Picker Override Settings</div>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="closeModal('overridePinModal')" style="padding:6px 12px;">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5;">
+        Pickers must enter this PIN to override an AI "wrong product" verdict. Share with supervisors only — pickers shouldn't know it.
+      </div>
+      <div id="opPinStatus" style="background:var(--bg);border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px;color:var(--text2);">Loading status…</div>
+      <div id="opPinCurrentWrap" class="form-group" style="display:none;">
+        <label class="form-label">Current PIN (required to rotate)</label>
+        <input type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" class="form-input" id="opPinCurrent" maxlength="8" placeholder="••••" style="font-family:ui-monospace,Menlo,monospace;letter-spacing:.4em;text-align:center;font-size:18px;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">New PIN (4–8 digits)</label>
+        <input type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" class="form-input" id="opPinNew" maxlength="8" placeholder="••••" style="font-family:ui-monospace,Menlo,monospace;letter-spacing:.4em;text-align:center;font-size:18px;">
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Confirm New PIN</label>
+        <input type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" class="form-input" id="opPinConfirm" maxlength="8" placeholder="••••" style="font-family:ui-monospace,Menlo,monospace;letter-spacing:.4em;text-align:center;font-size:18px;">
+      </div>
+      <div id="opPinError" style="color:var(--red);font-size:13px;margin-top:10px;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('overridePinModal')">Cancel</button>
+      <button class="btn btn-primary" id="opPinSaveBtn" onclick="saveOverridePin()">Save PIN</button>
+    </div>
+  </div>
 </div>
 
 <!-- INVENTORY DETAIL MODAL — opens on row click, shows full origin trail -->

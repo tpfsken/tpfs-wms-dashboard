@@ -329,21 +329,26 @@ async function confirmCurrentPick(){
     if(!confirm(`You're confirming ${qty} but only ${a.quantity} was allocated. Continue?`)) return;
   }
 
-  // If the AI flagged a "no" match, require an override reason. The
-  // reason gets logged on the pick_attachments row so supervisors can
-  // see why the picker overruled the AI.
-  let overrideReason = null;
+  // If the AI flagged a "no" match, the picker can't just type a reason
+  // and proceed — the two-step override modal requires a reason
+  // category, written explanation, AND a supervisor PIN. Open the
+  // overlay instead of confirming directly. The actual confirm happens
+  // from inside the overlay's submit handler (submitPickerOverride).
   if(_pickerLastMatch === 'no'){
-    overrideReason = prompt(
-      `AI says this looks like the wrong product. Override anyway?\n\nReason (required, e.g. "label damaged", "AI misread lot"):`
-    );
-    if(!overrideReason || !overrideReason.trim()){
-      showPickerStatus('Override cancelled', 'red');
-      return;
-    }
+    showPickerOverrideModal(qty);
+    return;
   }
 
-  // Lock the button while we save
+  await doConfirmPick(qty, null);
+}
+
+// Internal — actually POST the confirm + tag the verification row.
+// Called both from the green-path confirmCurrentPick and from the
+// override submit handler.
+async function doConfirmPick(qty, overrideReason){
+  if(_pickerIdx >= _pickerPending.length) return false;
+  const a = _pickerPending[_pickerIdx];
+
   const btn = document.getElementById('pickerConfirmBtn');
   btn.disabled = true;
   btn.style.opacity = '0.6';
@@ -358,34 +363,159 @@ async function confirmCurrentPick(){
     if(!r.ok){
       const d = await r.json().catch(() => ({}));
       showPickerStatus(d.error || 'Save failed', 'red');
-      return;
+      return false;
     }
 
-    // Tag the verification row (if any) with what the picker did so the
-    // supervisor view can show "confirmed" vs "overridden" vs "retook".
-    if(_pickerLastVerifyId){
-      const action = overrideReason ? 'overridden'
-                   : _pickerLastMatch === 'yes' || _pickerLastMatch === 'partial' ? 'confirmed'
-                   : 'confirmed';
+    // Tag the verification row (if any) with what the picker did. The
+    // override path already wrote 'overridden' via the dedicated
+    // /override endpoint server-side, so we only PATCH here for the
+    // green / yellow paths.
+    if(_pickerLastVerifyId && !overrideReason){
       try {
         await fetch(`${API}/picks/attachments/${_pickerLastVerifyId}`, {
           method:'PATCH',
           headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${T}` },
-          body: JSON.stringify({ action, override_reason: overrideReason || null }),
+          body: JSON.stringify({ action: 'confirmed', override_reason: null }),
         });
       } catch(_) { /* swallow — pick still saved */ }
     }
 
-    // Mark this allocation as picked locally so progress updates
     a.status = 'PICKED';
     _pickerIdx++;
     showPickerStatus('✓ Picked', 'green');
     setTimeout(() => renderCurrentPick(), 300);
+    return true;
   } catch(e){
     showPickerStatus('Network error', 'red');
+    return false;
   } finally {
     btn.disabled = false;
     btn.style.opacity = '';
+  }
+}
+
+// =============================================================================
+// TWO-STEP OVERRIDE MODAL — reason + supervisor PIN. Required to overrule
+// an AI 'no' match. Submits to POST /picks/attachments/:id/override which
+// bcrypt-checks the PIN against warehouses.override_pin_hash. Wrong PIN
+// returns a 403 and we show an inline error without closing the modal.
+// =============================================================================
+
+let _pickerOverrideQty = 0;  // qty captured when override modal opens
+
+function showPickerOverrideModal(qty){
+  _pickerOverrideQty = qty;
+  document.getElementById('pickerOverrideOverlay').style.display = 'flex';
+  document.getElementById('pickerOvStep1').style.display = 'block';
+  document.getElementById('pickerOvStep2').style.display = 'none';
+  document.getElementById('pickerOvReasonCat').value = '';
+  document.getElementById('pickerOvReason').value = '';
+  document.getElementById('pickerOvPin').value = '';
+  document.getElementById('pickerOvPinErr').style.display = 'none';
+  setTimeout(() => document.getElementById('pickerOvReasonCat').focus(), 100);
+
+  // Wire all the buttons (idempotent)
+  const next = document.getElementById('pickerOvNextBtn');
+  if(next && !next._wired){
+    next._wired = true;
+    next.addEventListener('click', overrideStep1Next);
+  }
+  const back = document.getElementById('pickerOvBackBtn');
+  if(back && !back._wired){
+    back._wired = true;
+    back.addEventListener('click', () => {
+      document.getElementById('pickerOvStep2').style.display = 'none';
+      document.getElementById('pickerOvStep1').style.display = 'block';
+    });
+  }
+  const cancel = document.getElementById('pickerOvCancelBtn');
+  if(cancel && !cancel._wired){
+    cancel._wired = true;
+    cancel.addEventListener('click', closePickerOverrideModal);
+  }
+  const submit = document.getElementById('pickerOvSubmitBtn');
+  if(submit && !submit._wired){
+    submit._wired = true;
+    submit.addEventListener('click', submitPickerOverride);
+  }
+  const pinInp = document.getElementById('pickerOvPin');
+  if(pinInp && !pinInp._wired){
+    pinInp._wired = true;
+    pinInp.addEventListener('keydown', e => {
+      if(e.key === 'Enter') submitPickerOverride();
+    });
+  }
+}
+
+function closePickerOverrideModal(){
+  document.getElementById('pickerOverrideOverlay').style.display = 'none';
+}
+
+function overrideStep1Next(){
+  const cat    = document.getElementById('pickerOvReasonCat').value;
+  const reason = document.getElementById('pickerOvReason').value.trim();
+  if(!cat){
+    alert('Pick a reason category first.');
+    return;
+  }
+  if(reason.length < 10){
+    alert('Describe what you actually pulled (at least 10 characters).');
+    return;
+  }
+  document.getElementById('pickerOvStep1').style.display = 'none';
+  document.getElementById('pickerOvStep2').style.display = 'block';
+  setTimeout(() => document.getElementById('pickerOvPin').focus(), 100);
+}
+
+async function submitPickerOverride(){
+  if(!_pickerLastVerifyId){
+    alert('Verification record missing — please retake the photo.');
+    closePickerOverrideModal();
+    return;
+  }
+  const cat    = document.getElementById('pickerOvReasonCat').value;
+  const reason = document.getElementById('pickerOvReason').value.trim();
+  const pin    = document.getElementById('pickerOvPin').value.trim();
+  const errEl  = document.getElementById('pickerOvPinErr');
+  errEl.style.display = 'none';
+
+  if(!pin || !/^\d{4,8}$/.test(pin)){
+    errEl.textContent = 'PIN must be 4–8 digits';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('pickerOvSubmitBtn');
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  btn.textContent = 'Verifying PIN…';
+
+  try {
+    // Step 1: verify PIN + log override server-side
+    const r = await fetch(`${API}/picks/attachments/${_pickerLastVerifyId}/override`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${T}` },
+      body: JSON.stringify({ pin, reason_category: cat, reason }),
+    });
+    if(!r.ok){
+      const d = await r.json().catch(() => ({}));
+      errEl.textContent = d.error || 'Override rejected';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    // Step 2: now actually confirm the pick. doConfirmPick won't
+    // re-tag the verification row because we pass overrideReason
+    // (server already logged the override on /override).
+    closePickerOverrideModal();
+    await doConfirmPick(_pickerOverrideQty, `[${cat}] ${reason}`);
+  } catch(e){
+    errEl.textContent = 'Network error — try again';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.style.opacity = '';
+    btn.textContent = '⚠ Override & Confirm';
   }
 }
 
@@ -413,4 +543,80 @@ function showPickerStatus(msg, color){
   el.style.color = color === 'red' ? '#ff6b6b' : color === 'green' ? '#7eff7e' : '#ddd';
   el.textContent = msg;
   setTimeout(() => { if(el.textContent === msg) el.textContent = ''; }, 2200);
+}
+
+// =============================================================================
+// SUPERVISOR OVERRIDE PIN — admin settings modal triggered from the
+// sidebar Settings link. Set / rotate the PIN gating picker overrides.
+// =============================================================================
+
+async function openOverridePinModal(){
+  const modal  = document.getElementById('overridePinModal');
+  const status = document.getElementById('opPinStatus');
+  const curWrap = document.getElementById('opPinCurrentWrap');
+  document.getElementById('opPinCurrent').value = '';
+  document.getElementById('opPinNew').value = '';
+  document.getElementById('opPinConfirm').value = '';
+  document.getElementById('opPinError').textContent = '';
+
+  modal.style.display = 'flex';
+  status.textContent = 'Loading status…';
+
+  const s = await apiGet('/warehouses/me/override-status');
+  if(!s){
+    status.textContent = 'Could not load status';
+    status.style.color = 'var(--red)';
+    return;
+  }
+  if(s.pin_configured){
+    const ts = s.override_pin_set_at
+      ? new Date(s.override_pin_set_at).toLocaleString()
+      : '—';
+    status.innerHTML = `✓ <strong>PIN configured</strong> · last rotated ${esc(ts)}`;
+    status.style.color = 'var(--green)';
+    curWrap.style.display = 'block';
+  } else {
+    status.innerHTML = `⚠ <strong>No PIN set yet</strong> · pickers will be unable to override mismatches until you configure one`;
+    status.style.color = 'var(--amber)';
+    curWrap.style.display = 'none';
+  }
+}
+
+async function saveOverridePin(){
+  const err = document.getElementById('opPinError');
+  err.textContent = '';
+
+  const cur     = document.getElementById('opPinCurrent').value.trim();
+  const next    = document.getElementById('opPinNew').value.trim();
+  const confirm = document.getElementById('opPinConfirm').value.trim();
+
+  if(!/^\d{4,8}$/.test(next)){ err.textContent = 'New PIN must be 4–8 digits'; return; }
+  if(next !== confirm)        { err.textContent = "Confirm doesn't match new PIN"; return; }
+
+  const body = { pin: next };
+  if(cur) body.current_pin = cur;
+
+  const btn = document.getElementById('opPinSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const r = await fetch(`${API}/warehouses/me/override-pin`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${T}` },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if(!r.ok){
+      err.textContent = d.error || 'Save failed';
+      return;
+    }
+    closeModal('overridePinModal');
+    alert('Supervisor PIN saved. Share it with supervisors only.');
+  } catch(e){
+    err.textContent = 'Network error';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save PIN';
+  }
 }
