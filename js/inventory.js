@@ -345,12 +345,20 @@ async function openItemFormModal(skuId){
   initCombo('itemUomWrap',           uomOptions,       {placeholder:'EA', value:'EA', allowCustom:true});
   initCombo('itemPackingGroupWrap',  PACKING_GROUPS,   {placeholder:'— None —'});
 
-  // Wire hazmat checkbox to reveal block (idempotent)
+  // Wire hazmat checkbox to reveal block (idempotent). Toggling hazmat
+  // on also auto-checks Lot tracked + Expiry tracked since hazmat items
+  // basically always require traceability — ops can untick if needed.
   const haz = document.getElementById('itemHazmat');
   if(!haz._wired){
     haz._wired = true;
     haz.addEventListener('change', () => {
       document.getElementById('itemHazmatBlock').style.display = haz.checked ? 'block' : 'none';
+      if(haz.checked){
+        const lot = document.getElementById('itemLotTracked');
+        const exp = document.getElementById('itemExpiryTracked');
+        if(lot && !lot.checked) lot.checked = true;
+        if(exp && !exp.checked) exp.checked = true;
+      }
     });
   }
 
