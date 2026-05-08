@@ -360,6 +360,15 @@ async function openItemFormModal(skuId){
     }
   }
 
+  // Load the current versioned SDS doc info into the Safety Data Sheet
+  // section's "Current SDS" card. Hidden when there's nothing on file.
+  if(skuId && typeof loadSkuCurrentSds === 'function'){
+    loadSkuCurrentSds(skuId);
+  } else {
+    const card = document.getElementById('itemSdsCurrentCard');
+    if(card) card.style.display = 'none';
+  }
+
   // Make sure clientsCache is populated for the dropdown
   await loadCC();
 
@@ -1015,6 +1024,62 @@ async function extractSdsAndFill(file){
 }
 
 // =============================================================================
+// CURRENT SDS CARD — shows the active versioned SDS in the Safety Data
+// Sheet section of the SKU edit modal. Lets ops open the PDF, see the
+// version, see when it was uploaded.
+// =============================================================================
+async function loadSkuCurrentSds(skuId){
+  const card = document.getElementById('itemSdsCurrentCard');
+  if(!card) return;
+  const r = await apiGet(`/skus/${skuId}/sds-history`);
+  if(!r){ card.style.display = 'none'; return; }
+  const rows = r.rows || [];
+  // Filter out withdrawn docs; pick the current one
+  const active = rows.filter(d => !d.withdrawn_at);
+  const current = active.find(d => d.is_current) || active[0];
+  if(!current){
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  const histCount = active.length;
+  const uploaded = current.uploaded_at ? new Date(current.uploaded_at).toLocaleString() : '—';
+  const by = current.uploaded_by_email || 'unknown';
+  const sizeKb = current.byte_size ? `${(current.byte_size / 1024).toFixed(0)} KB` : '';
+  card.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div style="width:36px;height:36px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#cc1f1f;">PDF</div>
+      <div style="flex:1;min-width:200px;">
+        <div style="font-weight:600;color:var(--text);">${esc(current.original_filename || 'sds.pdf')} <span style="color:var(--muted);font-weight:400;font-size:11px;">v${esc(current.version_number)} · current</span></div>
+        <div style="font-size:11px;color:var(--text2);">Uploaded ${esc(uploaded)} by ${esc(by)} ${sizeKb ? '· ' + esc(sizeKb) : ''}</div>
+      </div>
+      <button type="button" class="btn btn-ghost" onclick="openSdsDocument('${esc(current.id)}','${esc(current.original_filename || 'sds.pdf')}')" style="padding:4px 10px;font-size:11px;color:var(--blue);">📥 Open</button>
+      ${histCount > 1
+        ? `<span style="font-size:11px;color:var(--muted);">${esc(histCount - 1)} prior version${histCount - 1 === 1 ? '' : 's'} on file</span>`
+        : ''}
+    </div>
+  `;
+}
+
+// Fetch the SDS PDF bytes through the authenticated download endpoint
+// (so we never expose presigned S3 URLs) and pop a new tab with the blob.
+async function openSdsDocument(docId, filename){
+  try {
+    const r = await fetch(`${API}/sds-documents/${docId}/download`, {
+      headers: { 'Authorization': `Bearer ${T}` },
+    });
+    if(!r.ok){ alert('Could not load SDS — ' + (await r.text() || r.status)); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    // Open in a new tab; revoke after a delay so the tab can read it
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch(e){
+    alert('Network error opening SDS');
+  }
+}
+
+// =============================================================================
 // SDS INTELLIGENCE — new per-field pipeline. Versions the SDS doc, runs
 // Claude with per-field confidence + verbatim source citations, auto-
 // applies high-conf fields to the SKU master, queues review items for
@@ -1150,6 +1215,11 @@ function renderSdsExtractResult(ext, doc){
     setTimeout(() => {
       if(typeof loadInventory === 'function') loadInventory();
     }, 800);
+  }
+  // Refresh the Current SDS card so the user sees the new version
+  // alongside the result panel.
+  if(_editingItemId && typeof loadSkuCurrentSds === 'function'){
+    loadSkuCurrentSds(_editingItemId);
   }
 }
 

@@ -1711,6 +1711,9 @@
         <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Drop in any product's SDS (PDF). Auto-fill pre-fills the hazmat block if it's hazardous; otherwise the SDS is just kept on file.</div>
         <div id="itemSdsExtractStatus" style="font-size:12px;margin-bottom:8px;"></div>
         <div id="itemSdsIntelResult" style="display:none;font-size:12px;margin-bottom:8px;border-radius:8px;padding:10px;border:1px solid var(--border);"></div>
+        <!-- Current SDS card — shows the active versioned SDS for this SKU.
+             Hidden until the SKU has at least one SDS doc on file. -->
+        <div id="itemSdsCurrentCard" style="display:none;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:8px;"></div>
       </div>
 
       <!-- Hazmat fields — only when itemHazmat is checked -->
