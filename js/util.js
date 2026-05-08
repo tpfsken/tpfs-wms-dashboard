@@ -56,16 +56,22 @@ function fmtTimeShort(t){
 
 // ----- Status maps & workflow -----
 
+// Status meta. Workflow rename (migration 020): PICKED collapsed into
+// PACKING, PACKED renamed STAGED. PICKED + PACKED kept here as fallback
+// labels in case any old data still surfaces — they shouldn't, but the
+// chip won't crash if they do.
 const SM = {
   NEW:        {c:'chip-new',     l:'New'},
   ALLOCATED:  {c:'chip-active',  l:'Allocated'},
   PICKING:    {c:'chip-active',  l:'Picking'},
-  PICKED:     {c:'chip-active',  l:'Picked'},
   PACKING:    {c:'chip-active',  l:'Packing'},
-  PACKED:     {c:'chip-active',  l:'Packed'},
+  STAGED:     {c:'chip-warning', l:'Staged'},
   SHIPPED:    {c:'chip-success', l:'Shipped'},
   CANCELLED:  {c:'chip-danger',  l:'Cancelled'},
   BACKORDERED:{c:'chip-warning', l:'Backordered'},
+  // Legacy fallbacks
+  PICKED:     {c:'chip-active',  l:'Picked'},
+  PACKED:     {c:'chip-warning', l:'Packed'},
 };
 
-const WF = ['NEW','ALLOCATED','PICKING','PICKED','PACKING','PACKED','SHIPPED'];
+const WF = ['NEW','ALLOCATED','PICKING','PACKING','STAGED','SHIPPED'];

@@ -167,9 +167,9 @@ async function openOrderDetail(id){
     transBtns.innerHTML = '<div style="color:var(--muted);font-size:13px;">Read-only in portal</div>';
   } else {
     const tr = await apiGet(`/orders/${id}/valid-transitions`);
-    // Ship Order is its own action — collapses PACKING/PACKED → SHIPPED in one
-    // step. Show it prominently when the order is ready to ship.
-    const canShip = ['PICKED', 'PACKED'].includes(d.status);
+    // Ship Order is its own action — collapses PACKING/STAGED → SHIPPED in
+    // one step. Show it prominently when the order is ready to ship.
+    const canShip = ['PACKING', 'STAGED'].includes(d.status);
     let html = '';
     if(canShip){
       html += `<button class="btn btn-success js-ship-btn" style="margin:0 8px 8px 0;">📦 Ship Order</button>`;
@@ -462,7 +462,9 @@ function renderPickList(d, isPickable){
 
   const completeBtn = document.getElementById('pickListComplete');
   completeBtn.style.display = allDone ? 'inline-flex' : 'none';
-  completeBtn.onclick = () => transitionOrder(d.id, 'PICKED');
+  // Complete Picking moves PICKING → PACKING (the new unified workflow,
+  // post-migration 020 — there's no separate PICKED stage anymore).
+  completeBtn.onclick = () => transitionOrder(d.id, 'PACKING');
 }
 
 // =============================================================================

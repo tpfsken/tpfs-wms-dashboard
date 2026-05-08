@@ -300,6 +300,23 @@ function renderAllDone(){
           <button onclick="exitMobilePicker()" style="background:#444;color:#fff;border:none;padding:12px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Exit Picker</button>
         </div>
       </div>`;
+  } else if(done >= total && total > 0 && _pickerOrder.status === 'PICKING'){
+    // All picks done AND order is still in PICKING — needs Complete
+    // Picking to advance to PACKING. Surface that button right here so
+    // the picker on a tablet can finish the order without bouncing to
+    // desktop.
+    body = `
+      <div style="text-align:center;padding:32px 16px;">
+        <div style="font-size:64px;line-height:1;margin-bottom:14px;">✓</div>
+        <div style="font-size:24px;font-weight:700;margin-bottom:8px;">All ${esc(done)} picks done</div>
+        <div style="font-size:13px;opacity:.7;margin-bottom:20px;line-height:1.5;">
+          Order ${esc(_pickerOrder.order_number || '')} is ready to move to PACKING.
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <button onclick="completePickingFromPicker()" style="background:#28a745;color:#fff;border:none;padding:18px 24px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">✓ Complete Picking → PACKING</button>
+          <button onclick="exitMobilePicker()" style="background:#444;color:#fff;border:none;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Exit Picker</button>
+        </div>
+      </div>`;
   } else {
     body = `
       <div style="text-align:center;padding:48px 16px;">
@@ -311,6 +328,31 @@ function renderAllDone(){
   }
   document.getElementById('pickerBody').innerHTML = body;
   document.getElementById('pickerFooter').style.display = 'none';
+}
+
+// Complete picking right from the picker — advances the order
+// PICKING → PACKING so it shows up on the supervisor's pack queue.
+// Lives on the All Done view so a tablet picker doesn't have to
+// bounce to desktop just to mark a finished order.
+async function completePickingFromPicker(){
+  if(!_pickerOrder?.id) return;
+  try {
+    const r = await fetch(`${API}/orders/${_pickerOrder.id}/status`, {
+      method:'PATCH',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+      body: JSON.stringify({ status: 'PACKING' }),
+    });
+    const d = await r.json();
+    if(!r.ok){
+      alert(d.error || 'Could not advance to PACKING');
+      return;
+    }
+    pickerHaptic('success');
+    showPickerStatus('✓ Sent to PACKING', 'green');
+    setTimeout(() => exitMobilePicker(), 600);
+  } catch(e){
+    alert('Network error');
+  }
 }
 
 // Refresh the picker after ops has allocated more — pulls the order
