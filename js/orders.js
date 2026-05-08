@@ -182,6 +182,18 @@ async function openOrderDetail(id){
       // PICKING / PACKING / STAGED / SHIPPED get the disabled treatment.
       const blockForward = shortLines.length > 0;
       const exempt = new Set(['CANCELLED', 'NEW', 'ALLOCATED']);
+      // Friendlier labels — buttons describe the ACTION, not the
+      // destination state. ALLOCATED in particular opens the allocation
+      // panel (action), so "Allocate" reads correctly. Other forward
+      // transitions are direct status flips so '→ STATE' is fine.
+      const labelFor = (t) => {
+        if (t === 'CANCELLED') return 'Cancel';
+        if (t === 'ALLOCATED') return '🎯 Allocate';
+        if (t === 'PICKING')   return '▶ Start Picking';
+        if (t === 'PACKING')   return '✓ Complete Picking';
+        if (t === 'STAGED')    return '📦 Mark Staged';
+        return '→ ' + t;
+      };
       html += tr.allowed.map(t => {
         const blocked = blockForward && !exempt.has(t);
         const style = blocked
@@ -190,7 +202,7 @@ async function openOrderDetail(id){
         const title = blocked ? 'Allocate every line first before advancing' : '';
         return `<button class="btn ${t === 'CANCELLED' ? 'btn-danger' : 'btn-primary'} js-trans-btn"
                  data-target="${esc(t)}" data-blocked="${blocked ? '1' : '0'}"
-                 title="${esc(title)}" style="${style}">${t === 'CANCELLED' ? 'Cancel' : '→ ' + esc(t)}</button>`;
+                 title="${esc(title)}" style="${style}">${esc(labelFor(t))}</button>`;
       }).join('');
     }
     if(!html){
