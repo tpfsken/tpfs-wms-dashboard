@@ -1120,7 +1120,7 @@ function renderSdsExtractResult(ext, doc){
   result.style.borderColor = bandStyle.border;
 
   const reviewLink = (band === 'review_high' || band === 'review_low' || band === 'rejected')
-    ? `<div style="margin-top:8px;"><button class="btn btn-ghost" onclick="navigateTo('compliance')" style="padding:4px 12px;font-size:12px;color:${bandStyle.fg};border:1px solid ${bandStyle.border};">→ Open in Compliance Queue</button></div>`
+    ? `<div style="margin-top:8px;"><button class="btn btn-ghost" onclick="closeModal('itemFormModal');navigateTo('compliance')" style="padding:4px 12px;font-size:12px;color:${bandStyle.fg};border:1px solid ${bandStyle.border};">→ Open in Compliance Queue</button></div>`
     : '';
   const docLine = `Version ${esc(doc.version_number)} · ${esc(doc.original_filename || 'sds.pdf')}`;
 
