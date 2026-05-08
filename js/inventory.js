@@ -323,10 +323,34 @@ async function openItemFormModal(skuId){
   document.getElementById('itemFormSubmitBtn').textContent = skuId ? 'Save Changes' : 'Create Item';
   document.getElementById('itemFormError').textContent     = '';
 
+  // Reset the SDS panels so state from a prior item doesn't bleed into
+  // this open. The Intel result panel in particular was sticky — once
+  // shown for item A it stayed visible when the modal re-opened for
+  // item B, making it look like every item had a pending SDS review.
+  const intelResult = document.getElementById('itemSdsIntelResult');
+  if(intelResult){
+    intelResult.style.display = 'none';
+    intelResult.innerHTML = '';
+  }
+  const sdsStatus = document.getElementById('itemSdsExtractStatus');
+  if(sdsStatus){
+    sdsStatus.textContent = '';
+    sdsStatus.style.color = '';
+  }
+  // _itemPendingSds carries a staged file from create-mode SDS auto-fill;
+  // reset it so a stale file doesn't ride along to a different item.
+  _itemPendingSds = null;
+
   // Compliance audit panel — only meaningful in edit mode (need a sku_id).
   // The panel itself is collapsed by default; expanding loads the rows.
   const auditBlock = document.getElementById('itemAuditBlock');
   if(auditBlock){
+    // Always reset the toggle state so it opens collapsed for each item
+    const auditBody = document.getElementById('itemAuditBody');
+    const auditToggle = document.getElementById('itemAuditToggle');
+    if(auditBody)  auditBody.style.display = 'none';
+    if(auditToggle) auditToggle.textContent = '▾ Show';
+
     if(skuId){
       // Lazy load — call now so the count is shown in the header even
       // when the user hasn't expanded yet
