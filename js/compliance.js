@@ -177,8 +177,60 @@ async function cmpOpenReviewer(extractionId){
   document.getElementById('cmpAcceptAllGreenBtn').style.display = anyGreenPending ? '' : 'none';
   document.getElementById('cmpAcceptAllGreenBtn').onclick = () => cmpAcceptAllGreen(data);
 
+  // Withdraw button — only enabled if NO field has been applied yet.
+  // Once a field is applied, the SKU master has been touched and pulling
+  // the SDS doesn't undo that. Refuse and tell the user why.
+  const wBtn = document.getElementById('cmpWithdrawBtn');
+  if(wBtn){
+    const anyApplied = (data.fields || []).some(f => f.applied);
+    if(anyApplied){
+      wBtn.disabled = true;
+      wBtn.style.opacity = '0.5';
+      wBtn.style.cursor = 'not-allowed';
+      wBtn.title = 'Cannot withdraw — fields from this extraction have already been applied to the SKU master. Manually correct the SKU instead.';
+    } else {
+      wBtn.disabled = false;
+      wBtn.style.opacity = '';
+      wBtn.style.cursor = '';
+      wBtn.title = 'Wrong file uploaded? Withdraw this SDS before any field is applied to the SKU master. Soft delete — record stays for audit but the doc is removed from the queue and the prior version (if any) is restored.';
+    }
+  }
+
   // Load PDF in parallel
   cmpLoadPdf(data.id);
+}
+
+// =============================================================================
+// WITHDRAW — soft-delete the SDS doc. Reason captured for the audit log.
+// =============================================================================
+async function cmpWithdrawSds(){
+  if(!_cmpCurrentExtraction) return;
+  const reason = prompt(
+    'Withdraw this SDS upload?\n\n' +
+    'This is for "wrong file uploaded" cleanup BEFORE approval. The PDF + extraction stay in the audit log but disappear from the queue, and the prior version (if any) is restored as the SKU\'s current SDS.\n\n' +
+    'Reason for withdrawal (required, ≥5 chars):'
+  );
+  if(reason == null) return;
+  if(reason.trim().length < 5){ alert('Reason must be at least 5 characters.'); return; }
+
+  const docId = _cmpCurrentExtraction.sds_document_id;
+  if(!docId){ alert('No document id on this extraction'); return; }
+
+  try {
+    const r = await fetch(`${API}/sds-documents/${docId}/withdraw`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${T}` },
+      body: JSON.stringify({ reason: reason.trim() }),
+    });
+    const d = await r.json();
+    if(!r.ok){ alert(d.error || 'Withdraw failed'); return; }
+    alert(d.restored_version_id
+      ? '✓ SDS withdrawn. Prior version restored as current.'
+      : '✓ SDS withdrawn. No prior version to restore — this SKU has no current SDS.');
+    cmpCloseReviewer();
+  } catch(err){
+    alert('Network error — try again');
+  }
 }
 
 function cmpCloseReviewer(){

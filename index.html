@@ -927,6 +927,7 @@
         <div style="flex:1"></div>
         <span class="chip" id="cmpReviewerBand"></span>
         <button class="btn btn-success" id="cmpAcceptAllGreenBtn" style="display:none;" title="Accept every field that's already auto-eligible (≥95% confidence, no diff). Yellow/orange/red items still need individual review.">✓ Accept all green</button>
+        <button class="btn btn-danger" id="cmpWithdrawBtn" onclick="cmpWithdrawSds()" title="Wrong file uploaded? Withdraw this SDS before any field is applied to the SKU master. Soft delete — record stays for audit but the doc is removed from the queue and the prior version (if any) is restored.">🗑 Withdraw SDS</button>
       </div>
     </div>
     <div id="cmpReviewerSplit" style="display:grid;grid-template-columns:1fr 460px;gap:18px;align-items:start;">
