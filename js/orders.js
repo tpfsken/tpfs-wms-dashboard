@@ -167,57 +167,80 @@ async function openOrderDetail(id){
     transBtns.innerHTML = '<div style="color:var(--muted);font-size:13px;">Read-only in portal</div>';
   } else {
     const tr = await apiGet(`/orders/${id}/valid-transitions`);
-    // Ship Order is its own action — collapses PACKING/STAGED → SHIPPED in
-    // one step. Show it prominently when the order is ready to ship.
+    // The workflow panel groups actions by intent so it doesn't feel like
+    // a wall of buttons:
+    //   PRIMARY   — the most natural next step (forward state transition
+    //               or Ship). Big, prominent, full-width.
+    //   SECONDARY — backward / lateral state changes. Smaller, side-by-side.
+    //   DESTRUCTIVE — Unallocate Order. Smaller, amber-styled, separated
+    //               by a divider so ops doesn't bump into it accidentally.
+
     const canShip = ['PACKING', 'STAGED'].includes(d.status);
-    let html = '';
-    if(canShip){
-      html += `<button class="btn btn-success js-ship-btn" style="margin:0 8px 8px 0;">📦 Ship Order</button>`;
-    }
-    // Unallocate Order — checkout-style edit flow. Visible only when the
-    // order is ALLOCATED or PICKING (i.e. has allocations to release) AND
-    // nothing's been picked yet (PICKED allocs require per-row /unpick
-    // first to release them safely). Lets ops fully release allocations
-    // back to inventory so the order can be edited freely, then re-
-    // allocated. PIN+reason gated like the other destructive edits.
     const hasPickedAlloc = (d.allocations || []).some(a => a.status === 'PICKED');
     const canUnallocateAll = ['ALLOCATED', 'PICKING'].includes(d.status) && !hasPickedAlloc;
+
+    const labelFor = (t) => {
+      if (t === 'CANCELLED') return 'Cancel Order';
+      if (t === 'ALLOCATED') return '🎯 Allocate';
+      if (t === 'PICKING')   return '▶ Start Picking';
+      if (t === 'PACKING')   return '✓ Complete Picking';
+      if (t === 'STAGED')    return '📦 Mark Staged';
+      if (t === 'NEW')       return '← Back to NEW';
+      return '→ ' + t;
+    };
+
+    // Forward state transitions (the main "next step" — at most one is
+    // typically the dominant choice; we render them all but mark the
+    // most-forward one as primary if there are multiple).
+    const allowed = tr?.allowed || [];
+    const blockForward = shortLines.length > 0;
+    const exempt = new Set(['CANCELLED', 'NEW', 'ALLOCATED']);
+    const forwardOrder = ['ALLOCATED', 'PICKING', 'PACKING', 'STAGED'];
+    const primary  = allowed.filter(t => forwardOrder.includes(t))
+                            .sort((a,b) => forwardOrder.indexOf(a) - forwardOrder.indexOf(b));
+    const backward = allowed.filter(t => t === 'NEW');
+    const cancel   = allowed.filter(t => t === 'CANCELLED');
+
+    let html = '';
+
+    // PRIMARY — forward transitions. Ship Order takes precedence when
+    // status is PACKING/STAGED — collapses two clicks into one.
+    if(canShip){
+      html += `<button class="btn btn-success js-ship-btn" style="display:block;width:100%;padding:12px;font-size:14px;font-weight:700;margin-bottom:8px;">📦 Ship Order</button>`;
+    }
+    primary.forEach((t, i) => {
+      const blocked = blockForward && !exempt.has(t);
+      const style = `display:block;width:100%;padding:12px;font-size:14px;font-weight:700;margin-bottom:8px;${blocked ? 'opacity:0.5;cursor:not-allowed;' : ''}`;
+      const title = blocked ? 'Allocate every line first before advancing' : '';
+      html += `<button class="btn btn-primary js-trans-btn"
+               data-target="${esc(t)}" data-blocked="${blocked ? '1' : '0'}"
+               title="${esc(title)}" style="${style}">${esc(labelFor(t))}</button>`;
+    });
+
+    // SECONDARY — backward + cancel. Smaller, side-by-side row.
+    const secondary = [...backward, ...cancel];
+    if(secondary.length){
+      html += `<div style="display:flex;gap:6px;margin-top:4px;">`;
+      secondary.forEach(t => {
+        const isCancel = t === 'CANCELLED';
+        html += `<button class="btn ${isCancel ? 'btn-danger' : 'btn-ghost'} js-trans-btn"
+                 data-target="${esc(t)}" data-blocked="0"
+                 style="flex:1;padding:8px;font-size:12px;">${esc(labelFor(t))}</button>`;
+      });
+      html += `</div>`;
+    }
+
+    // DESTRUCTIVE — Unallocate Order. Visually separated by a divider,
+    // small + amber so ops doesn't fat-finger it.
     if(canUnallocateAll){
-      html += `<button class="btn js-unallocate-all-btn"
-        style="margin:0 8px 8px 0;background:#3a2c00;color:#ffd591;border:1px solid #6b4c00;"
-        title="Release all allocations and demote order to NEW so you can edit lines freely">↺ Unallocate Order</button>`;
+      html += `<div style="border-top:1px solid var(--border);margin:14px 0 8px;padding-top:10px;">
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Edit allocations</div>
+        <button class="btn js-unallocate-all-btn"
+          style="display:block;width:100%;padding:8px;font-size:12px;background:#2a1f00;color:#ffd591;border:1px solid #4d3800;"
+          title="Release all allocations and demote order to NEW so you can edit lines freely">↺ Unallocate Order</button>
+      </div>`;
     }
-    if(tr?.allowed?.length){
-      // Block transitions that move PAST the allocation stage when the
-      // order is under-allocated. Going TO ALLOCATED is exempt because
-      // that button opens the allocation panel — it's the gateway, not
-      // a sneak-past. NEW + CANCELLED + ALLOCATED stay clickable; only
-      // PICKING / PACKING / STAGED / SHIPPED get the disabled treatment.
-      const blockForward = shortLines.length > 0;
-      const exempt = new Set(['CANCELLED', 'NEW', 'ALLOCATED']);
-      // Friendlier labels — buttons describe the ACTION, not the
-      // destination state. ALLOCATED in particular opens the allocation
-      // panel (action), so "Allocate" reads correctly. Other forward
-      // transitions are direct status flips so '→ STATE' is fine.
-      const labelFor = (t) => {
-        if (t === 'CANCELLED') return 'Cancel';
-        if (t === 'ALLOCATED') return '🎯 Allocate';
-        if (t === 'PICKING')   return '▶ Start Picking';
-        if (t === 'PACKING')   return '✓ Complete Picking';
-        if (t === 'STAGED')    return '📦 Mark Staged';
-        return '→ ' + t;
-      };
-      html += tr.allowed.map(t => {
-        const blocked = blockForward && !exempt.has(t);
-        const style = blocked
-          ? 'margin:0 8px 8px 0;opacity:0.5;cursor:not-allowed;'
-          : 'margin:0 8px 8px 0;';
-        const title = blocked ? 'Allocate every line first before advancing' : '';
-        return `<button class="btn ${t === 'CANCELLED' ? 'btn-danger' : 'btn-primary'} js-trans-btn"
-                 data-target="${esc(t)}" data-blocked="${blocked ? '1' : '0'}"
-                 title="${esc(title)}" style="${style}">${esc(labelFor(t))}</button>`;
-      }).join('');
-    }
+
     if(!html){
       html = '<div style="color:var(--muted);font-size:13px;">Terminal state</div>';
     }
@@ -1114,7 +1137,24 @@ async function submitNewOrder(){
     const d = await r.json();
     if(!r.ok){ err.textContent = d.error || 'Failed'; return; }
     closeModal('newOrderModal');
-    loadOrders();
+
+    // Drop the user straight into allocation for the order they just
+    // created — the most natural next step is "now decide which lots
+    // fulfill it", and forcing them to bounce back to the list and find
+    // the order again was a documented friction point.
+    if(d.id){
+      await openOrderDetail(d.id);
+      // Small delay so COD is populated by the detail load before we
+      // try to render allocation lines off it
+      setTimeout(() => {
+        if(typeof showAllocPanel === 'function') showAllocPanel(d.id);
+        // Scroll the allocate panel into view
+        const ap = document.getElementById('allocPanel');
+        if(ap) ap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 250);
+    } else {
+      loadOrders();
+    }
   } catch(e){
     err.textContent = 'Network error';
   }

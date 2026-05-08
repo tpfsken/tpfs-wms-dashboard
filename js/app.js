@@ -227,66 +227,13 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // =============================================================================
-// PWA INSTALL — explicit "📱 Install App" button in the topbar that fires
-// the deferred beforeinstallprompt event. iOS Safari doesn't fire this
-// event so we show a helper banner instead with the Add-to-Home-Screen
-// instructions.
+// PWA INSTALL — was "📱 Install App" button in the topbar; removed for
+// less clutter. Browsers expose their own install UX (Chrome/Edge address-
+// bar icon, Safari Share menu → Add to Home Screen). manifest.json + service
+// worker stay registered so install still works via those native controls.
 // =============================================================================
 
-let _pwaInstallEvent = null;
-
 function setupPwaInstall(){
-  // Already installed? hide everything.
-  const standalone = window.matchMedia('(display-mode: standalone)').matches
-                  || window.navigator.standalone === true;
-  if(standalone) return;
-
-  // Chromium fires this when PWA criteria are met. We stash the event
-  // and show our install button.
-  window.addEventListener('beforeinstallprompt', e => {
-    e.preventDefault();
-    _pwaInstallEvent = e;
-    const btn = document.getElementById('installAppBtn');
-    if(btn) btn.style.display = '';
-  });
-
-  // Hide once installed
-  window.addEventListener('appinstalled', () => {
-    const btn = document.getElementById('installAppBtn');
-    if(btn) btn.style.display = 'none';
-    _pwaInstallEvent = null;
-  });
-
-  // iOS Safari doesn't fire beforeinstallprompt — show the banner with
-  // visual instructions instead. Detection: iOS user agent + Safari
-  // (not Chrome/Firefox on iOS, those use the same WebKit but can't
-  // install PWAs).
-  const ua = navigator.userAgent;
-  const isIos    = /iPhone|iPad|iPod/i.test(ua);
-  const isSafari = isIos && !/CriOS|FxiOS|OPiOS|EdgiOS/i.test(ua);
-  if(isIos && isSafari && !sessionStorage.getItem('iosInstallHintDismissed')){
-    setTimeout(() => {
-      const hint = document.getElementById('iosInstallHint');
-      if(hint) hint.style.display = '';
-    }, 2000);
-  }
-}
-
-async function installPwaApp(){
-  if(!_pwaInstallEvent){
-    alert('Install option not available yet — try a hard refresh (pull down on the page) and tap this button again. On iOS, use Safari\'s Share button → Add to Home Screen.');
-    return;
-  }
-  _pwaInstallEvent.prompt();
-  const choice = await _pwaInstallEvent.userChoice;
-  if(choice && choice.outcome === 'accepted'){
-    document.getElementById('installAppBtn').style.display = 'none';
-  }
-  _pwaInstallEvent = null;
-}
-
-function dismissIosHint(){
-  const hint = document.getElementById('iosInstallHint');
-  if(hint) hint.style.display = 'none';
-  sessionStorage.setItem('iosInstallHintDismissed', '1');
+  // No-op — install handled by native browser UX. Kept as a stub so the
+  // call site in boot() doesn't have to be edited.
 }
