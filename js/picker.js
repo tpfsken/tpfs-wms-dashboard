@@ -114,21 +114,25 @@ async function openMobilePicker(orderId){
   // a successful capture and silently no-op on the next click. Dodge it
   // by spinning up a FRESH input element on every click — no shared
   // state, no value reset gymnastics.
+  //
+  // Critical: don't use display:none on the input — Chrome/some Safari
+  // versions silently ignore .click() on a display:none file input.
+  // Position it off-screen + transparent + 1px size instead.
   const v = document.getElementById('pickerVerifyBtn');
   if(v && !v._wired){
     v._wired = true;
     v.addEventListener('click', () => {
-      // If the button is in a disabled-during-analysis state, no-op
       if(v.disabled) return;
       const tempInp = document.createElement('input');
       tempInp.type = 'file';
       tempInp.accept = 'image/*';
-      tempInp.setAttribute('capture', 'environment');  // prefer back camera
-      tempInp.style.display = 'none';
+      // capture=environment hints "use rear camera" on mobile; ignored
+      // on desktop, so safe to always set.
+      tempInp.setAttribute('capture', 'environment');
+      tempInp.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;';
       tempInp.onchange = e => {
         const file = (e.target.files || [])[0];
         if(file) verifyCurrentPickPhoto(file);
-        // Cleanup — input gets removed regardless of file presence
         try { tempInp.remove(); } catch(_) {}
       };
       document.body.appendChild(tempInp);
@@ -403,15 +407,25 @@ function renderAllDone(){
       </div>`;
   }
   else if (state === 'already_complete') {
+    // Two sub-cases:
+    //   - status moved past PICKING (PACKING/STAGED/SHIPPED) — picker
+    //     is just info, nothing to do. Order shouldn't be in the floor
+    //     list anyway since the floor filter is ALLOCATED+PICKING.
+    //   - status is still ALLOCATED but all picks are PICKED — data
+    //     inconsistency (auto-promote should have moved it to PICKING).
+    //     Hitting Refresh sometimes nudges the server to re-evaluate.
+    const isInconsistent = status === 'ALLOCATED';
     body = `
       <div style="text-align:center;padding:32px 16px;">
-        <div style="font-size:64px;line-height:1;margin-bottom:14px;">✓</div>
-        <div style="font-size:22px;font-weight:700;margin-bottom:8px;">Already Picked</div>
+        <div style="font-size:64px;line-height:1;margin-bottom:14px;">${isInconsistent ? '⚠' : '✓'}</div>
+        <div style="font-size:22px;font-weight:700;margin-bottom:8px;">${isInconsistent ? 'Stuck State' : 'Already Picked'}</div>
         ${orderLine}
         <div style="font-size:13px;opacity:.7;margin-bottom:18px;line-height:1.5;">
-          This order's ${esc(counts.picked)} pick${counts.picked === 1 ? '' : 's'} ${counts.picked === 1 ? 'is' : 'are'} done and the order has moved past PICKING. Nothing to do here.
+          ${isInconsistent
+            ? `All ${esc(counts.picked)} allocation${counts.picked === 1 ? '' : 's'} on this order ${counts.picked === 1 ? 'is' : 'are'} PICKED, but the order's status is still ALLOCATED — looks like the auto-promote to PICKING didn't fire. Try ↻ Refresh, or move to PACKING from desktop.`
+            : `This order's ${esc(counts.picked)} pick${counts.picked === 1 ? '' : 's'} ${counts.picked === 1 ? 'is' : 'are'} done and the status is ${esc(status)}. Nothing to pick here.`}
         </div>
-        <div style="display:flex;flex-direction:column;gap:10px;">${exitBtn}</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">${refreshBtn}${exitBtn}</div>
       </div>`;
   }
   else {  // unknown — show a diagnostic so we can debug
