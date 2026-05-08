@@ -420,9 +420,18 @@ async function openItemFormModal(skuId){
   if(huAddBtn && !huAddBtn._wired){
     huAddBtn._wired = true;
     huAddBtn.addEventListener('click', () => {
-      // Pick the next conventional level the user hasn't added yet
+      // Pick a sensible default level for the next row. Most warehouses
+      // skip INNER_PACK (it's a niche level used mostly in retail/CPG)
+      // and go directly EACH <-> CASE. We try in order: CASE if EACH
+      // exists, EACH if CASE exists, then PALLET, then INNER_PACK as
+      // a last resort. User can always change the dropdown manually.
       const used = new Set(_itemHandlingUnits.map(h => h.sku_type));
-      const next = ['EACH','INNER_PACK','CASE','PALLET'].find(t => !used.has(t)) || 'EACH';
+      const order = used.has('EACH')       ? ['CASE','PALLET','INNER_PACK','EACH']
+                  : used.has('CASE')       ? ['EACH','PALLET','INNER_PACK','CASE']
+                  : used.has('PALLET')     ? ['CASE','EACH','INNER_PACK','PALLET']
+                  : used.has('INNER_PACK') ? ['EACH','CASE','PALLET','INNER_PACK']
+                  :                          ['EACH','CASE','PALLET','INNER_PACK'];
+      const next = order.find(t => !used.has(t)) || 'EACH';
       addHandlingUnit(next);
     });
   }
@@ -934,8 +943,8 @@ async function renderHandlingUnits(){
           <input class="form-input js-hu-code" data-idx="${esc(i)}" value="${esc(hu.sku_code || '')}" placeholder="auto-filled from base code">
         </div>
         <div style="width:110px;">
-          <label class="form-label">Pack Qty</label>
-          <input class="form-input js-hu-pack" data-idx="${esc(i)}" type="number" min="0" step="1" value="${hu.pack_qty == null ? '' : esc(hu.pack_qty)}" placeholder="e.g. 24">
+          <label class="form-label" title="Number of EACH inside this level. e.g. a Case of 12 means pack qty 12 on the Case level (and 1 on the Each level).">Pack Qty <span style="color:var(--muted);font-weight:400;font-size:10px;">(qty inside)</span></label>
+          <input class="form-input js-hu-pack" data-idx="${esc(i)}" type="number" min="0" step="1" value="${hu.pack_qty == null ? '' : esc(hu.pack_qty)}" placeholder="${hu.sku_type === 'EACH' ? '1' : 'e.g. 12'}">
         </div>
         ${(!editing || hu._isNew) ? `<button type="button" class="btn btn-ghost js-hu-rm" data-idx="${esc(i)}" style="color:var(--red);padding:6px 10px;font-size:14px;" title="${editing ? 'Remove this new level — existing levels cannot be removed here' : 'Remove this level'}">✕</button>` : ''}
       </div>
@@ -954,13 +963,29 @@ async function renderHandlingUnits(){
     </div>
   `).join('');
 
-  // Init level combo for each row
+  // Init level combo for each row. When the level changes on a row
+  // that's still auto-sync'd to the base code (i.e. user hasn't manually
+  // edited the sku_code), refresh the suffix so the code matches the
+  // new level. Without this, picking "Case" after the row defaulted
+  // to "Inner Pack" leaves the code stuck at "...-IP".
   for(let i = 0; i < _itemHandlingUnits.length; i++){
     initCombo(`huType_${i}`, typeOptions, {
       placeholder:'Each',
       value: _itemHandlingUnits[i].sku_type,
       allowCustom: true,
-      onChange: (v) => { _itemHandlingUnits[i].sku_type = v; },
+      onChange: (v) => {
+        _itemHandlingUnits[i].sku_type = v;
+        // Re-derive sku_code suffix if the row is still in auto-sync
+        // mode (user hasn't typed in the code field directly).
+        const hu = _itemHandlingUnits[i];
+        if(hu._autoSync){
+          const base = document.getElementById('itemCode').value.trim();
+          const suffix = SKU_TYPE_SUFFIX[v] || (v ? v.slice(0,3).toUpperCase() : 'X');
+          const oneLevel = _itemHandlingUnits.length === 1;
+          hu.sku_code = base ? (oneLevel ? base : `${base}-${suffix}`) : '';
+          renderHandlingUnits();
+        }
+      },
     });
   }
 
