@@ -7,9 +7,11 @@
 // existing /orders/:id/picks/:allocationId/confirm endpoint.
 // =============================================================================
 
-let _pickerOrder    = null;   // full /orders/:id payload
-let _pickerPending  = [];     // pending allocations (filtered + sorted)
-let _pickerIdx      = 0;      // current index into _pickerPending
+let _pickerOrder        = null;  // full /orders/:id payload
+let _pickerPending      = [];    // pending allocations (filtered + sorted)
+let _pickerIdx          = 0;     // current index into _pickerPending
+let _pickerLastVerifyId = null;  // pick_attachment id of the last AI verification
+let _pickerLastMatch    = null;  // 'yes' | 'partial' | 'no' | 'unreadable' | null
 
 // =============================================================================
 // ENTRY / EXIT
@@ -33,7 +35,7 @@ async function openMobilePicker(orderId){
     });
   _pickerIdx = 0;
 
-  // Wire confirm + skip (idempotent)
+  // Wire confirm + skip + verify (idempotent)
   const c = document.getElementById('pickerConfirmBtn');
   if(c && !c._wired){
     c._wired = true;
@@ -43,6 +45,20 @@ async function openMobilePicker(orderId){
   if(s && !s._wired){
     s._wired = true;
     s.addEventListener('click', skipCurrentPick);
+  }
+  const v = document.getElementById('pickerVerifyBtn');
+  const camIn = document.getElementById('pickerCameraInput');
+  if(v && !v._wired){
+    v._wired = true;
+    v.addEventListener('click', () => camIn.click());
+  }
+  if(camIn && !camIn._wired){
+    camIn._wired = true;
+    camIn.addEventListener('change', e => {
+      const file = (e.target.files || [])[0];
+      e.target.value = '';
+      if(file) verifyCurrentPickPhoto(file);
+    });
   }
 
   document.getElementById('pickerOrderNum').textContent = _pickerOrder.order_number || '—';
@@ -140,8 +156,16 @@ function renderCurrentPick(){
     </div>
   `;
 
-  // Reset confirm button color in case prior pick set it red
+  // Reset state for the new pick — clear any prior verify result
+  _pickerLastVerifyId = null;
+  _pickerLastMatch    = null;
+  document.getElementById('pickerVerifyBanner').style.display = 'none';
+  document.getElementById('pickerVerifyBanner').innerHTML = '';
   document.getElementById('pickerConfirmBtn').style.background = '#28a745';
+  document.getElementById('pickerConfirmBtn').textContent = '✓ CONFIRM PICK';
+  document.getElementById('pickerVerifyBtn').disabled = false;
+  document.getElementById('pickerVerifyBtn').style.opacity = '';
+  document.getElementById('pickerVerifyBtn').textContent = '📷 Verify with Photo (AI)';
   document.getElementById('pickerStatus').textContent = '';
 }
 
@@ -177,6 +201,117 @@ function renderAllDone(){
 }
 
 // =============================================================================
+// AI VERIFICATION — picker takes a photo, server runs Claude vision,
+// result banner shows green / yellow / red. Picker can override on a
+// "no" match (override gets logged on the pick_attachments row).
+// =============================================================================
+
+async function verifyCurrentPickPhoto(file){
+  if(_pickerIdx >= _pickerPending.length) return;
+  const a = _pickerPending[_pickerIdx];
+
+  const banner = document.getElementById('pickerVerifyBanner');
+  const vbtn   = document.getElementById('pickerVerifyBtn');
+
+  // Loading state
+  vbtn.disabled = true;
+  vbtn.style.opacity = '0.6';
+  vbtn.textContent = 'Analyzing photo…';
+  banner.style.display = 'block';
+  banner.style.background = '#1f3a5e';
+  banner.style.color = '#cfe3ff';
+  banner.style.borderTop = '2px solid #2c7be5';
+  banner.innerHTML = `<div>🤖 Claude is reading the photo… (typically 3-5 sec)</div>`;
+
+  try {
+    const fd = new FormData();
+    fd.append('photo', file);
+    const r = await fetch(`${API}/orders/${_pickerOrder.id}/picks/${a.id}/verify`, {
+      method:'POST', headers:{ 'Authorization': `Bearer ${T}` }, body: fd,
+    });
+    const d = await r.json();
+    if(!r.ok){
+      banner.style.background = '#5a2c2c';
+      banner.style.color = '#ffb3b3';
+      banner.style.borderTop = '2px solid #d22';
+      banner.innerHTML = `<div>❌ Verification failed: ${esc(d.error || 'unknown error')}</div>`;
+      vbtn.disabled = false;
+      vbtn.style.opacity = '';
+      vbtn.textContent = '📷 Retry Photo';
+      return;
+    }
+
+    _pickerLastVerifyId = d.attachment_id;
+    _pickerLastMatch    = d.extracted?.match || 'unreadable';
+    renderVerifyBanner(d.extracted || {});
+    vbtn.disabled = false;
+    vbtn.style.opacity = '';
+    vbtn.textContent = '📷 Retake Photo';
+  } catch(e){
+    banner.style.background = '#5a2c2c';
+    banner.style.color = '#ffb3b3';
+    banner.innerHTML = `<div>❌ Network error reading photo</div>`;
+    vbtn.disabled = false;
+    vbtn.style.opacity = '';
+    vbtn.textContent = '📷 Retry Photo';
+  }
+}
+
+function renderVerifyBanner(e){
+  const banner = document.getElementById('pickerVerifyBanner');
+  const confirmBtn = document.getElementById('pickerConfirmBtn');
+  const conf = e.confidence == null ? '' : ` ${Math.round(Number(e.confidence) * 100)}%`;
+
+  let bg, fg, border, headline;
+  if(e.match === 'yes'){
+    bg = '#1f4d2e'; fg = '#a3ffb3'; border = '#28a745';
+    headline = `✓ AI verified${conf}`;
+    confirmBtn.style.background = '#28a745';
+    confirmBtn.textContent = '✓ CONFIRM PICK (verified)';
+  } else if(e.match === 'partial'){
+    bg = '#5a4500'; fg = '#ffe4a3'; border = '#d6a700';
+    headline = `⚠ Partial match${conf}`;
+    confirmBtn.style.background = '#d6a700';
+    confirmBtn.textContent = '✓ CONFIRM (partial)';
+  } else if(e.match === 'no'){
+    bg = '#5a2c2c'; fg = '#ffb3b3'; border = '#d22';
+    headline = `✕ AI says wrong product${conf}`;
+    confirmBtn.style.background = '#a14040';
+    confirmBtn.textContent = '⚠ Override & Confirm';
+  } else { // unreadable
+    bg = '#3a3a3a'; fg = '#ddd'; border = '#888';
+    headline = `📷 Photo unreadable${conf}`;
+    confirmBtn.style.background = '#28a745';
+    confirmBtn.textContent = '✓ CONFIRM PICK';
+  }
+
+  banner.style.background = bg;
+  banner.style.color = fg;
+  banner.style.borderTop = `2px solid ${border}`;
+
+  const detected = (e.detected_text && e.detected_text.length)
+    ? `<div style="font-size:11px;opacity:.85;margin-top:6px;"><strong>Detected:</strong> ${esc(e.detected_text.slice(0, 4).join(' · '))}</div>`
+    : '';
+  const matched = (e.matched_fields && e.matched_fields.length)
+    ? `<div style="font-size:11px;opacity:.85;margin-top:4px;"><strong>Matched on:</strong> ${esc(e.matched_fields.join(', '))}</div>`
+    : '';
+  const concerns = e.concerns
+    ? `<div style="font-size:11px;color:#ffd591;margin-top:6px;"><strong>Concern:</strong> ${esc(e.concerns)}</div>`
+    : '';
+  const reasoning = e.reasoning
+    ? `<div style="font-size:12px;margin-top:6px;font-style:italic;opacity:.9;">${esc(e.reasoning)}</div>`
+    : '';
+
+  banner.innerHTML = `
+    <div style="font-weight:700;font-size:14px;">${esc(headline)}</div>
+    ${reasoning}
+    ${matched}
+    ${detected}
+    ${concerns}
+  `;
+}
+
+// =============================================================================
 // CONFIRM / SKIP
 // =============================================================================
 
@@ -192,6 +327,20 @@ async function confirmCurrentPick(){
   }
   if(qty > Number(a.quantity)){
     if(!confirm(`You're confirming ${qty} but only ${a.quantity} was allocated. Continue?`)) return;
+  }
+
+  // If the AI flagged a "no" match, require an override reason. The
+  // reason gets logged on the pick_attachments row so supervisors can
+  // see why the picker overruled the AI.
+  let overrideReason = null;
+  if(_pickerLastMatch === 'no'){
+    overrideReason = prompt(
+      `AI says this looks like the wrong product. Override anyway?\n\nReason (required, e.g. "label damaged", "AI misread lot"):`
+    );
+    if(!overrideReason || !overrideReason.trim()){
+      showPickerStatus('Override cancelled', 'red');
+      return;
+    }
   }
 
   // Lock the button while we save
@@ -211,6 +360,22 @@ async function confirmCurrentPick(){
       showPickerStatus(d.error || 'Save failed', 'red');
       return;
     }
+
+    // Tag the verification row (if any) with what the picker did so the
+    // supervisor view can show "confirmed" vs "overridden" vs "retook".
+    if(_pickerLastVerifyId){
+      const action = overrideReason ? 'overridden'
+                   : _pickerLastMatch === 'yes' || _pickerLastMatch === 'partial' ? 'confirmed'
+                   : 'confirmed';
+      try {
+        await fetch(`${API}/picks/attachments/${_pickerLastVerifyId}`, {
+          method:'PATCH',
+          headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${T}` },
+          body: JSON.stringify({ action, override_reason: overrideReason || null }),
+        });
+      } catch(_) { /* swallow — pick still saved */ }
+    }
+
     // Mark this allocation as picked locally so progress updates
     a.status = 'PICKED';
     _pickerIdx++;
@@ -221,7 +386,6 @@ async function confirmCurrentPick(){
   } finally {
     btn.disabled = false;
     btn.style.opacity = '';
-    btn.textContent = '✓ CONFIRM PICK';
   }
 }
 
