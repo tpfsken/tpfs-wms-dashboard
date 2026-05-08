@@ -1047,55 +1047,100 @@ async function runSdsIntelExtract(skuId, file){
     if(d.deduped){
       result.style.borderColor = 'var(--amber)';
       result.style.color = 'var(--amber)';
-      result.innerHTML = `📎 This exact PDF (sha256 match) was already uploaded as version ${esc(d.document.version_number)}. No re-extraction was run. Re-upload a different file or use the existing extraction.`;
+      result.innerHTML = `
+        <div style="margin-bottom:10px;">📎 This exact PDF (sha256 match) was already uploaded as <strong>version ${esc(d.document.version_number)}</strong>. No re-upload was needed.</div>
+        <button class="btn btn-primary" id="reExtractExistingBtn" style="padding:6px 14px;font-size:12px;" data-doc-id="${esc(d.document.id)}">↻ Re-extract this version</button>
+        <span style="font-size:11px;color:var(--text2);margin-left:10px;">Same PDF, fresh Claude run. Useful when the prompt or model changed since last extraction.</span>
+      `;
+      // Wire the re-extract button to the existing-doc extraction endpoint
+      const reBtn = document.getElementById('reExtractExistingBtn');
+      if(reBtn){
+        reBtn.addEventListener('click', () => reRunExtractionOnExistingDoc(reBtn.dataset.docId));
+      }
       return;
     }
 
-    const ext = d.extraction || {};
-    const doc = d.document || {};
-    const band = ext.band || 'pending';
-    const conf = ext.weakestRequiredConf == null ? '' : ` · weakest required field at ${Math.round(Number(ext.weakestRequiredConf) * 100)}%`;
-
-    const bandStyle = {
-      auto_applied: { bg:'#1f4d2e', fg:'#a3ffb3', border:'#28a745', icon:'✓', label:'Auto-applied' },
-      review_high:  { bg:'#3a2c00', fg:'#ffd591', border:'#d6a700', icon:'⚠', label:'Queued for review (high confidence)' },
-      review_low:   { bg:'#3a1c00', fg:'#ffb380', border:'#cc6600', icon:'⚠', label:'Queued for review (low confidence)' },
-      rejected:     { bg:'#5a2c2c', fg:'#ffb3b3', border:'#d22',    icon:'✕', label:'Rejected (required fields missing or below threshold)' },
-      error:        { bg:'#5a2c2c', fg:'#ffb3b3', border:'#d22',    icon:'❌', label:'Extraction errored' },
-    }[band] || { bg:'#3a3a3a', fg:'#ddd', border:'#888', icon:'…', label:band };
-
-    result.style.background = bandStyle.bg;
-    result.style.color = bandStyle.fg;
-    result.style.borderColor = bandStyle.border;
-
-    const reviewLink = (band === 'review_high' || band === 'review_low' || band === 'rejected')
-      ? `<div style="margin-top:8px;"><button class="btn btn-ghost" onclick="navigateTo('compliance')" style="padding:4px 12px;font-size:12px;color:${bandStyle.fg};border:1px solid ${bandStyle.border};">→ Open in Compliance Queue</button></div>`
-      : '';
-    const docLine = `Version ${esc(doc.version_number)} · ${esc(doc.original_filename || 'sds.pdf')}`;
-
-    result.innerHTML = `
-      <div style="font-weight:700;font-size:13px;margin-bottom:4px;">${bandStyle.icon} ${esc(bandStyle.label)}${conf}</div>
-      <div style="font-size:11px;opacity:.85;">${docLine}</div>
-      ${band === 'auto_applied'
-        ? `<div style="font-size:11px;margin-top:6px;">High-confidence fields written directly to the SKU master. Review the audit log on the SKU detail page if you want to see what changed.</div>`
-        : band === 'rejected'
-          ? `<div style="font-size:11px;margin-top:6px;">Some required hazmat fields were missing or below 75% confidence. Reviewer must fix before this SKU can be considered compliant.</div>`
-          : `<div style="font-size:11px;margin-top:6px;">Some fields landed below the 95% auto-apply threshold or contained changes vs. previously approved values. They're queued for hazmat-certified reviewer approval.</div>`}
-      ${reviewLink}
-    `;
-
-    // If auto-applied, refresh the form so the user sees the new values
-    // pulled into the visible inputs. Edit mode reload — re-open the
-    // modal against the same SKU id.
-    if(band === 'auto_applied'){
-      setTimeout(() => {
-        if(typeof loadInventory === 'function') loadInventory();
-      }, 800);
-    }
+    renderSdsExtractResult(d.extraction || {}, d.document || {});
   } catch(err){
     result.style.borderColor = 'var(--red)';
     result.style.color = 'var(--red)';
     result.innerHTML = `❌ Network error: ${esc(err.message || err)}`;
+  }
+}
+
+// Re-run extraction on an existing SDS document (no upload, just kicks
+// Claude again on the same bytes). Used when dedupe rejected a re-upload
+// but the user wants a fresh extraction run — e.g. after a prompt or
+// triage-band fix.
+async function reRunExtractionOnExistingDoc(docId){
+  const result = document.getElementById('itemSdsIntelResult');
+  result.style.background = 'transparent';
+  result.style.borderColor = 'var(--blue)';
+  result.style.color = 'var(--text2)';
+  result.innerHTML = `🤖 Re-running extraction on existing SDS… (typically 10-30 sec for multi-page SDS)`;
+  try {
+    const r = await fetch(`${API}/sds-documents/${docId}/extract`, {
+      method:'POST', headers:{ 'Authorization': `Bearer ${T}` },
+    });
+    const d = await r.json();
+    if(!r.ok){
+      result.style.borderColor = 'var(--red)';
+      result.style.color = 'var(--red)';
+      result.innerHTML = `❌ ${esc(d.error || 'Re-extraction failed')}`;
+      return;
+    }
+    // /sds-documents/:id/extract returns { extractionId, band, weakestRequiredConf }
+    // — synthesize the same shape as the upload-and-extract endpoint for
+    // the shared renderer.
+    renderSdsExtractResult(d, { id: docId, version_number: '?', original_filename: 'sds.pdf' });
+  } catch(err){
+    result.style.borderColor = 'var(--red)';
+    result.style.color = 'var(--red)';
+    result.innerHTML = `❌ Network error: ${esc(err.message || err)}`;
+  }
+}
+
+// Shared renderer for the SDS Intel result panel — used by both the
+// upload-and-extract path and the re-extract-existing-doc path.
+function renderSdsExtractResult(ext, doc){
+  const result = document.getElementById('itemSdsIntelResult');
+  const band = ext.band || 'pending';
+  const conf = ext.weakestRequiredConf == null ? '' : ` · weakest required field at ${Math.round(Number(ext.weakestRequiredConf) * 100)}%`;
+
+  const bandStyle = {
+    auto_applied: { bg:'#1f4d2e', fg:'#a3ffb3', border:'#28a745', icon:'✓', label:'Auto-applied' },
+    review_high:  { bg:'#3a2c00', fg:'#ffd591', border:'#d6a700', icon:'⚠', label:'Queued for review (high confidence)' },
+    review_low:   { bg:'#3a1c00', fg:'#ffb380', border:'#cc6600', icon:'⚠', label:'Queued for review (low confidence)' },
+    rejected:     { bg:'#5a2c2c', fg:'#ffb3b3', border:'#d22',    icon:'✕', label:'Rejected (required fields missing or below threshold)' },
+    error:        { bg:'#5a2c2c', fg:'#ffb3b3', border:'#d22',    icon:'❌', label:'Extraction errored' },
+  }[band] || { bg:'#3a3a3a', fg:'#ddd', border:'#888', icon:'…', label:band };
+
+  result.style.background = bandStyle.bg;
+  result.style.color = bandStyle.fg;
+  result.style.borderColor = bandStyle.border;
+
+  const reviewLink = (band === 'review_high' || band === 'review_low' || band === 'rejected')
+    ? `<div style="margin-top:8px;"><button class="btn btn-ghost" onclick="navigateTo('compliance')" style="padding:4px 12px;font-size:12px;color:${bandStyle.fg};border:1px solid ${bandStyle.border};">→ Open in Compliance Queue</button></div>`
+    : '';
+  const docLine = `Version ${esc(doc.version_number)} · ${esc(doc.original_filename || 'sds.pdf')}`;
+
+  result.innerHTML = `
+    <div style="font-weight:700;font-size:13px;margin-bottom:4px;">${bandStyle.icon} ${esc(bandStyle.label)}${conf}</div>
+    <div style="font-size:11px;opacity:.85;">${docLine}</div>
+    ${band === 'auto_applied'
+      ? `<div style="font-size:11px;margin-top:6px;">High-confidence fields written directly to the SKU master. Review the audit log on the SKU detail page if you want to see what changed.</div>`
+      : band === 'rejected'
+        ? `<div style="font-size:11px;margin-top:6px;">Some required hazmat fields were missing or below 75% confidence. Reviewer must fix before this SKU can be considered compliant.</div>`
+        : `<div style="font-size:11px;margin-top:6px;">Some fields landed below the 95% auto-apply threshold or contained changes vs. previously approved values. They're queued for hazmat-certified reviewer approval.</div>`}
+    ${reviewLink}
+  `;
+
+  // If auto-applied, refresh the form so the user sees the new values
+  // pulled into the visible inputs.
+  if(band === 'auto_applied'){
+    setTimeout(() => {
+      if(typeof loadInventory === 'function') loadInventory();
+    }, 800);
   }
 }
 
