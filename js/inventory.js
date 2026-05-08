@@ -43,7 +43,7 @@ async function loadInventory(){
                  }))}'>Break</button>`
       : '';
     return `
-      <tr>
+      <tr class="js-inv-row" data-id="${esc(r.id)}" style="cursor:pointer;">
         <td style="font-weight:600;color:var(--blue);">${esc(r.sku_code || '')}</td>
         <td>${esc(r.sku_name || '')}</td>
         <td style="color:var(--text2);">${esc(r.client_name || '')}</td>
@@ -57,12 +57,21 @@ async function loadInventory(){
       </tr>`;
   }).join('');
 
-  // Wire break buttons
+  // Wire break buttons (stop propagation so clicking Break doesn't also
+  // trigger the row's drill-down).
   b.querySelectorAll('.js-break-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
       try { openCaseBreakFor(JSON.parse(btn.dataset.payload)); }
-      catch(e){ console.error('break payload parse error', e); }
+      catch(err){ console.error('break payload parse error', err); }
     });
+  });
+
+  // Row click -> Inventory Detail modal
+  b.querySelectorAll('.js-inv-row').forEach(row => {
+    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
+    row.addEventListener('mouseout',  () => row.style.background = '');
+    row.addEventListener('click', () => openInventoryDetail(row.dataset.id));
   });
 }
 
@@ -1053,4 +1062,179 @@ async function uploadItemAttachments(skuId, files){
     } catch(_) { /* keep going */ }
   }
   loadItemAttachmentsList(skuId);
+}
+
+// =============================================================================
+// INVENTORY DETAIL MODAL — drill-down from a row click. Renders the full
+// origin trail for an inventory entry: SKU master, lot, license-plate
+// family (parent / children if case-broken), inbound origin (PO + supplier
+// + receiver), and any current allocations holding the LP.
+// =============================================================================
+
+async function openInventoryDetail(invId){
+  const modal = document.getElementById('invDetailModal');
+  const body  = document.getElementById('invDetailBody');
+  body.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
+  modal.style.display = 'flex';
+
+  const d = await apiGet(`/inventory/${invId}`);
+  if(!d){
+    body.innerHTML = '<div style="color:var(--red);padding:24px;text-align:center;">Could not load inventory detail</div>';
+    return;
+  }
+
+  const inv = d.inventory;
+  document.getElementById('invDetailTitle').textContent =
+    `${inv.sku_code || ''} — ${inv.sku_name || ''}`;
+
+  // Wire Edit Item Master button to jump into the SKU edit modal
+  const editBtn = document.getElementById('invDetailEditItemBtn');
+  editBtn.onclick = () => {
+    closeModal('invDetailModal');
+    openItemFormModal(inv.sku_id);
+  };
+
+  // ---- HEADER STATS ----
+  const statusColor = inv.status === 'available' ? 'var(--green)'
+                    : inv.status === 'allocated' ? 'var(--blue)'
+                    : inv.status === 'damaged'   ? 'var(--red)'
+                    :                              'var(--amber)';
+
+  const headerHtml = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px;">
+      <div style="background:var(--bg);border-radius:8px;padding:12px;">
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Quantity</div>
+        <div style="font-size:22px;font-weight:700;color:var(--blue);margin-top:2px;">${esc(Number(inv.quantity || 0).toLocaleString())}</div>
+        <div style="font-size:11px;color:var(--text2);">${esc(inv.sku_uom || 'EA')}</div>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:12px;">
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Status</div>
+        <div style="font-size:14px;font-weight:700;color:${statusColor};margin-top:6px;">${esc((inv.status || '').toUpperCase())}</div>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:12px;">
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Location</div>
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-top:6px;font-family:ui-monospace,monospace;">${esc(inv.location_code || '—')}</div>
+        <div style="font-size:11px;color:var(--text2);">${esc(inv.zone_name || '')}</div>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:12px;">
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">License Plate</div>
+        <div style="font-size:13px;font-weight:700;color:var(--blue);margin-top:6px;font-family:ui-monospace,monospace;">${esc(inv.lp_number || '—')}</div>
+        <div style="font-size:11px;color:var(--text2);">${esc(inv.lp_type || '')}</div>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:12px;">
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Lot</div>
+        <div style="font-size:13px;font-weight:700;color:var(--blue);margin-top:6px;font-family:ui-monospace,monospace;">${esc(inv.lot_number || '—')}</div>
+        <div style="font-size:11px;color:${inv.expiry_date && new Date(inv.expiry_date) < new Date(Date.now() + 30*864e5) ? 'var(--red)' : 'var(--text2)'};">
+          ${inv.expiry_date ? 'Exp ' + esc(new Date(inv.expiry_date).toLocaleDateString()) : ''}
+        </div>
+      </div>
+    </div>`;
+
+  // ---- ITEM MASTER ----
+  const dims = [inv.length_in, inv.width_in, inv.height_in].some(x => x != null)
+    ? `${inv.length_in ?? '—'} × ${inv.width_in ?? '—'} × ${inv.height_in ?? '—'} in`
+    : '—';
+  const hazmatChips = inv.is_hazmat
+    ? `<span class="chip chip-danger" style="font-size:10px;">⚠ HAZMAT${inv.un_number ? ' ' + esc(inv.un_number) : ''}${inv.hazard_class ? ' · Cl ' + esc(inv.hazard_class) : ''}${inv.packing_group ? ' · PG ' + esc(inv.packing_group) : ''}</span>`
+    : '';
+  const itemHtml = `
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-head"><div class="card-title">Item Master</div><div style="flex:1"></div>${hazmatChips}</div>
+      <div style="padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:12px;">
+        <div><span style="color:var(--text2);">SKU Code:</span> <span style="font-weight:600;">${esc(inv.sku_code || '—')}</span></div>
+        <div><span style="color:var(--text2);">Type:</span> ${esc(inv.sku_type || '—')}</div>
+        <div><span style="color:var(--text2);">Client:</span> ${esc(inv.client_name || '')} <span style="color:var(--muted);">(${esc(inv.client_code || '')})</span></div>
+        <div><span style="color:var(--text2);">UPC:</span> ${esc(inv.upc || '—')}</div>
+        <div><span style="color:var(--text2);">Dimensions:</span> ${esc(dims)}</div>
+        <div><span style="color:var(--text2);">Weight:</span> ${inv.weight_lbs != null ? esc(inv.weight_lbs) + ' lbs' : '—'}</div>
+        <div><span style="color:var(--text2);">NMFC:</span> ${esc(inv.nmfc_code || '—')}</div>
+        <div><span style="color:var(--text2);">Freight Class:</span> ${esc(inv.freight_class || '—')}</div>
+      </div>
+      ${inv.description ? `<div style="padding:0 18px 14px;font-size:12px;color:var(--text2);"><strong style="color:var(--text);">Description:</strong> ${esc(inv.description)}</div>` : ''}
+      ${inv.special_handling_instructions ? `<div style="margin:0 18px 14px;padding:8px 12px;background:var(--amber-bg);color:var(--amber);font-size:12px;border-left:3px solid var(--amber);">📋 <strong>Special handling:</strong> ${esc(inv.special_handling_instructions)}</div>` : ''}
+    </div>`;
+
+  // ---- LOT DETAILS ----
+  const lotHtml = inv.lot_id ? `
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-head"><div class="card-title">Lot Detail</div></div>
+      <div style="padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:12px;">
+        <div><span style="color:var(--text2);">Lot Number:</span> <span style="font-weight:600;color:var(--blue);font-family:ui-monospace,monospace;">${esc(inv.lot_number || '—')}</span></div>
+        <div><span style="color:var(--text2);">Expiry Date:</span> ${inv.expiry_date ? esc(new Date(inv.expiry_date).toLocaleDateString()) : '—'}</div>
+        <div><span style="color:var(--text2);">Manufacture Date:</span> ${inv.manufacture_date ? esc(new Date(inv.manufacture_date).toLocaleDateString()) : '—'}</div>
+        <div><span style="color:var(--text2);">Supplier Lot:</span> ${esc(inv.supplier_lot || '—')}</div>
+      </div>
+    </div>` : '';
+
+  // ---- LP FAMILY (parent + children) ----
+  const familyHtml = (d.parent_lp || (d.child_lps && d.child_lps.length)) ? `
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-head"><div class="card-title">LP Family</div></div>
+      <div style="padding:14px 18px;font-size:12px;">
+        ${d.parent_lp ? `
+          <div style="margin-bottom:8px;">
+            <span style="color:var(--text2);">Parent LP (this is a case-break child of):</span>
+            <span class="lp-badge lp-original" style="margin-left:8px;">${esc(d.parent_lp.lp_number)}</span>
+          </div>` : ''}
+        ${d.child_lps && d.child_lps.length ? `
+          <div>
+            <span style="color:var(--text2);">Child LPs (this LP was case-broken into):</span>
+            <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;">
+              ${d.child_lps.map(c => `<span class="lp-badge ${c.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(c.lp_number)}</span>`).join('')}
+            </div>
+          </div>` : ''}
+      </div>
+    </div>` : '';
+
+  // ---- INBOUND ORIGIN ----
+  const inboundHtml = d.inbound ? `
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-head"><div class="card-title">Inbound Origin</div></div>
+      <div style="padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:12px;">
+        <div><span style="color:var(--text2);">Received:</span> ${d.inbound.received_at ? esc(new Date(d.inbound.received_at).toLocaleString()) : '—'}</div>
+        <div><span style="color:var(--text2);">Received By:</span> ${esc(d.inbound.received_by_name || d.inbound.received_by_email || '—')}</div>
+        <div><span style="color:var(--text2);">PO Number:</span> ${d.inbound.po_number ? `<span style="font-weight:600;color:var(--blue);">${esc(d.inbound.po_number)}</span>` : '—'}</div>
+        <div><span style="color:var(--text2);">Customer PO:</span> ${esc(d.inbound.external_po || '—')}</div>
+        <div><span style="color:var(--text2);">Supplier:</span> ${esc(d.inbound.supplier_name || '—')}</div>
+        <div><span style="color:var(--text2);">Received Qty:</span> ${esc(d.inbound.received_qty || 0)}</div>
+        <div><span style="color:var(--text2);">Condition:</span> ${esc(d.inbound.condition || '—')}</div>
+        ${d.inbound.notes ? `<div style="grid-column:1/-1;"><span style="color:var(--text2);">Notes:</span> ${esc(d.inbound.notes)}</div>` : ''}
+      </div>
+    </div>` : `
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-head"><div class="card-title">Inbound Origin</div></div>
+      <div style="padding:14px 18px;color:var(--muted);font-size:12px;">No receiving record found for this LP. May have been entered directly or pre-existed before this WMS install.</div>
+    </div>`;
+
+  // ---- CURRENT ALLOCATIONS ----
+  const allocHtml = d.current_allocations && d.current_allocations.length ? `
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-head"><div class="card-title">Current Allocations</div><div style="font-size:11px;color:var(--text2);margin-left:8px;">orders holding this LP</div></div>
+      <table class="data-table" style="margin:0;font-size:12px;">
+        <thead><tr><th>Order</th><th>Ship To</th><th>Required Ship</th><th class="right">Qty</th><th>Status</th></tr></thead>
+        <tbody>
+          ${d.current_allocations.map(a => `
+            <tr class="js-inv-alloc-row" data-order-id="${esc(a.order_id)}" style="cursor:pointer;">
+              <td style="font-weight:600;color:var(--blue);">${esc(a.order_number || '')}</td>
+              <td style="color:var(--text2);">${esc(a.ship_to_name || '—')}</td>
+              <td>${a.required_ship_date ? esc(new Date(a.required_ship_date).toLocaleDateString()) : '—'}</td>
+              <td class="right">${esc(a.quantity || 0)}</td>
+              <td><span class="chip ${a.allocation_status === 'PICKED' ? 'chip-success' : 'chip-active'}">${esc(a.allocation_status)}</span> · ${esc(a.order_status || '')}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : '';
+
+  body.innerHTML = headerHtml + itemHtml + lotHtml + familyHtml + inboundHtml + allocHtml;
+
+  // Wire allocation rows -> jump to that order
+  body.querySelectorAll('.js-inv-alloc-row').forEach(row => {
+    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
+    row.addEventListener('mouseout',  () => row.style.background = '');
+    row.addEventListener('click', () => {
+      closeModal('invDetailModal');
+      navigateTo('orders');
+      setTimeout(() => openOrderDetail(row.dataset.orderId), 100);
+    });
+  });
 }

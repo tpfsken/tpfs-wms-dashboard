@@ -1113,6 +1113,24 @@
   </div>
 </div>
 
+<!-- INVENTORY DETAIL MODAL — opens on row click, shows full origin trail -->
+<div id="invDetailModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div class="modal" style="max-width:880px;">
+    <div class="modal-head">
+      <div class="modal-title" id="invDetailTitle">Inventory Detail</div>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" id="invDetailEditItemBtn" style="padding:4px 12px;font-size:12px;">Edit Item Master</button>
+      <button class="btn btn-ghost" onclick="closeModal('invDetailModal')" style="padding:6px 12px;">✕</button>
+    </div>
+    <div class="modal-body" id="invDetailBody" style="font-size:13px;">
+      <div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('invDetailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- NEW / EDIT ITEM (SKU) MODAL -->
 <div id="itemFormModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
   <div class="modal" style="max-width:820px;">
