@@ -39,6 +39,7 @@
       <div class="nav-item" data-page="clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg><span class="nav-label">Clients</span></div>
       <div class="nav-item" data-page="billing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg><span class="nav-label">Billing</span></div>
       <div class="nav-item" data-page="reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 20V10M12 20V4M6 20v-6"/></svg><span class="nav-label">Reports</span></div>
+      <div class="nav-item" data-page="compliance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span class="nav-label">Compliance</span><span id="navComplianceBadge" class="nav-badge" style="display:none;background:var(--amber);color:#000;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:auto;"></span></div>
     </div>
     <div class="nav-portal-only">
       <div class="nav-section">Portal</div>
@@ -866,6 +867,84 @@
   </div>
   </div><!-- /reportsContent -->
 </div>
+
+<!-- =================================================================== -->
+<!-- COMPLIANCE — SDS Intelligence reviewer queue + history. The human-  -->
+<!-- in-the-loop UI for extractions in review_high / review_low /        -->
+<!-- rejected bands.                                                     -->
+<!-- =================================================================== -->
+<div class="page" id="page-compliance">
+  <!-- LEVEL 0: Queue / History -->
+  <div id="complianceListView">
+    <div class="page-header">
+      <button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button>
+      <div><div class="page-title">🛡 Compliance</div><div class="page-subtitle">SDS Intelligence reviewer queue · per-field confidence + audit log</div></div>
+    </div>
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px;">
+      <button id="cmpTabQueue"   class="cmp-tab cmp-tab-active" onclick="cmpSwitchTab('queue')">Queue</button>
+      <button id="cmpTabHistory" class="cmp-tab"                 onclick="cmpSwitchTab('history')">History</button>
+      <button id="cmpTabSettings" class="cmp-tab"                onclick="cmpSwitchTab('settings')">Settings</button>
+    </div>
+
+    <div id="cmpQueueTab">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;">Extractions awaiting human review. Each item lists the weakest required field's confidence and the diff vs. previously-applied values. Click to open the side-by-side reviewer.</div>
+      <div id="cmpQueueBody"></div>
+    </div>
+
+    <div id="cmpHistoryTab" style="display:none;">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;">All extractions across time. Use this for forensic replay — every field's source citation, prior value, reviewer trail, and applied SKU column are queryable.</div>
+      <div id="cmpHistoryFilters" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <input class="form-input" id="cmpHistorySearch" placeholder="Search SKU code or filename..." style="max-width:260px;">
+      </div>
+      <div id="cmpHistoryBody"></div>
+    </div>
+
+    <div id="cmpSettingsTab" style="display:none;">
+      <div class="card" style="padding:20px;">
+        <div style="font-size:14px;font-weight:600;margin-bottom:12px;">Confidence thresholds</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:14px;">Per-field confidence determines triage. Currently baked in at the API layer — making these editable per-warehouse is a v2 feature.</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:12px 18px;font-size:13px;">
+          <div style="color:var(--green);">≥ 95%</div><div>Auto-applied — no review needed (provided no diff vs prior value)</div>
+          <div style="color:var(--amber);">85–94%</div><div>Queued as <strong>review_high</strong> — needs reviewer accept/edit/reject</div>
+          <div style="color:#cc6600;">75–84%</div><div>Queued as <strong>review_low</strong> — closer scrutiny required</div>
+          <div style="color:var(--red);">&lt; 75%</div><div>Rejected — required field missing or unreliable</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEVEL 1: Reviewer split-pane (PDF on left, fields on right) -->
+  <div id="complianceReviewerView" style="display:none;">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" onclick="cmpCloseReviewer()">← Back to Queue</button>
+        <div><div class="page-title" id="cmpReviewerTitle">Reviewing extraction</div><div class="page-subtitle" id="cmpReviewerSub">—</div></div>
+        <div style="flex:1"></div>
+        <span class="chip" id="cmpReviewerBand"></span>
+        <button class="btn btn-success" id="cmpAcceptAllGreenBtn" style="display:none;" title="Accept every field that's already auto-eligible (≥95% confidence, no diff). Yellow/orange/red items still need individual review.">✓ Accept all green</button>
+      </div>
+    </div>
+    <div id="cmpReviewerSplit" style="display:grid;grid-template-columns:1fr 460px;gap:18px;align-items:start;">
+      <!-- PDF pane -->
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--panel);">
+          <button class="btn btn-ghost" onclick="cmpPdfPrev()" style="padding:4px 10px;">◀</button>
+          <div style="font-size:12px;color:var(--text2);" id="cmpPdfPageInfo">Loading…</div>
+          <button class="btn btn-ghost" onclick="cmpPdfNext()" style="padding:4px 10px;">▶</button>
+          <div style="flex:1"></div>
+          <button class="btn btn-ghost" onclick="cmpPdfZoomOut()" style="padding:4px 10px;" title="Zoom out">−</button>
+          <button class="btn btn-ghost" onclick="cmpPdfZoomIn()" style="padding:4px 10px;" title="Zoom in">+</button>
+        </div>
+        <div id="cmpPdfWrap" style="overflow:auto;max-height:75vh;background:#1a1a1a;text-align:center;padding:14px;">
+          <canvas id="cmpPdfCanvas" style="background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.4);"></canvas>
+        </div>
+      </div>
+
+      <!-- Fields pane -->
+      <div id="cmpFieldsBody" style="max-height:80vh;overflow-y:auto;"></div>
+    </div>
+  </div>
+</div>
 </div>
 
 <!-- INLINE SKU CREATE MODAL (used from Intake review when SKU code unknown) -->
@@ -1625,6 +1704,15 @@
 </div>
 
 <!-- Scripts: load order matters. util/combo first, then domain modules, then app.js boots. -->
+<!-- PDF.js for the Compliance reviewer's source-document viewer. Loaded
+     from Cloudflare CDN — small enough that we don't bother bundling
+     and the worker file lives at the same CDN path. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if(typeof pdfjsLib !== 'undefined'){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
 <script src="js/util.js"></script>
 <script src="js/combo.js"></script>
 <script src="js/printDocs.js"></script>
@@ -1639,6 +1727,7 @@
 <script src="js/portal.js"></script>
 <script src="js/picker.js"></script>
 <script src="js/floor.js"></script>
+<script src="js/compliance.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

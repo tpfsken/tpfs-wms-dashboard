@@ -58,7 +58,7 @@ function closeModal(id){
 const titles = {
   dashboard:'Dashboard', inventory:'Inventory', orders:'Orders',
   inbound:'Receiving', intake:'Intake', clients:'Clients',
-  billing:'Billing', reports:'Reports',
+  billing:'Billing', reports:'Reports', compliance:'Compliance',
   portalHome:'Customer Portal', portalNewOrder:'Place an Order', portalIntake:'Upload Documents',
   // Floor mode (phone-first ops shell)
   floorHome:'Warehouse Floor', floorPickList:'Orders to Pick',
@@ -75,6 +75,7 @@ const loaders = {
   clients:        loadClients,
   billing:        loadBilling,
   reports:        loadReports,
+  compliance:     loadCompliance,
   portalHome:     loadPortalHome,
   portalNewOrder: loadPortalNewOrder,
   portalIntake:   loadPortalIntake,

@@ -439,3 +439,83 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .sev-chip-moderate { background:#3a2c00; color:#ffd591; border-color:#a07700; }
 .sev-chip-standard { background:#0a2a0a; color:#a3ffb3; border-color:#3a8a3a; }
 
+
+/* ============================================================================
+   COMPLIANCE PAGE — tabs + queue cards + per-field reviewer cards.
+   ============================================================================ */
+.cmp-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text2);
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cmp-tab:hover { color: var(--text); }
+.cmp-tab-active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+
+.cmp-queue-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+.cmp-queue-card:hover { border-color: var(--blue); }
+
+.cmp-band-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.cmp-band-auto_applied { background: #1f4d2e; color: #a3ffb3; border: 1px solid #28a745; }
+.cmp-band-review_high  { background: #3a2c00; color: #ffd591; border: 1px solid #d6a700; }
+.cmp-band-review_low   { background: #3a1c00; color: #ffb380; border: 1px solid #cc6600; }
+.cmp-band-rejected     { background: #3a0a0a; color: #ff8888; border: 1px solid #cc1f1f; }
+.cmp-band-error        { background: #3a0a0a; color: #ff8888; border: 1px solid #cc1f1f; }
+.cmp-band-pending      { background: #2a2a2a; color: #ddd;    border: 1px solid #444; }
+
+.cmp-field-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.cmp-field-card.applied  { border-left: 3px solid #28a745; }
+.cmp-field-card.rejected { border-left: 3px solid #cc1f1f; }
+.cmp-field-card.review   { border-left: 3px solid #d6a700; }
+
+.cmp-confbar {
+  height: 4px;
+  border-radius: 2px;
+  background: #222;
+  overflow: hidden;
+  margin: 6px 0;
+}
+.cmp-confbar-fill { height: 100%; transition: width .2s; }
+
+.cmp-source-quote {
+  background: #1a1a1a;
+  border-left: 2px solid var(--blue);
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #cfd8e3;
+  font-style: italic;
+  margin: 6px 0;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+}
+.cmp-source-quote:hover { background: #232323; }
+
