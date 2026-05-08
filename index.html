@@ -134,7 +134,7 @@
   </div>
 
   <div class="page" id="page-inventory">
-    <div class="page-header"><button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><input type="text" class="form-input" id="invSearch" placeholder="Search SKU or lot..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadInventory()">Refresh</button><button class="btn btn-primary ops-only" onclick="openItemFormModal()">+ New Item</button><button class="btn btn-primary ops-only" onclick="showCaseBreakModal()">⊞ Case Break</button></div>
+    <div class="page-header"><button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location · add new items from the client's Item Master tab</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><input type="text" class="form-input" id="invSearch" placeholder="Search SKU or lot..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadInventory()">Refresh</button><button class="btn btn-primary ops-only" onclick="showCaseBreakModal()">⊞ Case Break</button></div>
     <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;"><div style="flex:1;overflow:auto;"><table class="data-table"><thead><tr><th>SKU</th><th>Description</th><th>Client</th><th>Type</th><th>Lot</th><th>Location</th><th>LP</th><th class="right">Qty</th><th>Status</th><th style="width:70px;"></th></tr></thead><tbody id="invBody"></tbody></table></div></div>
   </div>
 
@@ -162,9 +162,15 @@
       </div>
       <div style="display:grid;grid-template-columns:1fr 360px;gap:20px;">
         <div>
-          <div class="detail-panel" style="margin-bottom:16px;"><div class="detail-grid" id="ordInfoGrid"></div></div>
-          <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Order Lines</div></div><div><table class="data-table"><thead><tr><th>Line</th><th>SKU</th><th>Description</th><th>Type</th><th class="right">Ordered</th><th class="right">Allocated</th><th class="right">Picked</th><th class="right">Shipped</th></tr></thead><tbody id="ordLinesBody"></tbody></table></div></div>
-          <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Shipments</div></div><div id="ordShipments"></div></div>
+          <!-- HEADER INFO — order metadata + ship-to address merged in -->
+          <div class="detail-panel" style="margin-bottom:16px;">
+            <div class="detail-grid" id="ordInfoGrid"></div>
+            <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px;">
+              <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-bottom:6px;">📦 Ship To</div>
+              <div id="ordShipTo"></div>
+            </div>
+          </div>
+          <!-- ATTACHMENTS -->
           <div class="card" id="ordAttachCard" style="margin-bottom:16px;">
             <div class="card-head">
               <div class="card-title">Attachments</div>
@@ -177,7 +183,12 @@
             <div id="ordAttachList" style="padding:0 20px 16px 20px;"></div>
             <div id="ordAttachStatus" style="padding:0 20px 12px 20px;font-size:12px;"></div>
           </div>
+          <!-- ORDER LINES -->
+          <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Order Lines</div></div><div><table class="data-table"><thead><tr><th>Line</th><th>SKU</th><th>Description</th><th>Type</th><th class="right">Ordered</th><th class="right">Allocated</th><th class="right">Picked</th><th class="right">Shipped</th></tr></thead><tbody id="ordLinesBody"></tbody></table></div></div>
+          <!-- ALLOCATE INVENTORY -->
           <div id="allocPanel" class="card" style="margin-bottom:16px;display:none;"><div class="card-head"><div class="card-title">Allocate Inventory</div><div class="card-badge" style="background:var(--blue-bg);color:var(--blue);" id="allocModeBadge">FEFO</div></div><div style="padding:20px;"><div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Select lots and quantities. Override the recommendation as needed.</div><div id="allocLinesList"></div><div style="display:flex;gap:8px;margin-top:16px;"><button class="btn btn-primary" onclick="submitAllocation()">Confirm Allocation</button><button class="btn btn-ghost" onclick="document.getElementById('allocPanel').style.display='none'">Cancel</button></div><div id="allocError" style="color:var(--red);font-size:13px;margin-top:8px;"></div><div id="allocSuccess" style="color:var(--green);font-size:13px;margin-top:8px;"></div></div></div>
+          <!-- SHIPMENTS — only meaningful for multi-shipment orders, kept after allocate -->
+          <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Shipments</div></div><div id="ordShipments"></div></div>
           <div id="pickListPanel" class="card" style="display:none;margin-bottom:16px;">
             <div class="card-head">
               <div class="card-title">Pick List</div>
@@ -205,7 +216,6 @@
         </div>
         <div>
           <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Workflow</div></div><div style="padding:16px;" id="ordWorkflowSteps"></div><div style="padding:0 16px 16px;" id="ordTransitionBtns"></div><div style="padding:0 16px 8px;"><div id="ordTransError" style="color:var(--red);font-size:13px;"></div><div id="ordTransSuccess" style="color:var(--green);font-size:13px;"></div></div></div>
-          <div class="card"><div class="card-head"><div class="card-title">Ship To</div></div><div style="padding:16px;" id="ordShipTo"></div></div>
         </div>
       </div>
     </div>
@@ -1539,10 +1549,13 @@
 
       <div class="form-row form-row-2">
         <div class="form-group"><label class="form-label">External Order #</label><input class="form-input" id="eoExternalNum"></div>
-        <div class="form-group"><label class="form-label">Required Ship Date</label><input class="form-input" type="date" id="eoShipDate"></div>
+        <div class="form-group"><label class="form-label">PRO # <span style="color:var(--text2);font-weight:400;">(carrier tracking)</span></label><input class="form-input" id="eoProNum" placeholder="e.g. 12345-6789"></div>
       </div>
       <div class="form-row form-row-2">
+        <div class="form-group"><label class="form-label">Required Ship Date</label><input class="form-input" type="date" id="eoShipDate"></div>
         <div class="form-group"><label class="form-label">Carrier Code</label><input class="form-input" id="eoCarrierCode"></div>
+      </div>
+      <div class="form-row form-row-2">
         <div class="form-group"><label class="form-label">Ship Method</label><input class="form-input" id="eoShipMethod" placeholder="GROUND, EXPRESS, LTL..."></div>
       </div>
 

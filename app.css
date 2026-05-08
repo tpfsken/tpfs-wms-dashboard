@@ -68,7 +68,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .data-table th.right,.data-table td.right{text-align:right}
 
 .chip{font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;display:inline-block}
-.chip-new{background:rgba(255,255,255,.06);color:var(--text2)}
+.chip-new{background:rgba(255,140,0,.15);color:#ffa657;border:1px solid rgba(255,140,0,.45);font-weight:700}
 .chip-active{background:var(--blue-bg);color:var(--blue)}
 .chip-success{background:var(--green-bg);color:var(--green)}
 .chip-warning{background:var(--amber-bg);color:var(--amber)}

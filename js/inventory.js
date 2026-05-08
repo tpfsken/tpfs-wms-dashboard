@@ -1552,7 +1552,6 @@ async function openInventoryDetail(invId){
         <div><span style="color:var(--text2);">Lot Number:</span> <span style="font-weight:600;color:var(--blue);font-family:ui-monospace,monospace;">${esc(inv.lot_number || '—')}</span></div>
         <div><span style="color:var(--text2);">Expiry Date:</span> ${inv.expiry_date ? esc(new Date(inv.expiry_date).toLocaleDateString()) : '—'}</div>
         <div><span style="color:var(--text2);">Manufacture Date:</span> ${inv.manufacture_date ? esc(new Date(inv.manufacture_date).toLocaleDateString()) : '—'}</div>
-        <div><span style="color:var(--text2);">Supplier Lot:</span> ${esc(inv.supplier_lot || '—')}</div>
       </div>
     </div>` : '';
 

@@ -125,6 +125,7 @@ async function openOrderDetail(id){
   const fields = [
     {l:'Order #',  v:d.order_number},
     {l:'External', v:d.external_order_number || '—'},
+    {l:'PRO #',    v:d.pro_number || '—'},
     {l:'Channel',  v:d.channel || '—'},
     {l:'Type',     v:d.order_type || '—'},
     {l:'Customer', v:d.customer_name || '—'},
@@ -1327,6 +1328,7 @@ function openEditOrderModal(){
 
   document.getElementById('editOrderTitle').textContent = `Edit Order — ${COD.order_number || ''}`;
   document.getElementById('eoExternalNum').value = COD.external_order_number || '';
+  document.getElementById('eoProNum').value      = COD.pro_number || '';
   // <input type=date> wants YYYY-MM-DD; trim any time portion off ISO strings
   document.getElementById('eoShipDate').value =
     COD.required_ship_date ? String(COD.required_ship_date).slice(0, 10) : '';
@@ -1551,6 +1553,7 @@ async function submitEditOrder(){
   const v = (id) => document.getElementById(id).value.trim();
   const body = {
     externalOrderNumber: v('eoExternalNum') || null,
+    proNumber:           v('eoProNum') || null,
     requiredShipDate:    v('eoShipDate')    || null,
     carrierCode:         v('eoCarrierCode') || null,
     shipMethod:          v('eoShipMethod')  || null,
