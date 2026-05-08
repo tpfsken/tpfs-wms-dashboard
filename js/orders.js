@@ -175,13 +175,15 @@ async function openOrderDetail(id){
       html += `<button class="btn btn-success js-ship-btn" style="margin:0 8px 8px 0;">📦 Ship Order</button>`;
     }
     if(tr?.allowed?.length){
-      // Forward-progress transitions (anything past NEW that isn't
-      // CANCELLED) get disabled when the order is under-allocated.
-      // The server enforces the same rule; this just gives ops a
-      // visible reason without burning a click.
+      // Block transitions that move PAST the allocation stage when the
+      // order is under-allocated. Going TO ALLOCATED is exempt because
+      // that button opens the allocation panel — it's the gateway, not
+      // a sneak-past. NEW + CANCELLED + ALLOCATED stay clickable; only
+      // PICKING / PACKING / STAGED / SHIPPED get the disabled treatment.
       const blockForward = shortLines.length > 0;
+      const exempt = new Set(['CANCELLED', 'NEW', 'ALLOCATED']);
       html += tr.allowed.map(t => {
-        const blocked = blockForward && t !== 'CANCELLED' && t !== 'NEW';
+        const blocked = blockForward && !exempt.has(t);
         const style = blocked
           ? 'margin:0 8px 8px 0;opacity:0.5;cursor:not-allowed;'
           : 'margin:0 8px 8px 0;';
