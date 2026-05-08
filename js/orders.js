@@ -244,6 +244,10 @@ async function openOrderDetail(id){
   if(d.allocations?.length && !isPickable){
     ah.style.display = 'block';
     document.getElementById('allocHistBadge').textContent = d.allocations.length;
+    // Hide destructive actions if order has shipped — server rejects
+    // them anyway. Also hide for portal users (.ops-only check).
+    const isShipped = d.status === 'SHIPPED';
+    const portal = (typeof isPortalMode === 'function' && isPortalMode());
     document.getElementById('allocHistBody').innerHTML = d.allocations.map(a => {
       const lp = a.lp_number
         ? `<span class="lp-badge ${a.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(a.lp_number)}</span>`
@@ -251,6 +255,18 @@ async function openOrderDetail(id){
       const stChip = a.status === 'PICKED' ? 'chip-success'
                    : a.status === 'CANCELLED' ? 'chip-danger'
                    : 'chip-active';
+
+      let actions = '';
+      if (!portal && !isShipped) {
+        if (a.status === 'PENDING') {
+          actions = `<button class="btn btn-ghost js-unallocate-btn" data-alloc-id="${esc(a.id)}" style="padding:4px 10px;font-size:11px;color:var(--amber);">↺ Unallocate</button>`;
+        } else if (a.status === 'PICKED') {
+          actions = `<button class="btn btn-ghost js-unpick-btn" data-alloc-id="${esc(a.id)}" data-sku="${esc(a.sku_code || '')}" style="padding:4px 10px;font-size:11px;color:var(--red);">↺ Unpick</button>`;
+        } else if (a.status === 'CANCELLED') {
+          actions = '<span style="font-size:11px;color:var(--muted);">cancelled</span>';
+        }
+      }
+
       return `
         <tr>
           <td style="color:var(--blue);">${esc(a.sku_code || '')}</td>
@@ -259,10 +275,88 @@ async function openOrderDetail(id){
           <td>${esc(a.location_code || '')}</td>
           <td class="right" style="font-weight:600;">${esc(a.quantity || 0)}</td>
           <td><span class="chip ${stChip}">${esc(a.status || 'PENDING')}</span></td>
+          <td style="text-align:right;">${actions}</td>
         </tr>`;
     }).join('');
+
+    // Wire the destructive buttons
+    document.querySelectorAll('.js-unallocate-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const a = d.allocations.find(x => x.id === btn.dataset.allocId);
+        showDestructiveEdit({
+          title: '⚠ Unallocate',
+          description: `Release ${a?.quantity || 0} units of <strong>${esc(a?.sku_code || '')}</strong> from lot <strong>${esc(a?.lot_number || 'no lot')}</strong> back to available inventory? The allocation will be marked CANCELLED.`,
+          url: `${API}/orders/${d.id}/allocations/${btn.dataset.allocId}/unallocate`,
+        });
+      });
+    });
+    document.querySelectorAll('.js-unpick-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const a = d.allocations.find(x => x.id === btn.dataset.allocId);
+        showDestructiveEdit({
+          title: '⚠ Unpick',
+          description: `Reverse the pick of <strong>${esc(a?.sku_code || '')}</strong> (${a?.picked_qty || a?.quantity || 0} units)? The allocation will go back to PENDING and the picker will need to re-pick. Billing charge from the original pick stays on the order.`,
+          url: `${API}/orders/${d.id}/allocations/${btn.dataset.allocId}/unpick`,
+        });
+      });
+    });
   } else {
     ah.style.display = 'none';
+  }
+}
+
+// =============================================================================
+// DESTRUCTIVE EDIT MODAL — reusable PIN+reason gate for unallocate / unpick
+// (and any future destructive action). Pops up the red-bordered modal,
+// captures reason + PIN, POSTs to the supplied URL.
+// =============================================================================
+
+function showDestructiveEdit(opts){
+  document.getElementById('destructiveEditTitle').textContent = opts.title;
+  document.getElementById('destructiveEditDescription').innerHTML = opts.description;
+  document.getElementById('destructiveEditReason').value = '';
+  document.getElementById('destructiveEditPin').value = '';
+  document.getElementById('destructiveEditError').textContent = '';
+
+  const btn = document.getElementById('destructiveEditConfirmBtn');
+  btn.disabled = false;
+  btn.textContent = 'Confirm';
+  // Replace the click handler each time so we don't accumulate listeners
+  btn.onclick = () => submitDestructiveEdit(opts.url);
+
+  document.getElementById('destructiveEditModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('destructiveEditReason').focus(), 100);
+}
+
+async function submitDestructiveEdit(url){
+  const reason = document.getElementById('destructiveEditReason').value.trim();
+  const pin    = document.getElementById('destructiveEditPin').value.trim();
+  const errEl  = document.getElementById('destructiveEditError');
+  errEl.textContent = '';
+
+  if(reason.length < 5){
+    errEl.textContent = 'Reason is required (at least 5 characters)'; return;
+  }
+  if(!pin || !/^\d{4,8}$/.test(pin)){
+    errEl.textContent = 'PIN must be 4–8 digits'; return;
+  }
+
+  const btn = document.getElementById('destructiveEditConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Working…';
+  try {
+    const r = await fetch(url, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${T}` },
+      body: JSON.stringify({ pin, reason }),
+    });
+    const d = await r.json();
+    if(!r.ok){ errEl.textContent = d.error || 'Action rejected'; return; }
+    closeModal('destructiveEditModal');
+    if(COI) openOrderDetail(COI); // refresh to show new state
+  } catch(e){
+    errEl.textContent = 'Network error';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Confirm';
   }
 }
 

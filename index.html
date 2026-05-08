@@ -202,7 +202,7 @@
               <div id="pickListSuccess" style="color:var(--green);font-size:13px;"></div>
             </div>
           </div>
-          <div id="allocHistPanel" class="card" style="display:none;"><div class="card-head"><div class="card-title">Allocations</div><div class="card-badge" style="background:var(--green-bg);color:var(--green);" id="allocHistBadge">0</div></div><div><table class="data-table"><thead><tr><th>SKU</th><th>Lot</th><th>LP</th><th>Location</th><th class="right">Qty</th><th>Status</th></tr></thead><tbody id="allocHistBody"></tbody></table></div></div>
+          <div id="allocHistPanel" class="card" style="display:none;"><div class="card-head"><div class="card-title">Allocations</div><div class="card-badge" style="background:var(--green-bg);color:var(--green);" id="allocHistBadge">0</div><div style="flex:1"></div><div style="font-size:11px;color:var(--text2);">Unallocate / Unpick require supervisor PIN</div></div><div><table class="data-table"><thead><tr><th>SKU</th><th>Lot</th><th>LP</th><th>Location</th><th class="right">Qty</th><th>Status</th><th style="width:160px;text-align:right;">Action</th></tr></thead><tbody id="allocHistBody"></tbody></table></div></div>
         </div>
         <div>
           <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Workflow</div></div><div style="padding:16px;" id="ordWorkflowSteps"></div><div style="padding:0 16px 16px;" id="ordTransitionBtns"></div><div style="padding:0 16px 8px;"><div id="ordTransError" style="color:var(--red);font-size:13px;"></div><div id="ordTransSuccess" style="color:var(--green);font-size:13px;"></div></div></div>
@@ -1348,6 +1348,35 @@
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeModal('overridePinModal')">Cancel</button>
       <button class="btn btn-primary" id="opPinSaveBtn" onclick="saveOverridePin()">Save PIN</button>
+    </div>
+  </div>
+</div>
+
+<!-- DESTRUCTIVE EDIT MODAL — used for unallocate / unpick. Asks the
+     supervisor for a typed reason + PIN. Same PIN as the picker
+     override flow. -->
+<div id="destructiveEditModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10010;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div class="modal" style="max-width:460px;border:2px solid var(--red);">
+    <div class="modal-head" style="background:var(--red-bg);">
+      <div class="modal-title" id="destructiveEditTitle" style="color:var(--red);">⚠ Confirm</div>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="closeModal('destructiveEditModal')" style="padding:6px 12px;">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="destructiveEditDescription" style="font-size:13px;line-height:1.5;color:var(--text2);margin-bottom:14px;"></div>
+      <div class="form-group">
+        <label class="form-label">Reason (logged in audit) *</label>
+        <textarea class="form-input" id="destructiveEditReason" rows="2" placeholder="e.g. wrong lot allocated; need to allocate from PR-2024-0042 instead"></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Supervisor PIN *</label>
+        <input type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" class="form-input" id="destructiveEditPin" maxlength="8" placeholder="••••" style="font-family:ui-monospace,Menlo,monospace;letter-spacing:.4em;text-align:center;font-size:18px;">
+      </div>
+      <div id="destructiveEditError" style="color:var(--red);font-size:13px;margin-top:10px;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('destructiveEditModal')">Cancel</button>
+      <button class="btn btn-danger" id="destructiveEditConfirmBtn">Confirm</button>
     </div>
   </div>
 </div>
