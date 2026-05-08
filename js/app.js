@@ -58,7 +58,7 @@ function closeModal(id){
 const titles = {
   dashboard:'Dashboard', inventory:'Inventory', orders:'Orders',
   inbound:'Receiving', intake:'Intake', clients:'Clients',
-  billing:'Billing', reports:'Reports', compliance:'Compliance',
+  billing:'Billing', reports:'Reports', compliance:'Compliance', users:'Users & Certs',
   portalHome:'Customer Portal', portalNewOrder:'Place an Order', portalIntake:'Upload Documents',
   // Floor mode (phone-first ops shell)
   floorHome:'Warehouse Floor', floorPickList:'Orders to Pick',
@@ -76,6 +76,7 @@ const loaders = {
   billing:        loadBilling,
   reports:        loadReports,
   compliance:     loadCompliance,
+  users:          loadUsers,
   portalHome:     loadPortalHome,
   portalNewOrder: loadPortalNewOrder,
   portalIntake:   loadPortalIntake,
@@ -105,6 +106,43 @@ function tick(){
     new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit', hour12:true});
 }
 
+// =============================================================================
+// CERT EXPIRY RIBBON — auto-fires on boot if any of the user's hazmat
+// certs expire in the next 90 days. Click → /me/certs (or Users page if
+// they're admin/supervisor). Hidden if no certs are within the window.
+// =============================================================================
+async function refreshCertExpiryRibbon(){
+  const ribbon = document.getElementById('certExpiryRibbon');
+  if(!ribbon) return;
+  try {
+    const r = await apiGet('/me/certs');
+    const expiring = r?.expiring || [];
+    if(!expiring.length){
+      ribbon.style.display = 'none';
+      return;
+    }
+    // Show the soonest-expiring cert + a count if multiple
+    const soonest = expiring[0];
+    const days = Number(soonest.days_until_expiry);
+    const label = expiring.length === 1
+      ? `⏰ ${soonest.cert_type_display} expires in ${days} day${days === 1 ? '' : 's'}`
+      : `⏰ ${expiring.length} certs expiring soon (next: ${soonest.cert_type_display}, ${days}d)`;
+    ribbon.textContent = label;
+    ribbon.style.display = '';
+    ribbon.onclick = () => {
+      // If user is admin/supervisor, jump to Users page where they can
+      // manage anyone's certs. Otherwise just tell them.
+      if(U?.userType === 'admin' || U?.isSupervisor){
+        navigateTo('users');
+      } else {
+        alert(expiring.map(c => `${c.cert_type_display} (${c.cert_number || 'no #'}) — expires ${new Date(c.expires_at).toLocaleDateString()} (${c.days_until_expiry}d)`).join('\n'));
+      }
+    };
+  } catch(_) {
+    ribbon.style.display = 'none';
+  }
+}
+
 // ----- Boot -----
 
 function boot(){
@@ -113,6 +151,18 @@ function boot(){
       (U.fullName || U.email || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
     document.getElementById('userName').textContent = U.fullName || U.email;
   }
+
+  // Reveal admin/supervisor-only nav items
+  const isAdmin = U?.userType === 'admin';
+  const isSup   = !!U?.isSupervisor;
+  if(isAdmin || isSup){
+    const usersNav = document.getElementById('navUsersItem');
+    if(usersNav) usersNav.style.display = '';
+  }
+
+  // Topbar 90-day cert expiry ribbon — fires once on boot, links to Users
+  // page (admin/supervisor) or just informs the user otherwise.
+  refreshCertExpiryRibbon();
   // Init page-level filter combos on boot so they exist when pages load
   initCombo('invStatusFilterWrap', [
     {value:'',label:'All statuses'},

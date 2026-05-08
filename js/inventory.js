@@ -323,6 +323,19 @@ async function openItemFormModal(skuId){
   document.getElementById('itemFormSubmitBtn').textContent = skuId ? 'Save Changes' : 'Create Item';
   document.getElementById('itemFormError').textContent     = '';
 
+  // Compliance audit panel — only meaningful in edit mode (need a sku_id).
+  // The panel itself is collapsed by default; expanding loads the rows.
+  const auditBlock = document.getElementById('itemAuditBlock');
+  if(auditBlock){
+    if(skuId){
+      // Lazy load — call now so the count is shown in the header even
+      // when the user hasn't expanded yet
+      if(typeof loadSkuComplianceAudit === 'function') loadSkuComplianceAudit(skuId);
+    } else {
+      auditBlock.style.display = 'none';
+    }
+  }
+
   // Make sure clientsCache is populated for the dropdown
   await loadCC();
 
