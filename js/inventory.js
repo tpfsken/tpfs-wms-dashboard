@@ -536,22 +536,33 @@ async function openItemFormModal(skuId){
     // doesn't auto-update, and Save sends the unchanged old code.
     document.getElementById('itemCode').value = sku.sku_code || '';
 
-    // Edit mode shows just THIS SKU as one row; multi-level edit goes
-    // through Item Master + create a sibling SKU.
-    _itemHandlingUnits.push({
-      sku_type:      sku.sku_type || 'EACH',
-      sku_code:      sku.sku_code || '',
-      _autoSync:     true,                    // base-code edits flow into this unit
-      pack_qty:      sku.units_per_case ?? null,
-      length_in:     sku.length_in ?? null,
-      width_in:      sku.width_in ?? null,
-      height_in:     sku.height_in ?? null,
-      weight_lbs:    sku.weight_lbs ?? null,
-      nmfc_code:     sku.nmfc_code || '',
-      freight_class: sku.freight_class || '',
-    });
-    huAddBtn.style.display = 'none';
-    document.getElementById('itemHuEditNote').style.display = 'block';
+    // Edit mode now loads the entire SKU family (parent chain +
+    // descendants) so ops can see all handling-unit levels of the item
+    // and add new ones if needed (e.g. SKU was created as EACH but
+    // arrives in cases of 12, so they need to add a CASE level above).
+    const family = await apiGet(`/skus/${skuId}/family`);
+    const members = family?.members && family.members.length ? family.members : [sku];
+    for (const m of members) {
+      _itemHandlingUnits.push({
+        _id:           m.id,                // existing SKU id
+        _isNew:        false,
+        _autoSync:     m.id === sku.id,     // only the anchor's code follows the base field
+        sku_type:      m.sku_type || 'EACH',
+        sku_code:      m.sku_code || '',
+        pack_qty:      m.units_per_case ?? null,
+        length_in:     m.length_in ?? null,
+        width_in:      m.width_in ?? null,
+        height_in:     m.height_in ?? null,
+        weight_lbs:    m.weight_lbs ?? null,
+        nmfc_code:     m.nmfc_code || '',
+        freight_class: m.freight_class || '',
+      });
+    }
+    // Multi-handling-unit edit: + Add Level button stays visible in
+    // edit mode now. Uses POST /skus/:id/handling-units to attach a
+    // new level with proper parent linkage.
+    huAddBtn.style.display = '';
+    document.getElementById('itemHuEditNote').style.display = 'none';
     loadItemAttachmentsList(skuId);
   } else {
     // Create mode — reset everything (including itemCode, the Base SKU
@@ -688,25 +699,76 @@ async function submitItemForm(){
   try {
     let r, d;
     if(_editingItemId){
-      // EDIT MODE — single SKU update via PATCH /skus/:id. The handling
-      // unit array always has one row in this mode (by design).
-      const hu = _itemHandlingUnits[0];
-      const patchBody = Object.assign({}, common, {
-        skuCode:       hu.sku_code.trim().toUpperCase(),
-        skuType:       hu.sku_type,
-        unitsPerCase:  hu.pack_qty,
-        lengthIn:      hu.length_in,
-        widthIn:       hu.width_in,
-        heightIn:      hu.height_in,
-        weightLbs:     hu.weight_lbs,
-        nmfcCode:      hu.nmfc_code || null,
-        freightClass:  hu.freight_class || null,
-      });
-      r = await fetch(`${API}/skus/${_editingItemId}`, {
-        method:'PATCH', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
-        body: JSON.stringify(patchBody),
-      });
-      d = await r.json();
+      // EDIT MODE — split the units into existing (PATCH) vs new (POST
+      // via /skus/:anchor/handling-units). The anchor is the originally-
+      // edited SKU id; new units get attached to the family with
+      // automatic parent-linkage based on hierarchy.
+      const existingUnits = _itemHandlingUnits.filter(hu => hu._id);
+      const newUnits      = _itemHandlingUnits.filter(hu => hu._isNew);
+
+      // 1) PATCH each existing unit with its own row's level-specific
+      //    fields. Common fields (name, hazmat, notes, etc.) only need
+      //    to be patched on the anchor — no point sending the same
+      //    name to every sibling.
+      let lastResp = null;
+      for (const hu of existingUnits) {
+        const isAnchor = hu._id === _editingItemId;
+        const patchBody = Object.assign(
+          {},
+          isAnchor ? common : {},     // only anchor receives common fields
+          {
+            skuCode:      hu.sku_code.trim().toUpperCase(),
+            skuType:      hu.sku_type,
+            unitsPerCase: hu.pack_qty,
+            lengthIn:     hu.length_in,
+            widthIn:      hu.width_in,
+            heightIn:     hu.height_in,
+            weightLbs:    hu.weight_lbs,
+            nmfcCode:     hu.nmfc_code || null,
+            freightClass: hu.freight_class || null,
+          }
+        );
+        const rr = await fetch(`${API}/skus/${hu._id}`, {
+          method:'PATCH', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+          body: JSON.stringify(patchBody),
+        });
+        const dd = await rr.json();
+        if(!rr.ok){
+          err.textContent = dd.error || `Save failed updating ${hu.sku_code}`;
+          return;
+        }
+        lastResp = dd;
+      }
+
+      // 2) POST each new unit. Server figures out parent linkage based
+      //    on the standard PALLET > CASE > INNER_PACK > EACH hierarchy
+      //    and rewires neighbors as needed.
+      for (const hu of newUnits) {
+        const newBody = {
+          sku_type:      hu.sku_type,
+          sku_code:      hu.sku_code.trim().toUpperCase(),
+          pack_qty:      hu.pack_qty,
+          length_in:     hu.length_in,
+          width_in:      hu.width_in,
+          height_in:     hu.height_in,
+          weight_lbs:    hu.weight_lbs,
+          nmfc_code:     hu.nmfc_code || null,
+          freight_class: hu.freight_class || null,
+        };
+        const rr = await fetch(`${API}/skus/${_editingItemId}/handling-units`, {
+          method:'POST', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+          body: JSON.stringify(newBody),
+        });
+        const dd = await rr.json();
+        if(!rr.ok){
+          err.textContent = dd.error || `Could not add ${hu.sku_type} ${hu.sku_code}`;
+          return;
+        }
+        lastResp = dd;
+      }
+
+      r = { ok: true };  // shape so the success branch below doesn't choke
+      d = lastResp || {};
     } else {
       // CREATE MODE — POST /items handles both single-level and multi-
       // level. Server creates parent + linked children in order.
@@ -831,12 +893,15 @@ function addHandlingUnit(skuType){
   // family. _autoSync tracks whether typing in the base code field
   // should keep updating this unit's code (cleared when user edits the
   // unit code directly).
+  // _isNew=true marks units added in EDIT mode — they get POSTed via
+  // /skus/:anchor/handling-units instead of PATCHed.
   const isFirstAndOnly = _itemHandlingUnits.length === 0;
   _itemHandlingUnits.push({
     sku_type:      skuType,
     sku_code:      baseCode
       ? (isFirstAndOnly ? baseCode : `${baseCode}-${suffix}`)
       : '',
+    _isNew:        !!_editingItemId,        // edit mode + new unit → POST on save
     _autoSync:     true,
     pack_qty:      skuType === 'EACH' ? 1 : null,
     length_in:     null, width_in: null, height_in: null, weight_lbs: null,
@@ -871,7 +936,7 @@ async function renderHandlingUnits(){
           <label class="form-label">Pack Qty</label>
           <input class="form-input js-hu-pack" data-idx="${esc(i)}" type="number" min="0" step="1" value="${hu.pack_qty == null ? '' : esc(hu.pack_qty)}" placeholder="e.g. 24">
         </div>
-        ${editing ? '' : `<button type="button" class="btn btn-ghost js-hu-rm" data-idx="${esc(i)}" style="color:var(--red);padding:6px 10px;font-size:14px;" title="Remove this level">✕</button>`}
+        ${(!editing || hu._isNew) ? `<button type="button" class="btn btn-ghost js-hu-rm" data-idx="${esc(i)}" style="color:var(--red);padding:6px 10px;font-size:14px;" title="${editing ? 'Remove this new level (existing levels can\\'t be removed here)' : 'Remove this level'}">✕</button>` : ''}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
         <div style="width:90px;"><label class="form-label" style="font-size:11px;">L (in)</label><input class="form-input js-hu-len" data-idx="${esc(i)}" type="number" min="0" step="0.01" value="${hu.length_in == null ? '' : esc(hu.length_in)}"></div>
