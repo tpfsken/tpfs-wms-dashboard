@@ -389,6 +389,30 @@ async function openItemFormModal(skuId){
     });
   }
 
+  // Wire "Full SDS Intelligence" — only enabled in edit mode (we need a
+  // real sku id for the versioned upload). New per-field pipeline:
+  // versions the SDS doc, runs Claude with per-field confidence + source
+  // attribution, auto-applies high-confidence fields directly to the SKU
+  // master, queues review_high/review_low items for the compliance page.
+  const intelBtn = document.getElementById('itemSdsIntelBtn');
+  const intelInput = document.getElementById('itemSdsIntelInput');
+  if(intelBtn && !intelBtn._wired){
+    intelBtn._wired = true;
+    intelBtn.addEventListener('click', () => intelInput.click());
+  }
+  if(intelInput && !intelInput._wired){
+    intelInput._wired = true;
+    intelInput.addEventListener('change', e => {
+      const file = (e.target.files || [])[0];
+      e.target.value = '';
+      if(file && _editingItemId) runSdsIntelExtract(_editingItemId, file);
+    });
+  }
+  // Reveal the Intel button only in edit mode
+  if(intelBtn){
+    intelBtn.style.display = _editingItemId ? '' : 'none';
+  }
+
   // Wire Documents section's add button (idempotent). In create mode we
   // stage files client-side and upload them after Save; in edit mode we
   // upload directly.
@@ -896,6 +920,91 @@ async function extractSdsAndFill(file){
   } catch(err){
     status.style.color = 'var(--red)';
     status.textContent = 'Network error reading SDS';
+  }
+}
+
+// =============================================================================
+// SDS INTELLIGENCE — new per-field pipeline. Versions the SDS doc, runs
+// Claude with per-field confidence + verbatim source citations, auto-
+// applies high-conf fields to the SKU master, queues review items for
+// the compliance page. Edit mode only (needs an existing sku_id).
+// =============================================================================
+async function runSdsIntelExtract(skuId, file){
+  const result = document.getElementById('itemSdsIntelResult');
+  result.style.display = 'block';
+  result.style.borderColor = 'var(--blue)';
+  result.style.background = 'transparent';
+  result.style.color = 'var(--text2)';
+  result.innerHTML = `🤖 Running SDS Intelligence on <strong>${esc(file.name)}</strong>… (typically 10-30 sec for multi-page SDS)`;
+
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const r = await fetch(`${API}/skus/${skuId}/sds-extract`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${T}` },
+      body: fd,
+    });
+    const d = await r.json();
+    if(!r.ok){
+      result.style.borderColor = 'var(--red)';
+      result.style.color = 'var(--red)';
+      result.innerHTML = `❌ ${esc(d.error || 'Extraction failed')}`;
+      return;
+    }
+
+    if(d.deduped){
+      result.style.borderColor = 'var(--amber)';
+      result.style.color = 'var(--amber)';
+      result.innerHTML = `📎 This exact PDF (sha256 match) was already uploaded as version ${esc(d.document.version_number)}. No re-extraction was run. Re-upload a different file or use the existing extraction.`;
+      return;
+    }
+
+    const ext = d.extraction || {};
+    const doc = d.document || {};
+    const band = ext.band || 'pending';
+    const conf = ext.weakestRequiredConf == null ? '' : ` · weakest required field at ${Math.round(Number(ext.weakestRequiredConf) * 100)}%`;
+
+    const bandStyle = {
+      auto_applied: { bg:'#1f4d2e', fg:'#a3ffb3', border:'#28a745', icon:'✓', label:'Auto-applied' },
+      review_high:  { bg:'#3a2c00', fg:'#ffd591', border:'#d6a700', icon:'⚠', label:'Queued for review (high confidence)' },
+      review_low:   { bg:'#3a1c00', fg:'#ffb380', border:'#cc6600', icon:'⚠', label:'Queued for review (low confidence)' },
+      rejected:     { bg:'#5a2c2c', fg:'#ffb3b3', border:'#d22',    icon:'✕', label:'Rejected (required fields missing or below threshold)' },
+      error:        { bg:'#5a2c2c', fg:'#ffb3b3', border:'#d22',    icon:'❌', label:'Extraction errored' },
+    }[band] || { bg:'#3a3a3a', fg:'#ddd', border:'#888', icon:'…', label:band };
+
+    result.style.background = bandStyle.bg;
+    result.style.color = bandStyle.fg;
+    result.style.borderColor = bandStyle.border;
+
+    const reviewLink = (band === 'review_high' || band === 'review_low' || band === 'rejected')
+      ? `<div style="margin-top:8px;"><button class="btn btn-ghost" onclick="navigateTo('compliance')" style="padding:4px 12px;font-size:12px;color:${bandStyle.fg};border:1px solid ${bandStyle.border};">→ Open in Compliance Queue</button></div>`
+      : '';
+    const docLine = `Version ${esc(doc.version_number)} · ${esc(doc.original_filename || 'sds.pdf')}`;
+
+    result.innerHTML = `
+      <div style="font-weight:700;font-size:13px;margin-bottom:4px;">${bandStyle.icon} ${esc(bandStyle.label)}${conf}</div>
+      <div style="font-size:11px;opacity:.85;">${docLine}</div>
+      ${band === 'auto_applied'
+        ? `<div style="font-size:11px;margin-top:6px;">High-confidence fields written directly to the SKU master. Review the audit log on the SKU detail page if you want to see what changed.</div>`
+        : band === 'rejected'
+          ? `<div style="font-size:11px;margin-top:6px;">Some required hazmat fields were missing or below 75% confidence. Reviewer must fix before this SKU can be considered compliant.</div>`
+          : `<div style="font-size:11px;margin-top:6px;">Some fields landed below the 95% auto-apply threshold or contained changes vs. previously approved values. They're queued for hazmat-certified reviewer approval.</div>`}
+      ${reviewLink}
+    `;
+
+    // If auto-applied, refresh the form so the user sees the new values
+    // pulled into the visible inputs. Edit mode reload — re-open the
+    // modal against the same SKU id.
+    if(band === 'auto_applied'){
+      setTimeout(() => {
+        if(typeof loadInventory === 'function') loadInventory();
+      }, 800);
+    }
+  } catch(err){
+    result.style.borderColor = 'var(--red)';
+    result.style.color = 'var(--red)';
+    result.innerHTML = `❌ Network error: ${esc(err.message || err)}`;
   }
 }
 

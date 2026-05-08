@@ -1566,9 +1566,12 @@
           <div style="flex:1"></div>
           <button type="button" class="btn btn-ghost" id="itemSdsReuseBtn" style="display:none;padding:4px 12px;font-size:12px;color:var(--blue);">🔄 Re-read attached SDS</button>
           <button type="button" class="btn btn-ghost" onclick="document.getElementById('itemSdsExtractInput').click()" style="padding:4px 12px;font-size:12px;color:var(--blue);">📄 Upload SDS to auto-fill</button>
+          <button type="button" class="btn btn-ghost" id="itemSdsIntelBtn" style="display:none;padding:4px 12px;font-size:12px;color:var(--amber);" title="Run the new per-field SDS Intelligence extraction (versions the SDS, per-field confidence, audit log, queues review items)">🛡 Full SDS Intelligence</button>
           <input type="file" id="itemSdsExtractInput" accept="application/pdf,.pdf" style="display:none;">
+          <input type="file" id="itemSdsIntelInput" accept="application/pdf,.pdf" style="display:none;">
         </div>
         <div id="itemSdsExtractStatus" style="font-size:12px;margin-bottom:8px;"></div>
+        <div id="itemSdsIntelResult" style="display:none;font-size:12px;margin-bottom:8px;border-radius:8px;padding:10px;border:1px solid var(--border);"></div>
         <div class="form-row form-row-2">
           <div class="form-group"><label class="form-label">UN Number *</label><input class="form-input" id="itemUnNumber" placeholder="e.g. UN1090"></div>
           <div class="form-group"><label class="form-label">Hazard Class *</label><input class="form-input" id="itemHazardClass" placeholder="e.g. 3, 9, 1.4G"></div>
