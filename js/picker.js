@@ -265,21 +265,72 @@ function renderAllDone(){
   const total = (_pickerOrder.allocations || []).filter(a => a.status !== 'CANCELLED').length;
   const done  = (_pickerOrder.allocations || []).filter(a => a.status === 'PICKED').length;
 
-  document.getElementById('pickerBody').innerHTML = `
-    <div style="text-align:center;padding:48px 16px;">
-      <div style="font-size:64px;line-height:1;margin-bottom:16px;">${done >= total ? '✓' : '⏸'}</div>
-      <div style="font-size:24px;font-weight:700;margin-bottom:8px;">${done >= total ? 'All Done' : 'Nothing Left to Pick'}</div>
-      <div style="font-size:14px;opacity:.7;margin-bottom:24px;">${esc(done)} of ${esc(total)} allocations picked on order ${esc(_pickerOrder.order_number || '')}</div>
-      ${done >= total ? `
-        <button onclick="exitMobilePicker()" style="background:#28a745;color:#fff;border:none;padding:18px 36px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">Exit Picker</button>
-      ` : `
-        <div style="font-size:13px;opacity:.7;margin-bottom:14px;">Some allocations were skipped or aren't pickable yet.</div>
-        <button onclick="exitMobilePicker()" style="background:#444;color:#fff;border:none;padding:14px 32px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;">Exit</button>
-      `}
-    </div>
-  `;
-  // Hide the confirm/skip footer when done
+  // Check whether the ORDER is actually fully allocated. The picker may
+  // have run out of pending allocations to pick BEFORE the order was
+  // fully allocated (e.g. ops allocated only line 1 and forgot line 2).
+  // In that case "All Done" is misleading — the picker is waiting on ops,
+  // not finished.
+  const lines = _pickerOrder.lines || [];
+  const shortLines = lines.filter(l =>
+    Number(l.allocated_qty || 0) < Number(l.ordered_qty || 0)
+  );
+  const underAllocated = shortLines.length > 0;
+
+  let body;
+  if(underAllocated){
+    const totalShortUnits = shortLines.reduce((s, l) =>
+      s + (Number(l.ordered_qty || 0) - Number(l.allocated_qty || 0)), 0);
+    body = `
+      <div style="text-align:center;padding:24px 16px;">
+        <div style="font-size:64px;line-height:1;margin-bottom:14px;">⏸</div>
+        <div style="font-size:22px;font-weight:700;margin-bottom:6px;">Waiting on Allocation</div>
+        <div style="font-size:13px;opacity:.75;margin-bottom:16px;line-height:1.5;">
+          You picked everything that was allocated, but ${shortLines.length} line${shortLines.length === 1 ? '' : 's'} still need to be allocated by ops (${totalShortUnits} unit${totalShortUnits === 1 ? '' : 's'} short).
+        </div>
+        <div style="background:#2a2a2a;border-radius:12px;padding:14px;text-align:left;font-size:13px;margin-bottom:18px;">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;opacity:.7;margin-bottom:8px;">Not yet allocated</div>
+          ${shortLines.map(l => `
+            <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid #333;">
+              <span style="font-family:ui-monospace,Menlo,monospace;color:#7eb6ff;">${esc(l.sku_code || '')}</span>
+              <span><strong>${esc(Number(l.ordered_qty || 0) - Number(l.allocated_qty || 0))}</strong> of ${esc(l.ordered_qty || 0)} short</span>
+            </div>`).join('')}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <button onclick="reloadMobilePicker()" style="background:#2c7be5;color:#fff;border:none;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">↻ Refresh — Ops just allocated?</button>
+          <button onclick="exitMobilePicker()" style="background:#444;color:#fff;border:none;padding:12px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Exit Picker</button>
+        </div>
+      </div>`;
+  } else {
+    body = `
+      <div style="text-align:center;padding:48px 16px;">
+        <div style="font-size:64px;line-height:1;margin-bottom:16px;">${done >= total ? '✓' : '⏸'}</div>
+        <div style="font-size:24px;font-weight:700;margin-bottom:8px;">${done >= total ? 'All Done' : 'Nothing Left to Pick'}</div>
+        <div style="font-size:14px;opacity:.7;margin-bottom:24px;">${esc(done)} of ${esc(total)} allocations picked on order ${esc(_pickerOrder.order_number || '')}</div>
+        <button onclick="exitMobilePicker()" style="background:${done >= total ? '#28a745' : '#444'};color:#fff;border:none;padding:18px 36px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">${done >= total ? 'Exit Picker' : 'Exit'}</button>
+      </div>`;
+  }
+  document.getElementById('pickerBody').innerHTML = body;
   document.getElementById('pickerFooter').style.display = 'none';
+}
+
+// Refresh the picker after ops has allocated more — pulls the order
+// fresh from the server and rebuilds _pickerPending. If new pending
+// allocations exist, dives back into the pick flow.
+async function reloadMobilePicker(){
+  if(!_pickerOrder?.id) return;
+  const fresh = await apiGet(`/orders/${_pickerOrder.id}`);
+  if(!fresh){ alert('Could not refresh order'); return; }
+  _pickerOrder = fresh;
+  _pickerPending = (fresh.allocations || [])
+    .filter(a => a.status !== 'PICKED' && a.status !== 'CANCELLED')
+    .sort((a, b) => {
+      const sa = a.pick_sequence == null ? Infinity : Number(a.pick_sequence);
+      const sb = b.pick_sequence == null ? Infinity : Number(b.pick_sequence);
+      return sa - sb;
+    });
+  _pickerIdx = 0;
+  document.getElementById('pickerFooter').style.display = '';
+  renderCurrentPick();
 }
 
 // =============================================================================
