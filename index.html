@@ -1559,10 +1559,14 @@
         <textarea class="form-input" id="itemSpecialHandling" rows="2" placeholder="Printed on the pick slip and shown on the handheld — e.g. 'Wear gloves', 'Keep upright', 'Do not stack'"></textarea>
       </div>
 
-      <!-- Hazmat fields — only when itemHazmat is checked -->
-      <div id="itemHazmatBlock" style="display:none;border:1px solid var(--amber);border-radius:8px;padding:14px;margin-top:14px;background:var(--bg);">
+      <!-- Safety Data Sheet — visible for ALL items, hazmat or not. Many
+           non-hazmat products still ship with an SDS (lubricants, cleaning
+           supplies, food-safe coatings) and ops should be able to keep it
+           on file. The "auto-fill" path will flip the Hazmat checkbox on
+           if Claude detects hazmat in the document. -->
+      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:14px;">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
-          <div style="font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">⚠ Hazmat Details</div>
+          <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">📑 Safety Data Sheet</div>
           <div style="flex:1"></div>
           <button type="button" class="btn btn-ghost" id="itemSdsReuseBtn" style="display:none;padding:4px 12px;font-size:12px;color:var(--blue);">🔄 Re-read attached SDS</button>
           <button type="button" class="btn btn-ghost" onclick="document.getElementById('itemSdsExtractInput').click()" style="padding:4px 12px;font-size:12px;color:var(--blue);">📄 Upload SDS to auto-fill</button>
@@ -1570,8 +1574,17 @@
           <input type="file" id="itemSdsExtractInput" accept="application/pdf,.pdf" style="display:none;">
           <input type="file" id="itemSdsIntelInput" accept="application/pdf,.pdf" style="display:none;">
         </div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Drop in any product's SDS (PDF). Auto-fill pre-fills the hazmat block if it's hazardous; otherwise the SDS is just kept on file.</div>
         <div id="itemSdsExtractStatus" style="font-size:12px;margin-bottom:8px;"></div>
         <div id="itemSdsIntelResult" style="display:none;font-size:12px;margin-bottom:8px;border-radius:8px;padding:10px;border:1px solid var(--border);"></div>
+      </div>
+
+      <!-- Hazmat fields — only when itemHazmat is checked -->
+      <div id="itemHazmatBlock" style="display:none;border:1px solid var(--amber);border-radius:8px;padding:14px;margin-top:14px;background:var(--bg);">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+          <div style="font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">⚠ Hazmat Details</div>
+          <div style="flex:1"></div>
+        </div>
         <div class="form-row form-row-2">
           <div class="form-group"><label class="form-label">UN Number *</label><input class="form-input" id="itemUnNumber" placeholder="e.g. UN1090"></div>
           <div class="form-group"><label class="form-label">Hazard Class *</label><input class="form-input" id="itemHazardClass" placeholder="e.g. 3, 9, 1.4G"></div>
