@@ -61,10 +61,23 @@
   <div class="topbar">
     <div class="topbar-title" id="pageTitle">Dashboard</div>
     <div style="flex:1"></div><!-- topbar search removed; each page has its own search where it makes sense -->
+    <button id="installAppBtn" onclick="installPwaApp()" style="display:none;background:var(--blue);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-right:10px;">📱 Install App</button>
     <div class="topbar-sep"></div>
     <div class="topbar-wh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21V12h6v9"/></svg><span>ONT-01</span></div>
     <div class="topbar-time" id="clock"></div>
     <div class="topbar-user js-signout" title="Sign Out"><div class="topbar-avatar" id="userAvatar">?</div><div class="topbar-user-info"><div class="name" id="userName">—</div><div class="role">Operations</div></div></div>
+  </div>
+
+  <!-- iOS install hint — shown to iPhone/iPad users (no beforeinstallprompt
+       on Safari) after a short delay if not already installed -->
+  <div id="iosInstallHint" style="display:none;position:fixed;bottom:20px;left:20px;right:20px;background:#2c7be5;color:#fff;padding:14px 16px;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:9998;font-size:14px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:24px;">📱</span>
+      <div style="flex:1;">
+        <strong>Install on your iPhone:</strong> tap the Share button at the bottom, then "Add to Home Screen".
+      </div>
+      <button onclick="dismissIosHint()" style="background:rgba(255,255,255,.2);color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">✕</button>
+    </div>
   </div>
 
   <!-- Portal banner — visible only when body.portal-mode is set (Phase 3). -->
