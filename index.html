@@ -1374,13 +1374,14 @@
      Activated by openMobilePicker(orderId) from the Order Detail page.
 ============================================================ -->
 <div id="pickerShell" style="display:none;position:fixed;inset:0;background:#1a1a1a;color:#fff;z-index:9999;flex-direction:column;font-size:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <div style="background:#222;padding:14px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #333;">
+  <div style="background:#222;padding:14px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #333;flex-shrink:0;">
     <button onclick="exitMobilePicker()" style="background:#444;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-size:15px;cursor:pointer;">← Exit</button>
-    <div style="flex:1;">
-      <div id="pickerOrderNum" style="font-size:18px;font-weight:700;">—</div>
-      <div id="pickerOrderSub" style="font-size:12px;opacity:.7;">—</div>
+    <button onclick="reloadMobilePicker()" title="Re-fetch this order — useful if ops just changed the allocation and you want to pick up the new state without exiting" style="background:#2c7be5;color:#fff;border:none;padding:10px 12px;border-radius:8px;font-size:15px;cursor:pointer;">↻</button>
+    <div style="flex:1;min-width:0;">
+      <div id="pickerOrderNum" style="font-size:18px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</div>
+      <div id="pickerOrderSub" style="font-size:12px;opacity:.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</div>
     </div>
-    <div id="pickerProgress" style="font-size:13px;opacity:.85;text-align:right;">0 / 0</div>
+    <div id="pickerProgress" style="font-size:13px;opacity:.85;text-align:right;flex-shrink:0;">0 / 0</div>
   </div>
 
   <!-- Hazmat warning band (only shown when current pick is hazmat) -->

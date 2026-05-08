@@ -109,18 +109,30 @@ async function openMobilePicker(orderId){
     s._wired = true;
     s.addEventListener('click', skipCurrentPick);
   }
+  // Verify-with-photo button. iOS Safari has a known quirk where the
+  // same <input type=file capture=...> can get into a stale state after
+  // a successful capture and silently no-op on the next click. Dodge it
+  // by spinning up a FRESH input element on every click — no shared
+  // state, no value reset gymnastics.
   const v = document.getElementById('pickerVerifyBtn');
-  const camIn = document.getElementById('pickerCameraInput');
   if(v && !v._wired){
     v._wired = true;
-    v.addEventListener('click', () => camIn.click());
-  }
-  if(camIn && !camIn._wired){
-    camIn._wired = true;
-    camIn.addEventListener('change', e => {
-      const file = (e.target.files || [])[0];
-      e.target.value = '';
-      if(file) verifyCurrentPickPhoto(file);
+    v.addEventListener('click', () => {
+      // If the button is in a disabled-during-analysis state, no-op
+      if(v.disabled) return;
+      const tempInp = document.createElement('input');
+      tempInp.type = 'file';
+      tempInp.accept = 'image/*';
+      tempInp.setAttribute('capture', 'environment');  // prefer back camera
+      tempInp.style.display = 'none';
+      tempInp.onchange = e => {
+        const file = (e.target.files || [])[0];
+        if(file) verifyCurrentPickPhoto(file);
+        // Cleanup — input gets removed regardless of file presence
+        try { tempInp.remove(); } catch(_) {}
+      };
+      document.body.appendChild(tempInp);
+      tempInp.click();
     });
   }
 
