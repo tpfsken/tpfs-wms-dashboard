@@ -139,7 +139,7 @@ async function openOrderDetail(id){
   document.getElementById('ordLinesBody').innerHTML = d.lines?.map(ln => `
     <tr>
       <td>${esc(ln.line_number)}</td>
-      <td style="font-weight:600;color:var(--blue);">${esc(ln.sku_code || '')}</td>
+      <td style="font-weight:600;color:var(--blue);">${esc(ln.sku_code || '')} ${severityChip(ln, {size:'sm'})}</td>
       <td>${esc(ln.sku_name || '')}</td>
       <td>${esc(ln.sku_type || ln.uom || '')}</td>
       <td class="right">${esc(ln.ordered_qty || 0)}</td>
@@ -471,16 +471,17 @@ function renderPickList(d, isPickable){
         </tr>`;
     }
 
-    // PENDING (default) — hazmat badge inline next to sku name, special
-    // handling banner as a sub-row (full-width amber stripe so it can't
-    // be missed by the picker on a tablet).
+    // PENDING (default) — severity chip + hazmat badge inline next to sku
+    // name, special handling banner as a sub-row (full-width amber stripe
+    // so it can't be missed by the picker on a tablet).
+    const sev = severityChip(a, {size:'sm'});
     return `
       <tr>
         <td>${esc(i + 1)}</td>
         <td>${lpCell}</td>
         <td style="font-weight:600;">${esc(a.location_code || '—')}</td>
         <td style="color:var(--blue);">${esc(a.lot_number || '—')}</td>
-        <td style="color:var(--blue);font-weight:600;">${esc(a.sku_code || '')}</td>
+        <td style="color:var(--blue);font-weight:600;">${esc(a.sku_code || '')} ${sev}</td>
         <td style="color:var(--text2);">${hazBadge(a)}${esc(a.sku_name || '')}</td>
         <td class="right" style="font-weight:600;">${esc(a.quantity)}</td>
         <td>

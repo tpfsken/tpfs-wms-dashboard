@@ -75,3 +75,82 @@ const SM = {
 };
 
 const WF = ['NEW','ALLOCATED','PICKING','PACKING','STAGED','SHIPPED'];
+
+// =============================================================================
+// SEVERITY — at-a-glance product-handling tier. 4 levels:
+//   🔴 critical  — high-stakes hazmat (PG I, explosives, toxic gas, radioactive,
+//                  toxic-by-inhalation, organic peroxide). Mandatory PPE,
+//                  cert-required, special procedure.
+//   🟠 high      — any other hazmat (PG II/III, classes 2.1/2.2/3/4.x/5.1/8/9),
+//                  marine pollutants. Standard hazmat handling.
+//   🟡 moderate  — non-hazmat with care: special handling text on file,
+//                  ground-only, temperature-sensitive.
+//   🟢 standard  — normal product. No chip rendered by default unless
+//                  showStandard=true is passed to severityChip().
+//
+// Computed on read from existing SKU attributes — no migration. If we
+// ever need to filter by tier server-side ("all CRITICAL items"), we
+// can add a denormalized severity_tier column later as a cache.
+// =============================================================================
+
+function severityFor(sku){
+  if(!sku) return { tier:'standard', label:'STANDARD', emoji:'🟢', color:'#3a8a3a', reason:'' };
+
+  const isHaz = !!(sku.is_hazmat ?? sku.is_hazardous);
+  const cls   = String(sku.hazard_class || sku.transport_hazard_class || '').trim();
+  const pg    = String(sku.packing_group || '').trim().toUpperCase();
+  const sh    = String(sku.special_handling || sku.special_handling_instructions || '').trim();
+  const grnd  = !!(sku.is_ground_only);
+  const marin = !!(sku.marine_pollutant);
+
+  // CRITICAL: explosives, toxic gas, toxic, radioactive, organic peroxide,
+  // packing group I (most dangerous regardless of class)
+  const criticalClasses = new Set(['1','1.1','1.2','1.3','1.4','1.5','1.6','2.3','5.2','6.1','7']);
+  if(isHaz && (criticalClasses.has(cls) || pg === 'I')){
+    const why = pg === 'I'
+      ? `Packing Group I${cls ? ' (Class ' + cls + ')' : ''} — highest danger`
+      : `Class ${cls} — high-stakes hazmat`;
+    return { tier:'critical', label:'CRITICAL', emoji:'🔴', color:'#cc1f1f', reason: why };
+  }
+
+  // HIGH: any other hazmat. Marine pollutants also high even if not
+  // otherwise classified.
+  if(isHaz){
+    return {
+      tier:'high', label:'HIGH', emoji:'🟠', color:'#cc6600',
+      reason: `Class ${cls || '—'}${pg ? ' PG ' + pg : ''}`,
+    };
+  }
+  if(marin){
+    return { tier:'high', label:'HIGH', emoji:'🟠', color:'#cc6600',
+             reason:'Marine pollutant' };
+  }
+
+  // MODERATE: non-hazmat that still needs care
+  if(sh){
+    return { tier:'moderate', label:'MODERATE', emoji:'🟡', color:'#d6a700',
+             reason:'Special handling required' };
+  }
+  if(grnd){
+    return { tier:'moderate', label:'MODERATE', emoji:'🟡', color:'#d6a700',
+             reason:'Ground transport only' };
+  }
+
+  return { tier:'standard', label:'STANDARD', emoji:'🟢', color:'#3a8a3a', reason:'' };
+}
+
+// Render a chip for a SKU. Options:
+//   size:          'sm' (default), 'lg' (mobile picker prominent display)
+//   showStandard:  default false — green dot is omitted unless requested
+//   showLabel:     default true  — set false for icon-only (tight rows)
+function severityChip(sku, opts){
+  const o = opts || {};
+  const s = severityFor(sku);
+  if(s.tier === 'standard' && !o.showStandard) return '';
+  const cls = `sev-chip sev-chip-${s.tier} sev-chip-${o.size || 'sm'}`;
+  const title = `Severity: ${s.label}${s.reason ? ' — ' + s.reason : ''}`;
+  const text = o.showLabel === false
+    ? s.emoji
+    : `${s.emoji} ${s.label}`;
+  return `<span class="${cls}" title="${esc(title)}">${esc(text)}</span>`;
+}

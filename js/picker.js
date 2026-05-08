@@ -184,11 +184,24 @@ function renderCurrentPick(){
   const a = _pickerPending[_pickerIdx];
   const body = document.getElementById('pickerBody');
 
-  // Hazmat banner (top of screen)
+  // Severity banner — sits above the hazmat banner. Renders only for
+  // critical/high/moderate. Standard items show no banner so the picker
+  // doesn't get banner-fatigue on routine items.
+  const sev = severityFor(a);
   const hazBanner = document.getElementById('pickerHazBanner');
-  if(a.is_hazmat){
+  if(sev.tier === 'critical' || sev.tier === 'high'){
+    // Hazmat — keep the existing banner but make it the chip's color
     hazBanner.style.display = '';
-    hazBanner.innerHTML = `⚠ HAZMAT${a.un_number ? ' &middot; ' + esc(a.un_number) : ''}${a.hazard_class ? ' &middot; Class ' + esc(a.hazard_class) : ''} &middot; Follow handling instructions below`;
+    hazBanner.style.background = sev.tier === 'critical' ? '#3a0a0a' : '#3a1c00';
+    hazBanner.style.color = sev.tier === 'critical' ? '#ff8888' : '#ffb380';
+    hazBanner.style.borderTop = `3px solid ${sev.tier === 'critical' ? '#cc1f1f' : '#cc6600'}`;
+    hazBanner.innerHTML = `${sev.emoji} <strong>${esc(sev.label)}</strong> · ${esc(sev.reason)}${a.un_number ? ' · ' + esc(a.un_number) : ''}`;
+  } else if(sev.tier === 'moderate'){
+    hazBanner.style.display = '';
+    hazBanner.style.background = '#3a2c00';
+    hazBanner.style.color = '#ffd591';
+    hazBanner.style.borderTop = `3px solid #a07700`;
+    hazBanner.innerHTML = `${sev.emoji} <strong>${esc(sev.label)}</strong> · ${esc(sev.reason)}`;
   } else {
     hazBanner.style.display = 'none';
   }

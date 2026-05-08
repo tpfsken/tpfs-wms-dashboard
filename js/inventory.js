@@ -42,9 +42,10 @@ async function loadInventory(){
                    lot_number: r.lot_number || null, location_code: r.location_code || ''
                  }))}'>Break</button>`
       : '';
+    const sevChip = severityChip(r, { size:'sm' });
     return `
       <tr class="js-inv-row" data-id="${esc(r.id)}" style="cursor:pointer;">
-        <td style="font-weight:600;color:var(--blue);">${esc(r.sku_code || '')}</td>
+        <td style="font-weight:600;color:var(--blue);">${esc(r.sku_code || '')}${sevChip ? ' ' + sevChip : ''}</td>
         <td>${esc(r.sku_name || '')}</td>
         <td style="color:var(--text2);">${esc(r.client_name || '')}</td>
         <td><span class="chip chip-new">${esc(r.sku_type || r.uom || '')}</span></td>
