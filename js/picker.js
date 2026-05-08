@@ -12,6 +12,7 @@ let _pickerPending      = [];    // pending allocations (filtered + sorted)
 let _pickerIdx          = 0;     // current index into _pickerPending
 let _pickerLastVerifyId = null;  // pick_attachment id of the last AI verification
 let _pickerLastMatch    = null;  // 'yes' | 'partial' | 'no' | 'unreadable' | null
+let _pickerOverrideCfg  = null;  // { override_required, pin_configured } loaded once per session
 
 // =============================================================================
 // ENTRY / EXIT
@@ -19,8 +20,15 @@ let _pickerLastMatch    = null;  // 'yes' | 'partial' | 'no' | 'unreadable' | nu
 
 async function openMobilePicker(orderId){
   if(!orderId){ alert('No order selected'); return; }
-  _pickerOrder = await apiGet(`/orders/${orderId}`);
-  if(!_pickerOrder){ alert('Could not load order'); return; }
+  // Load order + override-required config in parallel. The config drives
+  // whether the picker can confirm without a photo at all.
+  const [orderRes, cfgRes] = await Promise.all([
+    apiGet(`/orders/${orderId}`),
+    apiGet('/warehouses/me/override-status'),
+  ]);
+  if(!orderRes){ alert('Could not load order'); return; }
+  _pickerOrder = orderRes;
+  _pickerOverrideCfg = cfgRes || { override_required: false, pin_configured: false };
 
   // Pending = allocations that haven't been picked or cancelled yet,
   // sorted by location pick_sequence (the receive flow sets this).
@@ -329,13 +337,21 @@ async function confirmCurrentPick(){
     if(!confirm(`You're confirming ${qty} but only ${a.quantity} was allocated. Continue?`)) return;
   }
 
-  // If the AI flagged a "no" match, the picker can't just type a reason
-  // and proceed — the two-step override modal requires a reason
-  // category, written explanation, AND a supervisor PIN. Open the
-  // overlay instead of confirming directly. The actual confirm happens
-  // from inside the overlay's submit handler (submitPickerOverride).
-  if(_pickerLastMatch === 'no'){
-    showPickerOverrideModal(qty);
+  // Three paths into the override modal:
+  //   1. AI flagged "no" — picker is overriding the AI verdict
+  //   2. AI flagged "unreadable" AND warehouse requires verification
+  //   3. Picker never took a photo AND warehouse requires verification
+  //      (this used to silently slip through — closes the loophole)
+  const noPhoto    = _pickerLastMatch == null;
+  const aiSaysNo   = _pickerLastMatch === 'no';
+  const aiVague    = _pickerLastMatch === 'unreadable';
+  const mandatory  = !!(_pickerOverrideCfg && _pickerOverrideCfg.override_required);
+
+  if(aiSaysNo || (mandatory && (noPhoto || aiVague))){
+    // Pre-select a sensible default reason category when the picker
+    // hasn't tried to verify at all — saves a click.
+    const defaultCat = noPhoto ? 'no_photo' : (aiVague ? 'label_damaged' : '');
+    showPickerOverrideModal(qty, defaultCat);
     return;
   }
 
@@ -403,15 +419,31 @@ async function doConfirmPick(qty, overrideReason){
 
 let _pickerOverrideQty = 0;  // qty captured when override modal opens
 
-function showPickerOverrideModal(qty){
+function showPickerOverrideModal(qty, defaultCat){
   _pickerOverrideQty = qty;
   document.getElementById('pickerOverrideOverlay').style.display = 'flex';
   document.getElementById('pickerOvStep1').style.display = 'block';
   document.getElementById('pickerOvStep2').style.display = 'none';
-  document.getElementById('pickerOvReasonCat').value = '';
+  document.getElementById('pickerOvReasonCat').value = defaultCat || '';
   document.getElementById('pickerOvReason').value = '';
   document.getElementById('pickerOvPin').value = '';
   document.getElementById('pickerOvPinErr').style.display = 'none';
+
+  // Adapt the heading + intro text to match what triggered the modal
+  // so the picker isn't confused about why they're here.
+  const heading = document.querySelector('#pickerOverrideOverlay > div:first-child');
+  const intro   = document.querySelector('#pickerOvStep1 > div:first-child');
+  if(_pickerLastMatch === 'no'){
+    heading.textContent = '⚠ Override AI Verification';
+    intro.textContent = 'Claude flagged this as the wrong product. To override, choose a reason and describe what you saw.';
+  } else if(_pickerLastMatch == null){
+    heading.textContent = '🔐 Supervisor Approval Required';
+    intro.textContent = 'No AI photo verification was done for this pick. Supervisor approval is required to confirm without a verified photo.';
+  } else {
+    heading.textContent = '⚠ Approval Required';
+    intro.textContent = 'AI couldn\'t verify the photo (label damaged or unreadable). Supervisor approval is required to confirm anyway.';
+  }
+
   setTimeout(() => document.getElementById('pickerOvReasonCat').focus(), 100);
 
   // Wire all the buttons (idempotent)
@@ -468,11 +500,6 @@ function overrideStep1Next(){
 }
 
 async function submitPickerOverride(){
-  if(!_pickerLastVerifyId){
-    alert('Verification record missing — please retake the photo.');
-    closePickerOverrideModal();
-    return;
-  }
   const cat    = document.getElementById('pickerOvReasonCat').value;
   const reason = document.getElementById('pickerOvReason').value.trim();
   const pin    = document.getElementById('pickerOvPin').value.trim();
@@ -490,9 +517,19 @@ async function submitPickerOverride(){
   btn.style.opacity = '0.6';
   btn.textContent = 'Verifying PIN…';
 
+  // Two server paths:
+  //   - Has photo verification id → /picks/attachments/:id/override
+  //     (the AI flagged it; this records the override on that row)
+  //   - No photo → /orders/:oid/picks/:aid/no-photo-override
+  //     (no photo was taken; creates a new pick_attachments row with
+  //     match_level='no_photo' and same audit trail)
+  const a = _pickerPending[_pickerIdx];
+  const url = _pickerLastVerifyId
+    ? `${API}/picks/attachments/${_pickerLastVerifyId}/override`
+    : `${API}/orders/${_pickerOrder.id}/picks/${a.id}/no-photo-override`;
+
   try {
-    // Step 1: verify PIN + log override server-side
-    const r = await fetch(`${API}/picks/attachments/${_pickerLastVerifyId}/override`, {
+    const r = await fetch(url, {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${T}` },
       body: JSON.stringify({ pin, reason_category: cat, reason }),
@@ -504,9 +541,7 @@ async function submitPickerOverride(){
       return;
     }
 
-    // Step 2: now actually confirm the pick. doConfirmPick won't
-    // re-tag the verification row because we pass overrideReason
-    // (server already logged the override on /override).
+    // Server logged the override + verified PIN. Now confirm the pick.
     closePickerOverrideModal();
     await doConfirmPick(_pickerOverrideQty, `[${cat}] ${reason}`);
   } catch(e){
