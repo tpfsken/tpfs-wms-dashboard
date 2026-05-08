@@ -298,6 +298,81 @@
   </div>
 
   <!-- ============================================================ -->
+  <!-- FLOOR MODE — phone-first ops shell. Auto-activated on mobile  -->
+  <!-- for ops users so warehouse staff get a stripped-down 3-card    -->
+  <!-- interface (Pick / Receive / Move) instead of the desktop     -->
+  <!-- dashboard. Hidden on tablet/desktop. Toggleable.              -->
+  <!-- ============================================================ -->
+  <div class="page" id="page-floorHome">
+    <div style="padding:16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);">
+      <div style="width:34px;height:34px;background:var(--blue);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;flex-shrink:0;">T</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;">Warehouse Floor</div>
+        <div style="font-size:11px;color:var(--text2);" id="floorUserLine">—</div>
+      </div>
+      <button class="btn btn-ghost js-signout" style="padding:6px 10px;font-size:12px;">Sign Out</button>
+    </div>
+    <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
+      <button class="floor-card" data-target="floorPickList" style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px 18px;text-align:left;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:16px;">
+        <div style="font-size:34px;line-height:1;">📦</div>
+        <div style="flex:1;">
+          <div style="font-size:18px;font-weight:700;">Orders to Pick</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px;" id="floorPickCount">— ready to pick</div>
+        </div>
+        <div style="font-size:22px;color:var(--text2);">›</div>
+      </button>
+      <button class="floor-card" data-target="floorInbound" style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px 18px;text-align:left;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:16px;">
+        <div style="font-size:34px;line-height:1;">📥</div>
+        <div style="flex:1;">
+          <div style="font-size:18px;font-weight:700;">Receive Inbound</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px;" id="floorInboundCount">— receipts open</div>
+        </div>
+        <div style="font-size:22px;color:var(--text2);">›</div>
+      </button>
+      <button class="floor-card" data-target="floorMove" style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px 18px;text-align:left;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:16px;">
+        <div style="font-size:34px;line-height:1;">↔️</div>
+        <div style="flex:1;">
+          <div style="font-size:18px;font-weight:700;">Move Inventory</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px;">Move an LP between locations</div>
+        </div>
+        <div style="font-size:22px;color:var(--text2);">›</div>
+      </button>
+    </div>
+    <div style="margin-top:auto;padding:14px 18px;border-top:1px solid var(--border);text-align:center;">
+      <button onclick="exitFloorMode()" style="background:none;border:none;color:var(--text2);font-size:13px;text-decoration:underline;cursor:pointer;padding:6px;">Switch to desktop view</button>
+    </div>
+  </div>
+
+  <!-- Orders to Pick — list of allocated/picking orders, tap to open picker -->
+  <div class="page" id="page-floorPickList">
+    <div style="padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);">
+      <button onclick="navigateTo('floorHome')" style="background:#3a3a3a;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:14px;cursor:pointer;">← Home</button>
+      <div style="flex:1;font-size:16px;font-weight:700;">Orders to Pick</div>
+      <button onclick="loadFloorPickList()" style="background:#3a3a3a;color:#fff;border:none;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;">↻</button>
+    </div>
+    <div id="floorPickListBody" style="padding:12px;"></div>
+  </div>
+
+  <!-- Receive Inbound — list of receipts -->
+  <div class="page" id="page-floorInbound">
+    <div style="padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);">
+      <button onclick="navigateTo('floorHome')" style="background:#3a3a3a;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:14px;cursor:pointer;">← Home</button>
+      <div style="flex:1;font-size:16px;font-weight:700;">Receive Inbound</div>
+      <button onclick="loadFloorInbound()" style="background:#3a3a3a;color:#fff;border:none;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;">↻</button>
+    </div>
+    <div id="floorInboundBody" style="padding:12px;"></div>
+  </div>
+
+  <!-- Move Inventory — LP source + destination scan/select -->
+  <div class="page" id="page-floorMove">
+    <div style="padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);">
+      <button onclick="navigateTo('floorHome')" style="background:#3a3a3a;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:14px;cursor:pointer;">← Home</button>
+      <div style="flex:1;font-size:16px;font-weight:700;">Move Inventory</div>
+    </div>
+    <div id="floorMoveBody" style="padding:18px;"></div>
+  </div>
+
+  <!-- ============================================================ -->
   <!-- PORTAL HOME (page-portalHome) — landing hub for client users  -->
   <!-- ============================================================ -->
   <div class="page" id="page-portalHome">
@@ -1436,6 +1511,7 @@
 <script src="js/reports.js"></script>
 <script src="js/portal.js"></script>
 <script src="js/picker.js"></script>
+<script src="js/floor.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

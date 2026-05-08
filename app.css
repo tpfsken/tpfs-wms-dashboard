@@ -194,6 +194,50 @@ body.portal-mode .portal-banner{
 }
 
 /* ===========================================================
+   FLOOR MODE — phone-first stripped-down ops shell.
+   Activated by setting body.floor-mode (auto on phones for ops
+   users, opt-in via ?floor=1 URL param). Hides the desktop
+   sidebar / topbar / dashboard pages; shows only the
+   page-floor* pages.
+=========================================================== */
+body.floor-mode .sidebar,
+body.floor-mode .topbar,
+body.floor-mode .portal-banner,
+body.floor-mode #portalBanner {
+  display: none !important;
+}
+body.floor-mode .shell {
+  grid-template-columns: 1fr !important;
+  height: 100dvh;
+  height: 100vh;
+  padding-top:    env(safe-area-inset-top, 0px) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+}
+body.floor-mode .main {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+body.floor-mode .page {
+  padding: 0 !important;
+  height: 100%;
+  display: none;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--bg);
+}
+body.floor-mode .page.active {
+  display: flex !important;
+}
+/* Big tappable cards on the floor home */
+body.floor-mode .floor-card:active {
+  transform: scale(0.98);
+  border-color: var(--blue) !important;
+}
+body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
+
+/* ===========================================================
    PHONE-SIZED PICKER (≤600px wide)
    The picker UI is sized for tablets by default. On a phone
    the cards / fonts / paddings need to compress so the picker

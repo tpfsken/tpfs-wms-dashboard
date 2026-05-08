@@ -39,7 +39,9 @@ async function doLogin(){
     document.getElementById('loginOverlay').style.display = 'none';
     // Phase 3: client portal users get the portal shell; ops/admin get the
     // full ops dashboard. Switch is purely on the JWT's userType claim.
-    if(U && U.userType === 'client') bootPortal(); else boot();
+    if(U && U.userType === 'client') bootPortal();
+    else if(typeof shouldUseFloorMode === 'function' && shouldUseFloorMode()) bootFloor();
+    else boot();
   } catch(x){
     err.textContent = 'Network error';
   }
@@ -58,6 +60,9 @@ const titles = {
   inbound:'Receiving', intake:'Intake', clients:'Clients',
   billing:'Billing', reports:'Reports',
   portalHome:'Customer Portal', portalNewOrder:'Place an Order', portalIntake:'Upload Documents',
+  // Floor mode (phone-first ops shell)
+  floorHome:'Warehouse Floor', floorPickList:'Orders to Pick',
+  floorInbound:'Receive Inbound', floorMove:'Move Inventory',
 };
 
 // FIX: clients was missing from this map, so the Clients tab never auto-loaded.
@@ -73,10 +78,25 @@ const loaders = {
   portalHome:     loadPortalHome,
   portalNewOrder: loadPortalNewOrder,
   portalIntake:   loadPortalIntake,
+  // Floor mode
+  floorHome:      loadFloorHomeCounts,
+  floorPickList:  loadFloorPickList,
+  floorInbound:   loadFloorInbound,
+  floorMove:      loadFloorMove,
 };
 
 function navigateTo(p){
-  document.querySelector(`.nav-item[data-page="${p}"]`)?.click();
+  // Pages with a sidebar nav-item: simulate the click so the active
+  // highlight + page swap + loader call all fire through that handler.
+  const navItem = document.querySelector(`.nav-item[data-page="${p}"]`);
+  if(navItem){ navItem.click(); return; }
+  // Pages without a sidebar entry (floor mode, etc.): swap the .active
+  // page directly and call the loader if there is one.
+  document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
+  document.getElementById('page-' + p)?.classList.add('active');
+  const titleEl = document.getElementById('pageTitle');
+  if(titleEl) titleEl.textContent = titles[p] || p;
+  if(loaders[p]) loaders[p]();
 }
 
 function tick(){
@@ -185,9 +205,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // If we already have a token, skip login overlay and boot.
   if(T && U){
     document.getElementById('loginOverlay').style.display = 'none';
-    // Phase 3: dispatch on JWT userType — clients land in the portal shell,
-    // ops/admin keep the existing dashboard boot.
-    if(U.userType === 'client') bootPortal(); else boot();
+    // Boot dispatch:
+    //   - client users → always portal mode
+    //   - ops users on phones → floor mode (stripped 3-card shell)
+    //   - ops users elsewhere → full desktop dashboard
+    if(U.userType === 'client') bootPortal();
+    else if(typeof shouldUseFloorMode === 'function' && shouldUseFloorMode()) bootFloor();
+    else boot();
   }
 
   // PWA: register the service worker so the app is installable to the

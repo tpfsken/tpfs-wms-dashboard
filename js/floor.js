@@ -1,0 +1,212 @@
+// =============================================================================
+// FLOOR MODE — phone-first ops shell.
+// =============================================================================
+// Auto-activates for ops users on phones (≤600px viewport) so warehouse
+// staff don't get the desktop dashboard on a 6" screen. Three focused
+// screens: Orders to Pick, Receive Inbound, Move Inventory. Designed
+// for one-handed tablet use with big tap targets and minimal info
+// density.
+//
+// URL params:
+//   ?floor=1     — force into floor mode (handy for QA on desktop)
+//   ?desktop=1   — force out of floor mode (saved per-session)
+//
+// Activated by bootFloor() from app.js after auth, in lieu of boot()
+// when the floor heuristic matches.
+// =============================================================================
+
+function shouldUseFloorMode(){
+  // Honor explicit overrides first (sticky for the session)
+  const params = new URLSearchParams(location.search);
+  if(params.get('floor')   === '1') sessionStorage.setItem('tpfs_mode', 'floor');
+  if(params.get('desktop') === '1') sessionStorage.setItem('tpfs_mode', 'desktop');
+  const stored = sessionStorage.getItem('tpfs_mode');
+  if(stored === 'floor')   return true;
+  if(stored === 'desktop') return false;
+  // Default heuristic: phone-sized viewport
+  return window.matchMedia('(max-width: 600px)').matches;
+}
+
+function bootFloor(){
+  document.body.classList.add('floor-mode');
+
+  if(U){
+    document.getElementById('floorUserLine').textContent =
+      (U.fullName || U.email || '') + ' · Operations';
+  }
+
+  // Wire the 3 home cards to navigate to their target pages
+  document.querySelectorAll('.floor-card').forEach(c => {
+    if(c._wired) return;
+    c._wired = true;
+    c.addEventListener('click', () => navigateTo(c.dataset.target));
+  });
+
+  // Clock helper from app.js still runs in the background; not displayed
+  // here, the floor home doesn't have a clock.
+
+  navigateTo('floorHome');
+  loadFloorHomeCounts();
+}
+
+function exitFloorMode(){
+  // Persist the user's choice for this session
+  sessionStorage.setItem('tpfs_mode', 'desktop');
+  document.body.classList.remove('floor-mode');
+  // Boot the regular dashboard so the user gets the full experience
+  if(typeof boot === 'function') boot();
+}
+
+// =============================================================================
+// FLOOR HOME — counts on each card so the user knows what's pending
+// =============================================================================
+
+async function loadFloorHomeCounts(){
+  // "Orders to Pick" = orders with allocations not yet picked
+  try {
+    const r = await apiGet('/orders?status=ALLOCATED,PICKING&limit=200');
+    const rows = r?.data || r?.rows || r || [];
+    const n = rows.length;
+    document.getElementById('floorPickCount').textContent =
+      n === 0 ? 'nothing to pick — caught up' :
+      n === 1 ? '1 order ready to pick' :
+                `${n} orders ready to pick`;
+  } catch(_) { /* leave the dash placeholder */ }
+
+  // "Receive Inbound" = open receipts
+  try {
+    const r = await apiGet('/inbound/receipts?status=OPEN&limit=200');
+    const rows = r?.data || r?.rows || r || [];
+    const n = rows.length;
+    document.getElementById('floorInboundCount').textContent =
+      n === 0 ? 'nothing to receive' :
+      n === 1 ? '1 receipt open' :
+                `${n} receipts open`;
+  } catch(_) { /* leave the dash placeholder */ }
+}
+
+// =============================================================================
+// ORDERS TO PICK — list of orders ready to pick. Tap → mobile picker.
+// =============================================================================
+
+async function loadFloorPickList(){
+  const body = document.getElementById('floorPickListBody');
+  body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text2);">Loading…</div>';
+
+  const r = await apiGet('/orders?status=ALLOCATED,PICKING&limit=200');
+  if(!r){
+    body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--red);">Could not load orders</div>';
+    return;
+  }
+  const rows = r?.data || r?.rows || r || [];
+  if(!rows.length){
+    body.innerHTML = `
+      <div style="padding:48px 18px;text-align:center;">
+        <div style="font-size:48px;margin-bottom:12px;">✓</div>
+        <div style="font-size:16px;font-weight:600;">All caught up</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:6px;">No orders waiting to be picked.</div>
+      </div>`;
+    return;
+  }
+
+  // Sort by required_ship_date ASC (most urgent first)
+  rows.sort((a, b) => {
+    const da = a.required_ship_date ? Date.parse(a.required_ship_date) : Infinity;
+    const db = b.required_ship_date ? Date.parse(b.required_ship_date) : Infinity;
+    return da - db;
+  });
+
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  body.innerHTML = rows.map(o => {
+    const ship = o.required_ship_date ? new Date(o.required_ship_date) : null;
+    const overdue = ship && ship < today;
+    const dueLabel = ship
+      ? (overdue
+          ? `<span style="color:var(--red);font-weight:700;">⚠ past due ${ship.toLocaleDateString()}</span>`
+          : `due ${ship.toLocaleDateString()}`)
+      : '';
+    const lineCount = o.line_count || 0;
+    const totalUnits = o.total_units || 0;
+    return `
+      <button class="js-floor-pick-row" data-id="${esc(o.id)}" style="display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;color:var(--text);cursor:pointer;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+          <div style="font-size:15px;font-weight:700;color:var(--blue);">${esc(o.order_number || '')}</div>
+          <span class="chip ${o.status === 'PICKING' ? 'chip-active' : 'chip-warning'}" style="font-size:10px;">${esc(o.status)}</span>
+          <div style="flex:1"></div>
+          <div style="font-size:18px;color:var(--text2);">›</div>
+        </div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:4px;">${esc(o.customer_name || o.client_name || '')}</div>
+        <div style="font-size:12px;color:var(--text2);display:flex;gap:10px;flex-wrap:wrap;">
+          <span>${esc(lineCount)} ${lineCount === 1 ? 'line' : 'lines'} · ${esc(totalUnits)} units</span>
+          ${dueLabel ? `<span>· ${dueLabel}</span>` : ''}
+        </div>
+      </button>`;
+  }).join('');
+
+  body.querySelectorAll('.js-floor-pick-row').forEach(row => {
+    row.addEventListener('click', () => {
+      // Re-uses the existing mobile picker — same UI everyone tested
+      openMobilePicker(row.dataset.id);
+    });
+  });
+}
+
+// =============================================================================
+// RECEIVE INBOUND — list of open receipts. Tap → opens detail view (basic
+// for now; full receive flow can layer on top).
+// =============================================================================
+
+async function loadFloorInbound(){
+  const body = document.getElementById('floorInboundBody');
+  body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text2);">Loading…</div>';
+
+  const r = await apiGet('/inbound/receipts?status=OPEN&limit=200');
+  if(!r){
+    body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--red);">Could not load receipts</div>';
+    return;
+  }
+  const rows = r?.data || r?.rows || r || [];
+  if(!rows.length){
+    body.innerHTML = `
+      <div style="padding:48px 18px;text-align:center;">
+        <div style="font-size:48px;margin-bottom:12px;">📭</div>
+        <div style="font-size:16px;font-weight:600;">No open receipts</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:6px;">Create a new receipt on the desktop view to start receiving.</div>
+      </div>`;
+    return;
+  }
+
+  body.innerHTML = rows.map(r => {
+    const exp = r.expected_arrival ? new Date(r.expected_arrival).toLocaleDateString() : '—';
+    return `
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+          <div style="font-size:15px;font-weight:700;color:var(--blue);">${esc(r.receipt_number || r.po_number || '')}</div>
+          <span class="chip chip-active" style="font-size:10px;">${esc(r.status || 'OPEN')}</span>
+        </div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:4px;">${esc(r.supplier_name || r.client_name || '')}</div>
+        <div style="font-size:12px;color:var(--text2);">Expected: ${esc(exp)}</div>
+      </div>`;
+  }).join('') + `
+    <div style="margin-top:14px;padding:14px;background:var(--bg);border-radius:10px;font-size:13px;color:var(--text2);text-align:center;">
+      📝 Full receive flow (tap a receipt → scan LP / qty / location) is coming next. For now use the desktop Receiving page to add lines.
+    </div>`;
+}
+
+// =============================================================================
+// MOVE INVENTORY — search LP, pick destination location, confirm move.
+// Phase 1: stub UI with a clear "coming next" so the home card isn't dead.
+// Phase 2: wire to a new POST /inventory/move endpoint.
+// =============================================================================
+
+function loadFloorMove(){
+  document.getElementById('floorMoveBody').innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center;">
+      <div style="font-size:48px;margin-bottom:14px;">🚧</div>
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px;">Move Inventory — coming next</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.5;">
+        Scan an LP, scan a destination location, tap Move. Updates location on the LP and the inventory row in one shot. Will land in the next push.
+      </div>
+    </div>`;
+}

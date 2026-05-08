@@ -12,7 +12,7 @@
 // old cache is purged on activate.
 // =============================================================================
 
-const CACHE_NAME = 'tpfs-wms-shell-v3';
+const CACHE_NAME = 'tpfs-wms-shell-v4';
 const SHELL_ASSETS = [
   '/',
   '/index.html',
@@ -32,6 +32,7 @@ const SHELL_ASSETS = [
   '/js/reports.js',
   '/js/portal.js',
   '/js/picker.js',
+  '/js/floor.js',
   '/js/app.js',
 ];
 
