@@ -516,11 +516,20 @@ async function openItemFormModal(skuId){
     document.getElementById('itemHazmatBlock').style.display = sku.is_hazmat ? 'block' : 'none';
     document.getElementById('itemSdsExtractStatus').textContent = '';
 
+    // Pre-fill the Base SKU Code field with the existing sku_code. In
+    // edit mode there's only one handling unit, so the base code IS the
+    // SKU code — keeping the two in sync (via _autoSync=true on the loaded
+    // unit) means typing in either field updates the saved value. Without
+    // this, the user types into Base SKU Code, the handling unit row
+    // doesn't auto-update, and Save sends the unchanged old code.
+    document.getElementById('itemCode').value = sku.sku_code || '';
+
     // Edit mode shows just THIS SKU as one row; multi-level edit goes
     // through Item Master + create a sibling SKU.
     _itemHandlingUnits.push({
       sku_type:      sku.sku_type || 'EACH',
       sku_code:      sku.sku_code || '',
+      _autoSync:     true,                    // base-code edits flow into this unit
       pack_qty:      sku.units_per_case ?? null,
       length_in:     sku.length_in ?? null,
       width_in:      sku.width_in ?? null,
@@ -533,9 +542,11 @@ async function openItemFormModal(skuId){
     document.getElementById('itemHuEditNote').style.display = 'block';
     loadItemAttachmentsList(skuId);
   } else {
-    // Create mode — reset everything
+    // Create mode — reset everything (including itemCode, the Base SKU
+    // Code field — without this, a stale value from a prior edit would
+    // bleed into the new-item form).
     [
-      'itemUpc','itemName','itemDescription','itemUnitCost','itemUnitPrice',
+      'itemCode','itemUpc','itemName','itemDescription','itemUnitCost','itemUnitPrice',
       'itemUnNumber','itemHazardClass','itemProperShippingName','itemHazmatNotes',
       'itemSpecialHandling',
     ].forEach(id => { document.getElementById(id).value = ''; });
@@ -727,7 +738,15 @@ async function submitItemForm(){
     }
 
     closeModal('itemFormModal');
-    loadInventory();
+    // Refresh whichever list view is currently visible. The user could
+    // be on Inventory OR on a client's Item Master tab — without
+    // refreshing both we end up showing stale rows on the page they're
+    // actually looking at.
+    if(typeof loadInventory === 'function') loadInventory();
+    if(typeof fetchClientItems === 'function' && document.getElementById('cliItemsBody')){
+      const search = document.getElementById('cliItemsSearch');
+      fetchClientItems(search?.value.trim() || '');
+    }
   } catch(e){
     err.textContent = 'Network error';
   } finally {
