@@ -412,13 +412,14 @@ async function openItemFormModal(skuId){
     });
   }
 
-  // Wire + Add Level — only meaningful in create mode (edit mode shows
-  // a single locked SKU; multi-level changes go through Item Master).
+  // Wire + Add Level — works in both create AND edit mode now. In edit
+  // mode the new unit is tagged _isNew=true and gets POSTed to
+  // /skus/:anchor/handling-units on save with proper parent linkage
+  // (see addHandlingUnit + submitItemForm).
   const huAddBtn = document.getElementById('itemHuAddBtn');
   if(huAddBtn && !huAddBtn._wired){
     huAddBtn._wired = true;
     huAddBtn.addEventListener('click', () => {
-      if(_editingItemId) return; // disabled in edit mode anyway
       // Pick the next conventional level the user hasn't added yet
       const used = new Set(_itemHandlingUnits.map(h => h.sku_type));
       const next = ['EACH','INNER_PACK','CASE','PALLET'].find(t => !used.has(t)) || 'EACH';
