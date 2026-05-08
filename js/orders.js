@@ -404,13 +404,19 @@ async function submitDestructiveEdit(url){
 function renderPickList(d, isPickable){
   const panel = document.getElementById('pickListPanel');
   if(!panel) return;
-  if(!isPickable || !d.allocations?.length){
+  // Pick list only shows ACTIVE allocations (PENDING + PICKED). CANCELLED
+  // rows from a prior unallocate-all stay in the order's allocation
+  // history (rendered separately when not pickable) but must not bleed
+  // into the active pick list — otherwise the picker sees a phantom row
+  // for inventory that was already returned to stock.
+  const activeAllocs = (d.allocations || []).filter(a => a.status !== 'CANCELLED');
+  if(!isPickable || !activeAllocs.length){
     panel.style.display = 'none';
     return;
   }
   panel.style.display = 'block';
 
-  const allocs = d.allocations;
+  const allocs = activeAllocs;
   const picked = allocs.filter(a => a.status === 'PICKED').length;
   const total  = allocs.length;
   // Don't trust just "all allocations picked" — also verify every
