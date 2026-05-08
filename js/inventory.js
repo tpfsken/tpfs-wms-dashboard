@@ -1124,14 +1124,23 @@ function renderSdsExtractResult(ext, doc){
     : '';
   const docLine = `Version ${esc(doc.version_number)} · ${esc(doc.original_filename || 'sds.pdf')}`;
 
+  // Use the backend-supplied reason when available — it explains things
+  // like "5 required fields couldn't be extracted" instead of the
+  // confidence-only message which can be misleading (e.g. weakest field
+  // at 98% but band still review_low because other required fields were
+  // entirely missing from the document).
+  const reasonText = ext.reason
+    ? esc(ext.reason)
+    : (band === 'auto_applied'
+        ? 'High-confidence fields written directly to the SKU master. Review the audit log on the SKU detail page if you want to see what changed.'
+        : band === 'rejected'
+          ? 'Some required hazmat fields were missing or below 75% confidence. Reviewer must fix before this SKU can be considered compliant.'
+          : 'Some fields landed below the 95% auto-apply threshold or contained changes vs. previously approved values.');
+
   result.innerHTML = `
     <div style="font-weight:700;font-size:13px;margin-bottom:4px;">${bandStyle.icon} ${esc(bandStyle.label)}${conf}</div>
     <div style="font-size:11px;opacity:.85;">${docLine}</div>
-    ${band === 'auto_applied'
-      ? `<div style="font-size:11px;margin-top:6px;">High-confidence fields written directly to the SKU master. Review the audit log on the SKU detail page if you want to see what changed.</div>`
-      : band === 'rejected'
-        ? `<div style="font-size:11px;margin-top:6px;">Some required hazmat fields were missing or below 75% confidence. Reviewer must fix before this SKU can be considered compliant.</div>`
-        : `<div style="font-size:11px;margin-top:6px;">Some fields landed below the 95% auto-apply threshold or contained changes vs. previously approved values. They're queued for hazmat-certified reviewer approval.</div>`}
+    <div style="font-size:11px;margin-top:6px;line-height:1.5;">${reasonText}</div>
     ${reviewLink}
   `;
 
