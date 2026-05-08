@@ -189,4 +189,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // ops/admin keep the existing dashboard boot.
     if(U.userType === 'client') bootPortal(); else boot();
   }
+
+  // PWA: register the service worker so the app is installable to the
+  // tablet's home screen and the static shell loads instantly even on
+  // flaky warehouse WiFi. The browser only allows SW registration over
+  // https or localhost — Netlify is https so this just works.
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+      console.warn('SW registration failed:', err);
+    });
+  }
 });

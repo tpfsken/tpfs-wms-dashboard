@@ -13,6 +13,41 @@ let _pickerIdx          = 0;     // current index into _pickerPending
 let _pickerLastVerifyId = null;  // pick_attachment id of the last AI verification
 let _pickerLastMatch    = null;  // 'yes' | 'partial' | 'no' | 'unreadable' | null
 let _pickerOverrideCfg  = null;  // { override_required, pin_configured } loaded once per session
+let _pickerWakeLock     = null;  // Screen Wake Lock sentinel — keeps tablet awake while picking
+
+// =============================================================================
+// PWA HELPERS — Wake Lock + haptic feedback
+// =============================================================================
+// Wake Lock keeps the tablet screen on while the picker is open. Browsers
+// release it automatically when the page is hidden; we re-acquire on
+// visibility change so a quick app-switch doesn't lose it.
+async function acquirePickerWakeLock(){
+  try {
+    if('wakeLock' in navigator){
+      _pickerWakeLock = await navigator.wakeLock.request('screen');
+      _pickerWakeLock.addEventListener?.('release', () => { _pickerWakeLock = null; });
+    }
+  } catch(_) { /* not supported / blocked — fail silent */ }
+}
+async function releasePickerWakeLock(){
+  try { if(_pickerWakeLock){ await _pickerWakeLock.release(); _pickerWakeLock = null; } }
+  catch(_) { /* swallow */ }
+}
+function reacquireWakeLockOnVisibility(){
+  if(document.visibilityState === 'visible' && document.getElementById('pickerShell').style.display === 'flex'){
+    acquirePickerWakeLock();
+  }
+}
+
+// Vibration — short pulse on success, longer on error. Silent fail on
+// browsers that don't expose the API (most desktops, all of iOS Safari
+// pre-16.4) so the picker behaves identically just without the buzz.
+function pickerHaptic(kind){
+  if(!('vibrate' in navigator)) return;
+  if(kind === 'success')      navigator.vibrate(40);
+  else if(kind === 'warn')    navigator.vibrate([30, 60, 30]);
+  else if(kind === 'error')   navigator.vibrate([80, 50, 80, 50, 80]);
+}
 
 // =============================================================================
 // ENTRY / EXIT
@@ -78,12 +113,21 @@ async function openMobilePicker(orderId){
   // bleed through to the dashboard
   document.body.style.overflow = 'hidden';
 
+  // PWA: keep the tablet screen on while picking, and re-acquire on
+  // visibility change since the browser releases on tab switch / sleep.
+  acquirePickerWakeLock();
+  if(!document._pickerVisWired){
+    document._pickerVisWired = true;
+    document.addEventListener('visibilitychange', reacquireWakeLockOnVisibility);
+  }
+
   renderCurrentPick();
 }
 
 function exitMobilePicker(){
   document.getElementById('pickerShell').style.display = 'none';
   document.body.style.overflow = '';
+  releasePickerWakeLock();
   // If we just finished an order, refresh its detail view if open
   if(typeof COI !== 'undefined' && COI && _pickerOrder && COI === _pickerOrder.id) {
     if(typeof openOrderDetail === 'function') openOrderDetail(COI);
@@ -251,6 +295,10 @@ async function verifyCurrentPickPhoto(file){
 
     _pickerLastVerifyId = d.attachment_id;
     _pickerLastMatch    = d.extracted?.match || 'unreadable';
+    // Haptic cue so the picker feels the verdict without looking
+    pickerHaptic(_pickerLastMatch === 'yes' ? 'success'
+               : _pickerLastMatch === 'no'  ? 'error'
+               : 'warn');
     renderVerifyBanner(d.extracted || {});
     vbtn.disabled = false;
     vbtn.style.opacity = '';
@@ -398,6 +446,7 @@ async function doConfirmPick(qty, overrideReason){
 
     a.status = 'PICKED';
     _pickerIdx++;
+    pickerHaptic('success');
     showPickerStatus('✓ Picked', 'green');
     setTimeout(() => renderCurrentPick(), 300);
     return true;
