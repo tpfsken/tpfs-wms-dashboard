@@ -1328,6 +1328,13 @@
           </label>
           <span style="font-size:12px;color:var(--text2);">Items under this client will require UN #, packing group, and hazard class</span>
         </div>
+        <div style="display:flex;align-items:center;gap:14px;margin-top:12px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:14px;">
+            <input type="checkbox" id="cfLotTracking" style="width:18px;height:18px;">
+            <span>📦 Lot Tracking Required</span>
+          </label>
+          <span style="font-size:12px;color:var(--text2);">All items under this client will be lot-tracked (mandatory) — turning this on backfills existing items.</span>
+        </div>
         <div id="cfHazmatBlock" style="display:none;margin-top:14px;padding:14px;background:var(--bg);border-radius:8px;border:1px solid var(--amber);">
           <div style="font-size:12px;color:var(--amber);font-weight:600;margin-bottom:6px;">⚠ HAZMAT — CLIENT-LEVEL CONTACT</div>
           <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Hazard class, packing group, and UN # vary by item — they're set per SKU. Only the emergency contact + notes belong to the client.</div>

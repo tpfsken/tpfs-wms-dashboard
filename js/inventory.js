@@ -252,6 +252,7 @@ async function submitCaseBreak(){
 
 let _editingItemId = null;   // null = create, string = edit
 let _itemClientHazmatMap = {}; // {clientId -> hazmat_enabled} for prompting
+let _itemClientLotMap    = {}; // {clientId -> lot_tracking_enabled} for SKU lock
 let _itemPendingSds = null;    // File staged from "Read SDS"; uploaded as
                                // an attachment after the SKU is saved so
                                // the SDS sticks with the item.
@@ -374,8 +375,10 @@ async function openItemFormModal(skuId){
 
   // Build clientId -> hazmat_enabled map so onChange we can prompt
   _itemClientHazmatMap = {};
+  _itemClientLotMap    = {};
   for(const c of clientsCache){
     _itemClientHazmatMap[c.id] = !!c.hazmat_enabled;
+    _itemClientLotMap[c.id]    = !!c.lot_tracking_enabled;
   }
 
   // Init combos. UOM options merge the baseline catalog with whatever's
@@ -598,6 +601,29 @@ function onItemClientChange(){
   const cid  = cbVal('itemClientWrap');
   const hint = document.getElementById('itemHazmatHint');
   hint.style.display = (cid && _itemClientHazmatMap[cid]) ? 'block' : 'none';
+
+  // Lot tracking mandate: if the selected client has lot_tracking_enabled,
+  // force-check the per-SKU Lot tracked checkbox + disable it so the user
+  // can't uncheck. The backend enforces this independently — UI just
+  // mirrors so the user understands what's happening.
+  const lotInp = document.getElementById('itemLotTracked');
+  if(lotInp){
+    const mandated = !!(cid && _itemClientLotMap[cid]);
+    if(mandated){
+      lotInp.checked  = true;
+      lotInp.disabled = true;
+      // Tooltip on the parent label so hover explains why
+      lotInp.title = 'This client mandates lot tracking on all SKUs (set on the client record).';
+      // Mark the label itself with the mandate so the visual state reads
+      const lab = lotInp.closest('label');
+      if(lab) lab.style.opacity = '0.85';
+    } else {
+      lotInp.disabled = false;
+      lotInp.title = '';
+      const lab = lotInp.closest('label');
+      if(lab) lab.style.opacity = '';
+    }
+  }
 }
 
 async function submitItemForm(){

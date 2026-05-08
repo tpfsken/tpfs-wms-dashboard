@@ -142,6 +142,7 @@ function renderClientProfileTab(){
     row('Contact Email',  c.contact_email) +
     row('Phone',          c.contact_phone) +
     row('Hazmat',         c.hazmat_enabled ? 'Enabled' : 'No') +
+    row('Lot Tracking',   c.lot_tracking_enabled ? 'Mandatory (all SKUs)' : 'Per-item') +
     row('Onboarded',      c.onboarded_at ? new Date(c.onboarded_at).toLocaleDateString() : null) +
     row('Status',         c.is_active ? 'Active' : 'Inactive');
 
@@ -197,6 +198,7 @@ function openClientFormModal(client){
   document.getElementById('cfContactEmail').value = client?.contact_email|| '';
   document.getElementById('cfContactPhone').value = client?.contact_phone|| '';
   document.getElementById('cfHazmat').checked     = !!client?.hazmat_enabled;
+  document.getElementById('cfLotTracking').checked = !!client?.lot_tracking_enabled;
 
   const hc = client?.hazmat_config || {};
   document.getElementById('cfHazEmergency').value = hc.emergency_contact || '';
@@ -239,6 +241,15 @@ async function submitClientForm(){
   const err = document.getElementById('cfError');
   err.textContent = '';
 
+  const lotTrackingChecked = document.getElementById('cfLotTracking').checked;
+  // Confirm before flipping ON for an existing client — backfill might
+  // affect a lot of SKUs.
+  if(_currentClient && lotTrackingChecked && !_currentClient.lot_tracking_enabled){
+    if(!confirm('Turning on lot tracking will MANDATE it on every SKU under this client (existing items will be backfilled to is_lot_tracked=true). Continue?')){
+      return;
+    }
+  }
+
   const body = {
     code:           document.getElementById('cfCode').value.trim().toUpperCase(),
     name:           document.getElementById('cfName').value.trim(),
@@ -247,6 +258,7 @@ async function submitClientForm(){
     contact_email:  document.getElementById('cfContactEmail').value.trim() || null,
     contact_phone:  document.getElementById('cfContactPhone').value.trim() || null,
     hazmat_enabled: document.getElementById('cfHazmat').checked,
+    lot_tracking_enabled: lotTrackingChecked,
   };
 
   if(!body.code) { err.textContent = 'Client code is required'; return; }
