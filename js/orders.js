@@ -174,6 +174,19 @@ async function openOrderDetail(id){
     if(canShip){
       html += `<button class="btn btn-success js-ship-btn" style="margin:0 8px 8px 0;">📦 Ship Order</button>`;
     }
+    // Unallocate Order — checkout-style edit flow. Visible only when the
+    // order is ALLOCATED or PICKING (i.e. has allocations to release) AND
+    // nothing's been picked yet (PICKED allocs require per-row /unpick
+    // first to release them safely). Lets ops fully release allocations
+    // back to inventory so the order can be edited freely, then re-
+    // allocated. PIN+reason gated like the other destructive edits.
+    const hasPickedAlloc = (d.allocations || []).some(a => a.status === 'PICKED');
+    const canUnallocateAll = ['ALLOCATED', 'PICKING'].includes(d.status) && !hasPickedAlloc;
+    if(canUnallocateAll){
+      html += `<button class="btn js-unallocate-all-btn"
+        style="margin:0 8px 8px 0;background:#3a2c00;color:#ffd591;border:1px solid #6b4c00;"
+        title="Release all allocations and demote order to NEW so you can edit lines freely">↺ Unallocate Order</button>`;
+    }
     if(tr?.allowed?.length){
       // Block transitions that move PAST the allocation stage when the
       // order is under-allocated. Going TO ALLOCATED is exempt because
@@ -220,6 +233,16 @@ async function openOrderDetail(id){
     );
     transBtns.querySelectorAll('.js-ship-btn').forEach(btn =>
       btn.addEventListener('click', () => showShipOrderModal())
+    );
+    transBtns.querySelectorAll('.js-unallocate-all-btn').forEach(btn =>
+      btn.addEventListener('click', () => {
+        const allocCount = (d.allocations || []).filter(a => a.status === 'PENDING').length;
+        showDestructiveEdit({
+          title: '↺ Unallocate Entire Order',
+          description: `Release all <strong>${allocCount}</strong> allocation${allocCount === 1 ? '' : 's'} on order <strong>${esc(d.order_number || '')}</strong> back to inventory and demote the order to <strong>NEW</strong>?<br><br>This is the right move when you need to <em>edit lines</em> (change qty, swap lots, add/remove SKUs) on an already-allocated order. After unallocating you can edit freely, then click 🎯 Allocate again to re-allocate fresh.<br><br><span style="color:var(--amber);">Inventory returns to available at the same lot/LP/location it came from. The cancelled allocations stay in history with reason and your name.</span>`,
+          url: `${API}/orders/${d.id}/unallocate-all`,
+        });
+      })
     );
   }
 
