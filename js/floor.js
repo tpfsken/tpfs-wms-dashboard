@@ -98,25 +98,19 @@ async function loadFloorPickList(){
     body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--red);">Could not load orders</div>';
     return;
   }
-  const allRows = r?.data || r?.rows || r || [];
-  // Only show orders that ACTUALLY have pending picks. The list query
-  // returns pending_picks_count per order; an ALLOCATED/PICKING order
-  // with 0 pending means everything's been picked but the supervisor
-  // hasn't clicked Complete Picking yet — those don't belong on the
-  // pick queue.
-  const rows = allRows.filter(o => Number(o.pending_picks_count || 0) > 0);
+  // Show every ALLOCATED/PICKING order. Two visual states:
+  //   pending_picks_count > 0 → "X picks ready" (tap to pick)
+  //   pending_picks_count = 0 → "Ready to complete" (tap → Complete Picking)
+  // This way the floor app stays self-sufficient — pickers can finish
+  // their own work without bouncing to desktop just to mark complete.
+  const rows = r?.data || r?.rows || r || [];
 
   if(!rows.length){
-    const waitingForSupervisor = allRows.length > 0;
     body.innerHTML = `
       <div style="padding:48px 18px;text-align:center;">
         <div style="font-size:48px;margin-bottom:12px;">✓</div>
         <div style="font-size:16px;font-weight:600;">All caught up</div>
-        <div style="font-size:13px;color:var(--text2);margin-top:6px;line-height:1.5;">
-          ${waitingForSupervisor
-            ? `${allRows.length} order${allRows.length === 1 ? '' : 's'} waiting on supervisor to complete picking on the desktop.`
-            : 'No orders waiting to be picked.'}
-        </div>
+        <div style="font-size:13px;color:var(--text2);margin-top:6px;">No orders waiting to be picked.</div>
       </div>`;
     return;
   }
@@ -145,6 +139,7 @@ async function loadFloorPickList(){
     const lineCount = o.line_count || 0;
     const totalUnits = o.total_units || 0;
     const pendingPicks = Number(o.pending_picks_count || 0);
+    const readyToComplete = pendingPicks === 0 && o.status === 'PICKING';
 
     // Lock check: held by someone else AND fresh (<30 min) → disable
     const lockedAt = o.picking_started_at ? new Date(o.picking_started_at) : null;
@@ -169,7 +164,9 @@ async function loadFloorPickList(){
         </div>
         <div style="font-size:13px;color:var(--text2);margin-bottom:4px;">${esc(o.customer_name || o.client_name || '')}</div>
         <div style="font-size:12px;color:var(--text2);display:flex;gap:10px;flex-wrap:wrap;">
-          <span style="color:var(--blue);font-weight:600;">${esc(pendingPicks)} pick${pendingPicks === 1 ? '' : 's'} ready</span>
+          ${readyToComplete
+            ? `<span style="color:var(--green);font-weight:600;">✓ Ready to complete</span>`
+            : `<span style="color:var(--blue);font-weight:600;">${esc(pendingPicks)} pick${pendingPicks === 1 ? '' : 's'} ready</span>`}
           <span>· ${esc(lineCount)} ${lineCount === 1 ? 'line' : 'lines'} · ${esc(totalUnits)} units</span>
           ${dueLabel ? `<span>· ${dueLabel}</span>` : ''}
         </div>

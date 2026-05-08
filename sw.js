@@ -12,7 +12,7 @@
 // old cache is purged on activate.
 // =============================================================================
 
-const CACHE_NAME = 'tpfs-wms-shell-v11';
+const CACHE_NAME = 'tpfs-wms-shell-v12';
 const SHELL_ASSETS = [
   '/',
   '/index.html',
