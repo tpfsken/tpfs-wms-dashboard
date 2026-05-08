@@ -522,9 +522,13 @@ async function openItemFormModal(skuId){
     cbReset('itemClientWrap'); cbSet('itemUomWrap','EA');
     cbReset('itemPackingGroupWrap');
 
-    // Create mode starts with one default level (EACH); ops can add more
+    // Create mode starts with one default level (EACH); ops can add more.
+    // _autoSync=true keeps the unit's sku_code in sync with the base
+    // code field as the user types (cleared once the user manually edits
+    // the unit's sku_code input).
     _itemHandlingUnits.push({
       sku_type:'EACH', sku_code:'', pack_qty:1,
+      _autoSync: true,
       length_in:null, width_in:null, height_in:null, weight_lbs:null,
       nmfc_code:'', freight_class:'',
     });
@@ -743,9 +747,19 @@ function computeDensity(L, W, H, wt){
 function addHandlingUnit(skuType){
   const baseCode = document.getElementById('itemCode').value.trim();
   const suffix = SKU_TYPE_SUFFIX[skuType] || (skuType ? skuType.slice(0, 3).toUpperCase() : 'X');
+  // For a single-level item the unit code defaults to the base code with
+  // no suffix — that's the user's actual SKU. For multi-level items each
+  // level gets a suffix (CS, EA, etc.) so codes are unique across the
+  // family. _autoSync tracks whether typing in the base code field
+  // should keep updating this unit's code (cleared when user edits the
+  // unit code directly).
+  const isFirstAndOnly = _itemHandlingUnits.length === 0;
   _itemHandlingUnits.push({
     sku_type:      skuType,
-    sku_code:      baseCode ? `${baseCode}-${suffix}` : '',
+    sku_code:      baseCode
+      ? (isFirstAndOnly ? baseCode : `${baseCode}-${suffix}`)
+      : '',
+    _autoSync:     true,
     pack_qty:      skuType === 'EACH' ? 1 : null,
     length_in:     null, width_in: null, height_in: null, weight_lbs: null,
     nmfc_code:     '',
@@ -806,9 +820,14 @@ async function renderHandlingUnits(){
     });
   }
 
-  // Wire input changes
-  wrap.querySelectorAll('.js-hu-code').forEach(inp => inp.addEventListener('input', e =>
-    _itemHandlingUnits[+e.target.dataset.idx].sku_code = e.target.value));
+  // Wire input changes. Editing a unit's sku_code directly breaks the
+  // auto-sync link with the base code — we won't clobber it on future
+  // base code edits.
+  wrap.querySelectorAll('.js-hu-code').forEach(inp => inp.addEventListener('input', e => {
+    const i = +e.target.dataset.idx;
+    _itemHandlingUnits[i].sku_code = e.target.value;
+    _itemHandlingUnits[i]._autoSync = false;
+  }));
   wrap.querySelectorAll('.js-hu-pack').forEach(inp => inp.addEventListener('input', e => {
     const v = e.target.value.trim();
     _itemHandlingUnits[+e.target.dataset.idx].pack_qty = v === '' ? null : Number(v);
@@ -858,20 +877,35 @@ function updateHuDensity(i){
   span.textContent = `${d.toFixed(1)} lb/ft³`;
 }
 
-// Optional convenience: when ops types in the Base SKU Code field, fill
-// in any per-level sku_codes that are still blank or still match the
-// previous derived pattern.
+// When ops types in the Base SKU Code field, keep each handling unit's
+// sku_code in sync — but only for units the user hasn't manually edited.
+// Tracking is via hu._autoSync (true on creation, false once the user
+// types into the unit's sku_code input).
+//
+// For a single-level item the unit code = base code (no suffix), since
+// that single level IS the SKU the user means. For multi-level items
+// each gets ${base}-${suffix}.
 function _wireBaseCodeAutofill(){
   const baseInp = document.getElementById('itemCode');
   if(!baseInp || baseInp._huWired) return;
   baseInp._huWired = true;
   baseInp.addEventListener('input', () => {
     const base = baseInp.value.trim();
+    const oneLevel = _itemHandlingUnits.length === 1;
     let mutated = false;
     for(const hu of _itemHandlingUnits){
+      // Sync only units that started auto-filled and haven't been
+      // manually edited. Edit-mode rows + user-customized create-mode
+      // rows are left alone (their _autoSync is unset or false).
+      if(hu._autoSync !== true) continue;
       const suffix = SKU_TYPE_SUFFIX[hu.sku_type] || (hu.sku_type ? hu.sku_type.slice(0,3).toUpperCase() : 'X');
-      const expected = base ? `${base}-${suffix}` : '';
-      if(!hu.sku_code) { hu.sku_code = expected; mutated = true; }
+      const next = base
+        ? (oneLevel ? base : `${base}-${suffix}`)
+        : '';
+      if(hu.sku_code !== next){
+        hu.sku_code = next;
+        mutated = true;
+      }
     }
     if(mutated) renderHandlingUnits();
   });
