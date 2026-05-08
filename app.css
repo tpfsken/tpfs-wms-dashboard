@@ -245,11 +245,30 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
    most picker styles are inline in picker.js render.
 =========================================================== */
 @media (max-width: 600px) {
-  /* Picker shell respects iOS notch / Android status bar / iPhone home
-     indicator at the bottom. */
+  /* Picker shell — explicit viewport height so flex children + body
+     overflow-y:auto behave correctly. 100dvh respects mobile browser
+     chrome (URL bar etc) better than 100vh. box-sizing:border-box so
+     the safe-area padding is included in the height (otherwise the
+     shell ends up taller than viewport and the footer falls below). */
   #pickerShell {
+    height: 100dvh !important;
+    height: 100vh; /* fallback for browsers without dvh support */
     padding-top:    env(safe-area-inset-top, 0px) !important;
     padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    box-sizing: border-box !important;
+  }
+  /* Footer must NOT shrink — flex parent might try to compress it.
+     flex-shrink:0 keeps it pinned at its natural height, body
+     overflow-y:auto (set inline) handles the scroll. */
+  #pickerFooter {
+    flex-shrink: 0 !important;
+  }
+  /* Same protection for the banners up top */
+  #pickerHazBanner, #pickerHandlingBanner, #pickerVerifyBanner, #pickerStatus {
+    flex-shrink: 0 !important;
+  }
+  #pickerShell > div:first-child {
+    flex-shrink: 0 !important;
   }
   /* Header: tighter, smaller text */
   #pickerShell > div:first-child {
