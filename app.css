@@ -192,3 +192,140 @@ body.portal-mode .portal-banner{
   .pno-grid { grid-template-columns: 1fr !important; }
   .pno-grid .card[style*="position:sticky"] { position: relative !important; }
 }
+
+/* ===========================================================
+   PHONE-SIZED PICKER (≤600px wide)
+   The picker UI is sized for tablets by default. On a phone
+   the cards / fonts / paddings need to compress so the picker
+   line fits without scrolling. !important is needed because
+   most picker styles are inline in picker.js render.
+=========================================================== */
+@media (max-width: 600px) {
+  /* Header: tighter, smaller text */
+  #pickerShell > div:first-child {
+    padding: 10px 12px !important;
+  }
+  #pickerOrderNum { font-size: 15px !important; }
+  #pickerOrderSub { font-size: 11px !important; }
+  #pickerProgress { font-size: 12px !important; }
+  #pickerShell button { font-size: 13px !important; }
+
+  /* Top banners (hazmat / handling) */
+  #pickerHazBanner, #pickerHandlingBanner {
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+  }
+
+  /* Body padding */
+  #pickerBody { padding: 10px !important; }
+
+  /* Cards inside the body — tighter padding, smaller corners */
+  #pickerBody > div {
+    padding: 10px !important;
+    margin-bottom: 8px !important;
+    border-radius: 10px !important;
+  }
+  /* Card labels */
+  #pickerBody [style*="text-transform:uppercase"] {
+    font-size: 9px !important;
+  }
+  /* Big location number — was 42px, way too big on phone */
+  #pickerBody [style*="font-size:42px"] { font-size: 28px !important; }
+  /* SKU code — was 24px */
+  #pickerBody [style*="font-size:24px"] { font-size: 18px !important; }
+  /* SKU name */
+  #pickerBody [style*="font-size:16px"] { font-size: 13px !important; }
+  /* LP / Lot values — were 18px */
+  #pickerBody [style*="font-size:18px"] { font-size: 14px !important; }
+
+  /* Quantity row — buttons + input. The 56×56 +/- becomes 44×44,
+     the 36px input shrinks to 26px. */
+  #pickerBody button[onclick*="adjustPickerQty"] {
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 22px !important;
+  }
+  #pickerQtyInput {
+    font-size: 26px !important;
+    padding: 8px !important;
+  }
+
+  /* Footer (verify / skip / confirm) */
+  #pickerFooter { padding: 10px !important; gap: 8px !important; }
+  #pickerVerifyBtn, #pickerConfirmBtn, #pickerSkipBtn {
+    padding: 14px !important;
+    font-size: 14px !important;
+  }
+  #pickerSkipBtn { flex: 0 0 80px !important; }
+
+  /* Verification result banner */
+  #pickerVerifyBanner { padding: 8px 12px !important; font-size: 12px !important; }
+
+  /* Override overlay — same compression */
+  #pickerOverrideOverlay > div:first-child { padding: 10px 14px !important; font-size: 13px !important; }
+  #pickerOverrideOverlay textarea, #pickerOverrideOverlay select {
+    padding: 10px !important; font-size: 14px !important;
+  }
+  #pickerOvPin { font-size: 24px !important; padding: 14px !important; }
+  #pickerOverrideOverlay button { padding: 14px !important; font-size: 14px !important; }
+}
+
+/* ===========================================================
+   PHONE-SIZED DASHBOARD (≤600px wide)
+   Hide the sidebar on phones (kicks user toward the picker
+   which is the main mobile use case). Make tabs and cards
+   stack and shrink fonts.
+=========================================================== */
+@media (max-width: 600px) {
+  /* Collapse sidebar to icons-only on small screens — keeps nav usable
+     without eating half the viewport. */
+  .shell { grid-template-columns: 56px 1fr !important; }
+  .shell.collapsed { grid-template-columns: 56px 1fr !important; }
+  .nav-label, .side-brand { display: none !important; }
+  .side-header { padding: 16px 8px !important; justify-content: center; }
+  .side-logo { width: 32px !important; height: 32px !important; font-size: 14px !important; }
+  .nav-item { justify-content: center; padding: 10px 0 !important; }
+  .nav-item svg { margin: 0 !important; }
+  .collapse-btn { display: none !important; }
+
+  /* Topbar tighter */
+  .topbar { padding: 8px 10px !important; }
+  .topbar-title { font-size: 14px !important; }
+  .topbar-wh, .topbar-time, .topbar-user-info .role { display: none !important; }
+  .topbar-user-info .name { font-size: 12px !important; }
+  .topbar-avatar { width: 30px !important; height: 30px !important; font-size: 12px !important; }
+  #installAppBtn { padding: 6px 10px !important; font-size: 12px !important; }
+
+  /* Body / cards */
+  .main { overflow-x: hidden; }
+  .page { padding: 12px !important; }
+  .page-header { padding: 0 0 12px !important; flex-wrap: wrap; gap: 8px !important; }
+  .page-title { font-size: 18px !important; }
+  .page-subtitle { font-size: 12px !important; }
+
+  /* Card grids → stack */
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr !important; gap: 12px !important; }
+  .kpi-row { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+  .kpi { padding: 10px !important; }
+  .kpi-label { font-size: 10px !important; }
+  .kpi-val { font-size: 18px !important; }
+
+  /* Tables — shrink + horizontal scroll */
+  .data-table { font-size: 11px !important; }
+  .data-table th, .data-table td { padding: 6px 8px !important; }
+
+  /* Form inputs — bigger touch targets but smaller font on phone */
+  .form-input { font-size: 14px !important; padding: 10px !important; }
+  .btn { padding: 8px 12px !important; font-size: 13px !important; }
+  .btn-primary { padding: 10px 14px !important; }
+
+  /* Modals stretch full width */
+  .modal { max-width: 95vw !important; max-height: 90vh !important; overflow-y: auto; }
+  .modal-head { padding: 12px 14px !important; }
+  .modal-title { font-size: 15px !important; }
+  .modal-body { padding: 12px 14px !important; }
+
+  /* Hide sidebar nav for portal users — they only need a back button */
+  body.portal-mode .sidebar { display: none !important; }
+  body.portal-mode .shell { grid-template-columns: 1fr !important; }
+}
