@@ -201,6 +201,12 @@ body.portal-mode .portal-banner{
    most picker styles are inline in picker.js render.
 =========================================================== */
 @media (max-width: 600px) {
+  /* Picker shell respects iOS notch / Android status bar / iPhone home
+     indicator at the bottom. */
+  #pickerShell {
+    padding-top:    env(safe-area-inset-top, 0px) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  }
   /* Header: tighter, smaller text */
   #pickerShell > div:first-child {
     padding: 10px 12px !important;
@@ -275,26 +281,42 @@ body.portal-mode .portal-banner{
    Hide the sidebar on phones (kicks user toward the picker
    which is the main mobile use case). Make tabs and cards
    stack and shrink fonts.
+
+   Safe-area handling: when running as PWA on iOS the page
+   extends under the status bar. env(safe-area-inset-top) is
+   the iOS-reported height of the notch / status bar so we
+   pad the topbar to clear it.
 =========================================================== */
 @media (max-width: 600px) {
+  /* Push the entire grid down past the iOS notch / Android status bar */
+  .shell {
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    grid-template-columns: 56px 1fr !important;
+  }
+  .shell.collapsed { grid-template-columns: 56px 1fr !important; }
+
   /* Collapse sidebar to icons-only on small screens — keeps nav usable
      without eating half the viewport. */
-  .shell { grid-template-columns: 56px 1fr !important; }
-  .shell.collapsed { grid-template-columns: 56px 1fr !important; }
-  .nav-label, .side-brand { display: none !important; }
-  .side-header { padding: 16px 8px !important; justify-content: center; }
-  .side-logo { width: 32px !important; height: 32px !important; font-size: 14px !important; }
+  .nav-label, .side-brand, .side-header small { display: none !important; }
+  .side-header { padding: 12px 8px !important; justify-content: center; }
+  .side-logo { width: 30px !important; height: 30px !important; font-size: 13px !important; }
   .nav-item { justify-content: center; padding: 10px 0 !important; }
   .nav-item svg { margin: 0 !important; }
+  .nav-item span { display: none !important; }
   .collapse-btn { display: none !important; }
 
-  /* Topbar tighter */
-  .topbar { padding: 8px 10px !important; }
+  /* Topbar tighter, drop everything that doesn't matter on phone.
+     Hide the user info entirely — sign out is in the sidebar. */
+  .topbar {
+    padding: 8px 10px !important;
+    min-height: 44px !important;
+  }
   .topbar-title { font-size: 14px !important; }
-  .topbar-wh, .topbar-time, .topbar-user-info .role { display: none !important; }
-  .topbar-user-info .name { font-size: 12px !important; }
+  .topbar-wh, .topbar-time, .topbar-user-info, .topbar-sep { display: none !important; }
   .topbar-avatar { width: 30px !important; height: 30px !important; font-size: 12px !important; }
-  #installAppBtn { padding: 6px 10px !important; font-size: 12px !important; }
+  .topbar-user { padding: 0 !important; }
+  #installAppBtn { padding: 6px 10px !important; font-size: 12px !important; margin-right: 6px !important; }
 
   /* Body / cards */
   .main { overflow-x: hidden; }
