@@ -157,6 +157,8 @@
         <button class="btn btn-ghost ops-only" onclick="printOrderDoc('pick')"   title="Pick slip — for the warehouse picker">🖨️ Pick</button>
         <button class="btn btn-ghost"          onclick="printOrderDoc('packing')" title="Packing slip — goes in the box">📦 Packing</button>
         <button class="btn btn-ghost ops-only" onclick="printOrderDoc('bol')"    title="Bill of Lading — driver / freight">📄 BOL</button>
+        <button class="btn btn-ghost ops-only js-ord-edit-btn" onclick="openEditOrderModal()" title="Edit order details">✎ Edit</button>
+        <button class="btn btn-danger ops-only js-ord-delete-btn" onclick="deleteCurrentOrder()" title="Delete this order (soft delete — preserved for audit)">🗑 Delete</button>
         <span class="chip" id="ordDetailStatus"></span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 360px;gap:20px;">
@@ -1346,6 +1348,58 @@
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeModal('overridePinModal')">Cancel</button>
       <button class="btn btn-primary" id="opPinSaveBtn" onclick="saveOverridePin()">Save PIN</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT ORDER MODAL — header-level edits (customer / ship-to / dates /
+     notes). Line edits live in their own future feature. Available on
+     any order before SHIPPED. -->
+<div id="editOrderModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-head">
+      <div class="modal-title" id="editOrderTitle">Edit Order</div>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="closeModal('editOrderModal')" style="padding:6px 12px;">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:11px;color:var(--text2);background:var(--bg);padding:8px 12px;border-radius:6px;margin-bottom:14px;">
+        Header-level edits only — line items + allocations stay as-is. To change the lines, cancel + recreate the order or wait for the line-edit feature.
+      </div>
+
+      <div class="form-row form-row-2">
+        <div class="form-group"><label class="form-label">External Order #</label><input class="form-input" id="eoExternalNum"></div>
+        <div class="form-group"><label class="form-label">Required Ship Date</label><input class="form-input" type="date" id="eoShipDate"></div>
+      </div>
+      <div class="form-row form-row-2">
+        <div class="form-group"><label class="form-label">Carrier Code</label><input class="form-input" id="eoCarrierCode"></div>
+        <div class="form-group"><label class="form-label">Ship Method</label><input class="form-input" id="eoShipMethod" placeholder="GROUND, EXPRESS, LTL..."></div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:14px;">
+        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-bottom:8px;">Customer / Ship To</div>
+        <div class="form-row form-row-2">
+          <div class="form-group"><label class="form-label">Customer Name</label><input class="form-input" id="eoCustName"></div>
+          <div class="form-group"><label class="form-label">Customer Email</label><input class="form-input" id="eoCustEmail" type="email"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Ship-To Name</label><input class="form-input" id="eoShipName"></div>
+        <div class="form-group"><label class="form-label">Address Line 1</label><input class="form-input" id="eoAddr1"></div>
+        <div class="form-group"><label class="form-label">Address Line 2</label><input class="form-input" id="eoAddr2"></div>
+        <div class="form-row form-row-4">
+          <div class="form-group"><label class="form-label">City</label><input class="form-input" id="eoCity"></div>
+          <div class="form-group"><label class="form-label">State</label><input class="form-input" id="eoState"></div>
+          <div class="form-group"><label class="form-label">Postal</label><input class="form-input" id="eoPostal"></div>
+          <div class="form-group"><label class="form-label">Country</label><input class="form-input" id="eoCountry" value="US"></div>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0;"><label class="form-label">Notes</label><textarea class="form-input" id="eoNotes" rows="2"></textarea></div>
+
+      <div id="eoError" style="color:var(--red);font-size:13px;margin-top:10px;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('editOrderModal')">Cancel</button>
+      <button class="btn btn-primary" id="eoSaveBtn" onclick="submitEditOrder()">Save Changes</button>
     </div>
   </div>
 </div>

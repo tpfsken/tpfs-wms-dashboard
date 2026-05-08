@@ -114,6 +114,14 @@ async function openOrderDetail(id){
     b.title = lockedByOther ? `Locked by ${d.picking_user_name}` : '';
   });
 
+  // Edit + Delete: hidden once status='SHIPPED' (the order has left
+  // the building — no more changes). Both API endpoints reject SHIPPED
+  // anyway; this keeps the UI honest.
+  const isShipped = d.status === 'SHIPPED';
+  document.querySelectorAll('.js-ord-edit-btn, .js-ord-delete-btn').forEach(b => {
+    b.style.display = isShipped ? 'none' : '';
+  });
+
   const fields = [
     {l:'Order #',  v:d.order_number},
     {l:'External', v:d.external_order_number || '—'},
@@ -1122,4 +1130,122 @@ async function printOrderDoc(kind){
   if(kind === 'pick')         renderPickSlip(order);
   else if(kind === 'packing') renderPackingSlip(order);
   else if(kind === 'bol')     renderBol(order);
+}
+
+// =============================================================================
+// EDIT ORDER — header-level fields only (customer / ship-to / dates /
+// notes / carrier). Allowed any time before SHIPPED. Lines + allocations
+// stay as-is — line edits are a future feature.
+// =============================================================================
+
+function openEditOrderModal(){
+  if(!COI || !COD) return;
+  if(COD.status === 'SHIPPED'){
+    alert('Cannot edit a SHIPPED order — it has already left the warehouse.');
+    return;
+  }
+
+  document.getElementById('editOrderTitle').textContent = `Edit Order — ${COD.order_number || ''}`;
+  document.getElementById('eoExternalNum').value = COD.external_order_number || '';
+  // <input type=date> wants YYYY-MM-DD; trim any time portion off ISO strings
+  document.getElementById('eoShipDate').value =
+    COD.required_ship_date ? String(COD.required_ship_date).slice(0, 10) : '';
+  document.getElementById('eoCarrierCode').value = COD.carrier_code || '';
+  document.getElementById('eoShipMethod').value  = COD.ship_method || '';
+  document.getElementById('eoCustName').value    = COD.customer_name || '';
+  document.getElementById('eoCustEmail').value   = COD.customer_email || '';
+  document.getElementById('eoShipName').value    = COD.ship_to_name || '';
+  document.getElementById('eoAddr1').value       = COD.ship_to_line1 || '';
+  document.getElementById('eoAddr2').value       = COD.ship_to_line2 || '';
+  document.getElementById('eoCity').value        = COD.ship_to_city || '';
+  document.getElementById('eoState').value       = COD.ship_to_state || '';
+  document.getElementById('eoPostal').value      = COD.ship_to_postal || '';
+  document.getElementById('eoCountry').value     = COD.ship_to_country || 'US';
+  document.getElementById('eoNotes').value       = COD.notes || '';
+  document.getElementById('eoError').textContent = '';
+
+  document.getElementById('editOrderModal').style.display = 'flex';
+}
+
+async function submitEditOrder(){
+  const err = document.getElementById('eoError');
+  err.textContent = '';
+
+  // Build a body of just the editable fields. Empty strings -> null
+  // so blanking a field clears it on the server side.
+  const v = (id) => document.getElementById(id).value.trim();
+  const body = {
+    externalOrderNumber: v('eoExternalNum') || null,
+    requiredShipDate:    v('eoShipDate')    || null,
+    carrierCode:         v('eoCarrierCode') || null,
+    shipMethod:          v('eoShipMethod')  || null,
+    customerName:        v('eoCustName')    || null,
+    customerEmail:       v('eoCustEmail')   || null,
+    shipToName:          v('eoShipName')    || null,
+    shipToLine1:         v('eoAddr1')       || null,
+    shipToLine2:         v('eoAddr2')       || null,
+    shipToCity:          v('eoCity')        || null,
+    shipToState:         v('eoState')       || null,
+    shipToPostal:        v('eoPostal')      || null,
+    shipToCountry:       v('eoCountry')     || null,
+    notes:               v('eoNotes')       || null,
+  };
+
+  const btn = document.getElementById('eoSaveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const r = await fetch(`${API}/orders/${COI}`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if(!r.ok){ err.textContent = d.error || 'Save failed'; return; }
+    closeModal('editOrderModal');
+    openOrderDetail(COI); // refresh the detail view to show new values
+  } catch(e){
+    err.textContent = 'Network error';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Changes';
+  }
+}
+
+// =============================================================================
+// DELETE ORDER — soft delete, requires confirmation + reason.
+// Server enforces 'cannot delete SHIPPED'; we mirror that on the UI for
+// a faster fail. Reason captured into delete_reason on the order row
+// for audit so we know why something was tossed.
+// =============================================================================
+
+async function deleteCurrentOrder(){
+  if(!COI || !COD) return;
+  if(COD.status === 'SHIPPED'){
+    alert('Cannot delete a SHIPPED order — it has already left the warehouse.');
+    return;
+  }
+  const reason = prompt(
+    `Delete order ${COD.order_number || ''}?\n\n` +
+    `This soft-deletes the order — the row stays in the DB for audit but disappears from every list. ` +
+    `Type a short reason (e.g. "duplicate of ORD-...", "customer cancelled", "test data"):`
+  );
+  if(reason === null) return;        // user clicked Cancel
+  if(!reason.trim()){
+    alert('Reason is required to delete an order.');
+    return;
+  }
+  // Final yes/no
+  if(!confirm(`Delete ${COD.order_number || ''} for reason: "${reason}" ?`)) return;
+
+  try {
+    const r = await fetch(`${API}/orders/${COI}?reason=${encodeURIComponent(reason)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${T}` },
+    });
+    const d = await r.json();
+    if(!r.ok){ alert(d.error || 'Delete failed'); return; }
+    closeOrderDetail();
+    loadOrders();
+  } catch(e){
+    alert('Network error');
+  }
 }
