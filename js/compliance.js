@@ -170,9 +170,12 @@ async function cmpOpenReviewer(extractionId){
   // Render fields
   cmpRenderFields(data);
 
-  // Show "Accept all green" if any field is auto-eligible AND not yet applied
+  // Show "Accept all green" if any field is auto-eligible AND not yet
+  // applied AND has a value to apply. (No "found" column — derive from
+  // value presence; same convention as the field card render.)
+  const hasValue = (f) => f.value != null && String(f.value).trim() !== '';
   const anyGreenPending = (data.fields || []).some(f =>
-    f.triage_decision === 'auto' && !f.applied && !f.reviewer_action
+    f.triage_decision === 'auto' && !f.applied && !f.reviewer_action && hasValue(f)
   );
   document.getElementById('cmpAcceptAllGreenBtn').style.display = anyGreenPending ? '' : 'none';
   document.getElementById('cmpAcceptAllGreenBtn').onclick = () => cmpAcceptAllGreen(data);
@@ -277,6 +280,11 @@ function cmpFieldCard(f){
                   : conf >= 0.85 ? '#d6a700'
                   : conf >= 0.75 ? '#cc6600'
                   :                '#cc1f1f';
+  // The schema doesn't store a "found" flag — derive from whether a
+  // non-empty value is present. Treat null, undefined, and empty string
+  // as "not found" so the UI doesn't surface action buttons for fields
+  // Claude couldn't extract.
+  const found = f.value != null && String(f.value).trim() !== '';
   const cardCls = f.applied ? 'applied'
                 : f.reviewer_action === 'rejected' ? 'rejected'
                 : f.triage_decision === 'review'   ? 'review'
@@ -308,19 +316,19 @@ function cmpFieldCard(f){
     ? `<div class="cmp-source-quote" data-page="${esc(f.source_page || '')}" title="Click to jump to page ${esc(f.source_page || '?')} in the PDF">
          <strong>p.${esc(f.source_page || '?')}</strong> ${esc(f.source_section ? '§' + f.source_section + ' · ' : '')}"${esc(f.source_snippet)}"
        </div>`
-    : f.found
+    : found
       ? `<div style="font-size:11px;color:var(--muted);font-style:italic;">No source citation</div>`
       : `<div style="font-size:11px;color:var(--muted);font-style:italic;">Not found in document</div>`;
 
-  // Action row (only when not yet reviewed AND found)
-  const actions = !f.reviewer_action && f.found
+  // Action row (only when not yet reviewed AND a value was extracted)
+  const actions = !f.reviewer_action && found
     ? `<div style="display:flex;gap:6px;margin-top:8px;">
          <button class="btn btn-success js-cmp-accept" data-id="${esc(f.id)}" style="padding:5px 10px;font-size:11px;">✓ Accept</button>
          <button class="btn btn-ghost js-cmp-edit"   data-id="${esc(f.id)}" style="padding:5px 10px;font-size:11px;">✏ Edit</button>
          <button class="btn btn-danger js-cmp-reject" data-id="${esc(f.id)}" style="padding:5px 10px;font-size:11px;">✕ Reject</button>
          <button class="btn btn-ghost js-cmp-defer"   data-id="${esc(f.id)}" style="padding:5px 10px;font-size:11px;color:var(--text2);">⏸ Defer</button>
        </div>`
-    : !f.reviewer_action && !f.found
+    : !f.reviewer_action && !found
       ? `<div style="margin-top:8px;font-size:11px;color:var(--text2);"><em>No value extracted — nothing to review.</em></div>`
       : '';
 
@@ -334,7 +342,7 @@ function cmpFieldCard(f){
         <div style="font-size:11px;color:${confColor};font-weight:700;">${esc(confPct)}%</div>
       </div>
       <div class="cmp-confbar"><div class="cmp-confbar-fill" style="width:${esc(confPct)}%;background:${confColor};"></div></div>
-      <div style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:${f.found ? 'var(--text)' : 'var(--muted)'};word-break:break-word;">
+      <div style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:${found ? 'var(--text)' : 'var(--muted)'};word-break:break-word;">
         ${esc(f.value || '—')}
       </div>
       ${diffLine}
@@ -380,8 +388,9 @@ async function cmpEditField(fieldId){
 }
 
 async function cmpAcceptAllGreen(data){
+  const hasValue = (f) => f.value != null && String(f.value).trim() !== '';
   const greens = (data.fields || []).filter(f =>
-    f.triage_decision === 'auto' && !f.applied && !f.reviewer_action && f.found
+    f.triage_decision === 'auto' && !f.applied && !f.reviewer_action && hasValue(f)
   );
   if(!greens.length){ alert('Nothing eligible to bulk-accept.'); return; }
   if(!confirm(`Accept ${greens.length} field${greens.length === 1 ? '' : 's'} that scored ≥95% confidence?`)) return;
