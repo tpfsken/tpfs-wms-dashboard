@@ -68,6 +68,25 @@ async function openOrderDetail(id){
   stEl.textContent = st.l;
   stEl.className = 'chip ' + st.c;
 
+  // Under-allocation banner — show when any line is short on
+  // allocated qty. The order can't legitimately move past NEW until
+  // every line is fully allocated; surface this front-and-center so
+  // ops doesn't try to push it forward.
+  document.querySelectorAll('.js-ord-shortalloc-banner').forEach(el => el.remove());
+  const shortLines = (d.lines || []).filter(l =>
+    Number(l.allocated_qty || 0) < Number(l.ordered_qty || 0)
+  );
+  if(shortLines.length){
+    const totalShort = shortLines.reduce((s, l) =>
+      s + (Number(l.ordered_qty || 0) - Number(l.allocated_qty || 0)), 0);
+    const banner = document.createElement('div');
+    banner.className = 'js-ord-shortalloc-banner';
+    banner.style.cssText = 'background:var(--red-bg);color:var(--red);padding:12px 16px;border-radius:8px;border-left:4px solid var(--red);margin-bottom:14px;font-size:13px;font-weight:600;';
+    banner.innerHTML = `⚠ <strong>${shortLines.length} line${shortLines.length === 1 ? '' : 's'} not fully allocated</strong> — ${totalShort} unit${totalShort === 1 ? '' : 's'} short. Order can't be picked or shipped until every line is fully allocated.`;
+    const detailView = document.getElementById('ordDetailView');
+    detailView.insertBefore(banner, detailView.children[1] || detailView.firstChild?.nextSibling || null);
+  }
+
   // Pessimistic lock banner — show when another picker is actively
   // working this order. Disables the Pick on Tablet button and the
   // status transition buttons further down so ops doesn't re-allocate
@@ -148,17 +167,34 @@ async function openOrderDetail(id){
       html += `<button class="btn btn-success js-ship-btn" style="margin:0 8px 8px 0;">📦 Ship Order</button>`;
     }
     if(tr?.allowed?.length){
-      html += tr.allowed.map(t =>
-        `<button class="btn ${t === 'CANCELLED' ? 'btn-danger' : 'btn-primary'} js-trans-btn"
-                 data-target="${esc(t)}" style="margin:0 8px 8px 0;">${t === 'CANCELLED' ? 'Cancel' : '→ ' + esc(t)}</button>`
-      ).join('');
+      // Forward-progress transitions (anything past NEW that isn't
+      // CANCELLED) get disabled when the order is under-allocated.
+      // The server enforces the same rule; this just gives ops a
+      // visible reason without burning a click.
+      const blockForward = shortLines.length > 0;
+      html += tr.allowed.map(t => {
+        const blocked = blockForward && t !== 'CANCELLED' && t !== 'NEW';
+        const style = blocked
+          ? 'margin:0 8px 8px 0;opacity:0.5;cursor:not-allowed;'
+          : 'margin:0 8px 8px 0;';
+        const title = blocked ? 'Allocate every line first before advancing' : '';
+        return `<button class="btn ${t === 'CANCELLED' ? 'btn-danger' : 'btn-primary'} js-trans-btn"
+                 data-target="${esc(t)}" data-blocked="${blocked ? '1' : '0'}"
+                 title="${esc(title)}" style="${style}">${t === 'CANCELLED' ? 'Cancel' : '→ ' + esc(t)}</button>`;
+      }).join('');
     }
     if(!html){
       html = '<div style="color:var(--muted);font-size:13px;">Terminal state</div>';
     }
     transBtns.innerHTML = html;
     transBtns.querySelectorAll('.js-trans-btn').forEach(btn =>
-      btn.addEventListener('click', () => transitionOrder(id, btn.dataset.target))
+      btn.addEventListener('click', () => {
+        if(btn.dataset.blocked === '1'){
+          alert('This order has lines that aren\'t fully allocated yet. Finish allocating before advancing the status.');
+          return;
+        }
+        transitionOrder(id, btn.dataset.target);
+      })
     );
     transBtns.querySelectorAll('.js-ship-btn').forEach(btn =>
       btn.addEventListener('click', () => showShipOrderModal())
@@ -238,7 +274,14 @@ function renderPickList(d, isPickable){
   const allocs = d.allocations;
   const picked = allocs.filter(a => a.status === 'PICKED').length;
   const total  = allocs.length;
-  const allDone = picked === total;
+  // Don't trust just "all allocations picked" — also verify every
+  // order_line is FULLY allocated. A partial allocation can otherwise
+  // sneak past as 'allDone' (1 of 2 lines fully allocated, that 1 line
+  // gets picked, system thinks the order is done).
+  const fullyAllocated = (d.lines || []).every(l =>
+    Number(l.allocated_qty || 0) >= Number(l.ordered_qty || 0)
+  );
+  const allDone = fullyAllocated && picked === total;
   const pct = total ? Math.round((picked / total) * 100) : 0;
 
   document.getElementById('pickListBadge').textContent = `${picked} of ${total} picked`;
