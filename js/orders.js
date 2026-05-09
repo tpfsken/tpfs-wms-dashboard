@@ -854,8 +854,13 @@ async function showNewOrderModal(){
   orderLines = [];
   renderOL();
   document.getElementById('noError').textContent = '';
-  document.getElementById('noOrderNum').value =
-    'ORD-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 9000) + 1000);
+  // Order number is now generated server-side via a Postgres sequence
+  // (starts at 500000, increments by 1) when the field is left blank.
+  // Client-side random generation removed — collisions and gaps were
+  // both possible under concurrency. Ops can still type an explicit
+  // number here if they want to mirror an external order.
+  document.getElementById('noOrderNum').value = '';
+  document.getElementById('noOrderNum').placeholder = 'Auto-generated (or type to override)';
 }
 
 async function onOrderClientChange(cid){
@@ -1104,7 +1109,6 @@ async function submitNewOrder(){
   const num = document.getElementById('noOrderNum').value.trim();
   const cn  = document.getElementById('noCustName').value.trim();
   if(!cid){ err.textContent = 'Select a client'; return; }
-  if(!num){ err.textContent = 'Enter order number'; return; }
   if(!orderLines.length){ err.textContent = 'Add at least one line'; return; }
   if(!cn){ err.textContent = 'Enter customer name'; return; }
 
@@ -1114,7 +1118,11 @@ async function submitNewOrder(){
       headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
       body: JSON.stringify({
         clientId: cid,
-        orderNumber: num,
+        // Order number is optional — backend auto-generates from the
+        // orders_order_number_seq sequence when left blank. Pass null
+        // (not '') so the backend's "no orderNumber" branch fires
+        // cleanly.
+        orderNumber: num || null,
         channel: cbVal('noChannelWrap') || 'MANUAL',
         orderType: cbVal('noTypeWrap') || 'FULFILLMENT',
         priority: parseInt(cbVal('noPriorityWrap')) || 5,
