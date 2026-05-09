@@ -467,10 +467,49 @@ async function completePickingFromPicker(){
       return;
     }
     pickerHaptic('success');
-    showPickerStatus('✓ Sent to PACKING', 'green');
-    setTimeout(() => exitMobilePicker(), 600);
+    // Instead of exiting cold, show a "what's next" card with useful
+    // follow-on actions. Eliminates the dead-end the user hit after
+    // the only "Exit" button left them on a stale page.
+    renderPostPickComplete();
   } catch(e){
     alert('Network error');
+  }
+}
+
+// Post-completion card. Shows after Complete Picking → PACKING
+// successfully advances the status. Gives the picker explicit next-
+// action paths instead of dropping them onto whatever was underneath.
+function renderPostPickComplete(){
+  const completedNum = _pickerOrder?.order_number || '';
+  document.getElementById('pickerHazBanner').style.display = 'none';
+  document.getElementById('pickerHandlingBanner').style.display = 'none';
+  document.getElementById('pickerFooter').style.display = 'none';
+  document.getElementById('pickerBody').innerHTML = `
+    <div style="text-align:center;padding:32px 16px;">
+      <div style="font-size:80px;line-height:1;margin-bottom:14px;">✓</div>
+      <div style="font-size:26px;font-weight:700;margin-bottom:8px;">Picking Complete</div>
+      <div style="font-size:14px;opacity:.85;margin-bottom:24px;line-height:1.5;">
+        Order <strong>${esc(completedNum)}</strong> is now in <strong>PACKING</strong>.<br>
+        What's next?
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button onclick="pickNextOrder()" style="background:#2c7be5;color:#fff;border:none;padding:18px 24px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">📦 Pick another order</button>
+        <button onclick="exitMobilePicker()" style="background:#444;color:#fff;border:none;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">← Back to home</button>
+      </div>
+      <div style="margin-top:24px;font-size:11px;color:#888;">
+        Packing + staging + shipping continue from the desktop order detail page.<br>
+        The handheld is for picking only (for now).
+      </div>
+    </div>`;
+}
+
+// "Pick another order" — exits the current order's picker session
+// (releases lock, etc.) and navigates to floor mode's pick list,
+// which auto-refreshes its query so the just-completed order is gone.
+async function pickNextOrder(){
+  exitMobilePicker();
+  if(typeof navigateTo === 'function'){
+    navigateTo('floorPickList');
   }
 }
 
