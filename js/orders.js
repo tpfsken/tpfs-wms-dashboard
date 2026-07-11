@@ -289,7 +289,7 @@ async function openOrderDetail(id){
     ? d.shipments.map(sh => `
         <div style="padding:14px 20px;border-bottom:1px solid var(--border);">
           <div style="font-weight:600;color:var(--blue);">${esc(sh.shipment_number || '')} <span class="chip chip-success">${esc(sh.status || '')}</span></div>
-          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Tracking: ${esc(sh.tracking_number || '—')}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Tracking: ${esc(sh.tracking_number || '—')}${sh.label_url ? ` · <a href="${esc(sh.label_url)}" target="_blank" rel="noopener">🏷 Label</a>` : ''}</div>
         </div>`).join('')
     : '<div class="empty-state">No shipments</div>';
 
@@ -539,10 +539,29 @@ function renderPickList(d, isPickable){
 // SHIP ORDER (Phase 1E.basic)
 // =============================================================================
 
+let shipEpShipmentId = null;   // EasyPost shipment id from the last rate quote
+let shipSelectedRateId = null; // rate the user picked
+
+function resetShipRates(){
+  shipEpShipmentId = null;
+  shipSelectedRateId = null;
+  document.getElementById('shipRatesBox').style.display = 'none';
+  document.getElementById('shipRatesList').innerHTML = '';
+  document.getElementById('shipRatesHint').textContent = '';
+  document.getElementById('shipBuyLabelBtn').disabled = true;
+}
+
 function showShipOrderModal(){
   if(!COI || !COD) return;
   const m = document.getElementById('shipOrderModal');
   m.style.display = 'flex'; m.style.zIndex = '10000';
+  resetShipRates();
+
+  // Quoted rates are only valid for the weight/dims they were quoted for —
+  // invalidate them if the parcel changes.
+  ['shipWeight','shipLength','shipWidth','shipHeight'].forEach(id => {
+    document.getElementById(id).oninput = () => { if(shipEpShipmentId) resetShipRates(); };
+  });
 
   // Reset fields
   document.getElementById('shipServiceLevel').value = '';
@@ -577,6 +596,101 @@ function showShipOrderModal(){
   }
   document.getElementById('shipOrderSub').textContent =
     `Ship order ${COD.order_number || ''} (${COD.client_name || ''}) — confirms physical shipment, decrements inventory, fires billing charge.`;
+}
+
+async function getShipRates(){
+  if(!COI) return;
+  const err = document.getElementById('shipOrderError');
+  const btn = document.getElementById('shipGetRatesBtn');
+  err.textContent = '';
+  resetShipRates();
+
+  const weightLbs = parseFloat(document.getElementById('shipWeight').value);
+  if(!weightLbs || weightLbs <= 0){ err.textContent = 'Enter a parcel weight to get rates'; return; }
+
+  btn.disabled = true;
+  document.getElementById('shipRatesHint').textContent = 'Fetching rates…';
+  try {
+    const r = await fetch(`${API}/orders/${COI}/shipping/rates`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+      body: JSON.stringify({
+        weightLbs,
+        lengthIn: parseFloat(document.getElementById('shipLength').value) || null,
+        widthIn:  parseFloat(document.getElementById('shipWidth').value)  || null,
+        heightIn: parseFloat(document.getElementById('shipHeight').value) || null,
+      }),
+    });
+    const d = await r.json();
+    if(!r.ok){ err.textContent = d.error || 'Rate lookup failed'; return; }
+
+    shipEpShipmentId = d.epShipmentId;
+    document.getElementById('shipRatesHint').textContent =
+      `${d.rates.length} rate${d.rates.length === 1 ? '' : 's'} — cheapest first`;
+    document.getElementById('shipRatesList').innerHTML = d.rates.map(rt => `
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;">
+        <input type="radio" name="shipRateChoice" value="${esc(rt.rateId)}">
+        <span style="font-weight:700;min-width:70px;">$${esc(Number(rt.rate).toFixed(2))}</span>
+        <span style="flex:1;">${esc(rt.carrier)} ${esc(rt.service)}</span>
+        <span style="font-size:12px;color:var(--text2);">${rt.deliveryDays != null ? esc(rt.deliveryDays) + 'd' : ''}</span>
+      </label>`).join('');
+    document.getElementById('shipRatesBox').style.display = 'block';
+    document.querySelectorAll('input[name="shipRateChoice"]').forEach(inp =>
+      inp.addEventListener('change', () => {
+        shipSelectedRateId = inp.value;
+        document.getElementById('shipBuyLabelBtn').disabled = false;
+      })
+    );
+  } catch(e){
+    err.textContent = 'Network error';
+  } finally {
+    btn.disabled = false;
+    if(!shipEpShipmentId) document.getElementById('shipRatesHint').textContent = '';
+  }
+}
+
+async function buyShipLabel(){
+  if(!COI || !shipEpShipmentId || !shipSelectedRateId) return;
+  const err = document.getElementById('shipOrderError');
+  const suc = document.getElementById('shipOrderSuccess');
+  err.textContent = ''; suc.textContent = '';
+  const btn = document.getElementById('shipBuyLabelBtn');
+
+  btn.disabled = true;
+  document.getElementById('shipOrderSubmitBtn').disabled = true;
+  try {
+    const r = await fetch(`${API}/orders/${COI}/shipping/buy`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+      body: JSON.stringify({
+        epShipmentId: shipEpShipmentId,
+        rateId:       shipSelectedRateId,
+        weightLbs:    parseFloat(document.getElementById('shipWeight').value) || null,
+        lengthIn:     parseFloat(document.getElementById('shipLength').value) || null,
+        widthIn:      parseFloat(document.getElementById('shipWidth').value)  || null,
+        heightIn:     parseFloat(document.getElementById('shipHeight').value) || null,
+        notes:        document.getElementById('shipNotes').value || null,
+      }),
+    });
+    const d = await r.json();
+    if(!r.ok){
+      err.textContent = d.error || 'Label purchase failed';
+      btn.disabled = false;
+      document.getElementById('shipOrderSubmitBtn').disabled = false;
+      return;
+    }
+
+    suc.textContent = `Shipped — ${d.shipmentNumber} · tracking ${d.trackingNumber || '—'}`;
+    if(d.labelUrl) window.open(d.labelUrl, '_blank', 'noopener');
+    setTimeout(() => {
+      closeModal('shipOrderModal');
+      openOrderDetail(COI);
+    }, 1200);
+  } catch(e){
+    err.textContent = 'Network error';
+    btn.disabled = false;
+    document.getElementById('shipOrderSubmitBtn').disabled = false;
+  }
 }
 
 async function submitShipOrder(){
