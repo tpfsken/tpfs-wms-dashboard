@@ -631,7 +631,7 @@ async function getShipRates(){
       <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;">
         <input type="radio" name="shipRateChoice" value="${esc(rt.rateId)}">
         <span style="font-weight:700;min-width:70px;">$${esc(Number(rt.rate).toFixed(2))}</span>
-        <span style="flex:1;">${esc(rt.carrier)} ${esc(rt.service)}</span>
+        <span style="flex:1;">${esc(rt.carrierDisplay || rt.carrier)} · ${esc(rt.service)}</span>
         <span style="font-size:12px;color:var(--text2);">${rt.deliveryDays != null ? esc(rt.deliveryDays) + 'd' : ''}</span>
       </label>`).join('');
     document.getElementById('shipRatesBox').style.display = 'block';
