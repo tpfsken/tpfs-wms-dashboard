@@ -118,3 +118,37 @@ Inventory status colors: `available` → success, `allocated` → active, `damag
 - Never call `innerHTML = ` with untrusted data unless every interpolated value is wrapped in `esc()`.
 - Never bypass auth — every API call goes through `apiGet` or includes the `Authorization` header manually.
 - Don't introduce build tools, bundlers, frameworks, or TypeScript without explicit user request. The simplicity is intentional.
+
+
+## Design system — TERMINAL LEDGER (NON-NEGOTIABLE for new/updated screens)
+
+Direction: **Terminal** (Linear density) governs tables, chrome, chips, and
+identifiers; **Ledger** (Stripe/Mercury) governs money and display figures.
+Components live in `js/ui.js`; tokens + `ui-*` classes at the bottom of
+`app.css`. Legacy classes remain until each screen's migration batch (D1-D7);
+printed documents (printDocs.js) are EXCLUDED until their own batch.
+
+Rules:
+
+1. **No native dialogs.** `alert()`/`confirm()`/`prompt()` are banned in new
+   or modified code. Use `await uiConfirm({...})`, `await uiPrompt({...})`,
+   `uiAlert({...})`. They are Promise-based — the containing function must be
+   `async`, and remember a pending dialog does NOT block other events the way
+   native dialogs did.
+2. **No new inline `style=""`** beyond trivial one-off layout (flex:1, a
+   width). Spacing/typography/color always via tokens and `ui-*` classes.
+3. **Every mutation reports via `uiToast(msg, 'success'|'error')`.** Silent
+   success is a bug; `alert()`-as-error is a bug.
+4. **Tables** through `uiTable()` (or `.ui-table` markup): 32px rows, sticky
+   header, numerics right-aligned via `num:true`/`money:true`, identifiers
+   (LP/SKU/order numbers) via `mono:true`.
+5. **Money** renders through `uiMoney()` — never hand-format dollars. Stat
+   tiles through `uiTile()` inside `.ui-tiles`.
+6. **Statuses** render through `uiChip(status)`. The taxonomy has exactly
+   five tones (ok/info/warn/danger/neutral) — map new statuses in
+   `UI_STATUS_MAP`, never invent a new chip color.
+7. **Tabs** through `uiTabs()` — do not build another tab system.
+8. **Forms in modals** through `uiModal()` + `uiField()`/`uiFieldSelect()`
+   with `uiFieldError()` for validation — never a `prompt()` chain.
+9. `esc()` discipline is unchanged and applies inside anything you pass to
+   these components as HTML.
