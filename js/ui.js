@@ -28,6 +28,8 @@ const UI_STATUS_MAP = {
   // order flow
   NEW: 'info', ALLOCATED: 'info', PICKING: 'warn', PACKING: 'warn', STAGED: 'warn',
   SHIPPED: 'ok', CANCELLED: 'neutral', BACKORDERED: 'danger',
+  // allocation lifecycle (+ PICKED/PACKED as legacy order-status fallbacks)
+  PENDING: 'info', PICKED: 'ok', PACKED: 'warn',
   // billing runs / charges / invoices
   DRAFT: 'warn', POSTED: 'ok', DISCARDED: 'neutral', FAILED: 'danger', RUNNING: 'info',
   APPROVED: 'ok', SENT: 'info', PAID: 'ok', VOID: 'neutral',

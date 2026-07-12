@@ -1,5 +1,8 @@
+'use strict';
 // =============================================================================
-// ORDERS — list, detail, allocation, new-order modal
+// ORDERS — list, detail, allocation, new-order modal.
+// TERMINAL LEDGER (batch D3). Tables via uiTable, statuses via uiChip, no
+// native dialogs, mutations report through uiToast.
 // =============================================================================
 
 let COI = null;          // current order id
@@ -7,147 +10,133 @@ let COD = null;          // current order data
 let AIC = {};            // allocation inventory cache by order line id
 let orderLines = [];     // new-order modal: pending lines
 
+const ORD_COLS = [
+  { key: 'order_number', label: 'Order #', mono: true },
+  { key: 'client_name', label: 'Client' },
+  { key: 'channel', label: 'Channel' },
+  { key: 'order_type', label: 'Type' },
+  { key: 'customer_name', label: 'Customer' },
+  { key: '_shipTo', label: 'Ship to', render: o =>
+      `<span class="ui-muted">${esc([o.ship_to_city, o.ship_to_state].filter(Boolean).join(', ') || '—')}</span>` },
+  { key: 'carrier_code', label: 'Carrier' },
+  { key: 'line_count', label: 'Lines', num: true },
+  { key: 'total_units', label: 'Units', num: true },
+  { key: '_shipBy', label: 'Ship by', render: o => {
+      if (!o.required_ship_date) return '<span class="ui-muted">—</span>';
+      const d = new Date(o.required_ship_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      // Past SLA is the one thing on this row ops must not miss.
+      return o.is_past_sla
+        ? `<span class="ui-chip ui-chip-danger">${esc(d)}</span>`
+        : uiId(d);
+    } },
+  { key: 'status', label: 'Status', render: o => uiChip(o.status) },
+];
+
 async function loadOrders(){
+  document.getElementById('ordDetailView').style.display = 'none';
+  document.getElementById('ordListView').style.display = 'block';
+
   const s  = document.getElementById('ordSearch')?.value || '';
   const st = (_cbState['ordStatusFilterWrap']?.selected?.value) || '';
   let u = '/orders?limit=100';
   if(st) u += `&status=${encodeURIComponent(st)}`;
   if(s)  u += `&search=${encodeURIComponent(s)}`;
+
+  uiTableLoading('ordListWrap', ORD_COLS);
   const d = await apiGet(u);
-  if(!d) return;
+  if(d === null) return uiTableError('ordListWrap', ORD_COLS, 'Could not load orders', loadOrders);
 
-  const b = document.getElementById('ordBody');
-  const rows = d.data || d.rows || d;
-  if(!rows?.length){
-    b.innerHTML = '<tr><td colspan="11" class="empty-state">No orders</td></tr>';
-    return;
-  }
-
-  b.innerHTML = rows.map(o => {
-    const s = SM[o.status] || {c:'chip-new', l:o.status};
-    const sd = o.required_ship_date
-      ? new Date(o.required_ship_date).toLocaleDateString('en-US', {month:'short', day:'numeric'})
-      : '—';
-    const cityState = [o.ship_to_city, o.ship_to_state].filter(Boolean).join(', ');
-    return `
-      <tr class="js-order-row" data-order-id="${esc(o.id)}" style="cursor:pointer;">
-        <td style="font-weight:600;color:var(--blue);">${esc(o.order_number || '')}</td>
-        <td>${esc(o.client_name || '')}</td>
-        <td>${esc(o.channel || '')}</td>
-        <td><span class="chip chip-new">${esc(o.order_type || '')}</span></td>
-        <td>${esc(o.customer_name || '—')}</td>
-        <td style="color:var(--text2);font-size:12px;">${esc(cityState)}</td>
-        <td>${esc(o.carrier_code || '—')}</td>
-        <td class="right">${esc(o.line_count || 0)}</td>
-        <td class="right" style="font-weight:600;">${esc(o.total_units || 0)}</td>
-        <td style="color:${o.is_past_sla ? 'var(--red)' : 'var(--text2)'};">${esc(sd)}</td>
-        <td><span class="chip ${s.c}">${esc(s.l)}</span></td>
-      </tr>`;
-  }).join('');
-
-  b.querySelectorAll('.js-order-row').forEach(row => {
-    row.addEventListener('click', () => openOrderDetail(row.dataset.orderId));
+  uiTable('ordListWrap', {
+    columns: ORD_COLS, rows: (d.data || d.rows || d || []), rowKey: 'id',
+    onRowClick: o => openOrderDetail(o.id),
+    empty: s || st ? 'No orders match that filter.' : 'No orders yet.',
   });
 }
+
+const ORD_LINE_COLS = [
+  { key: 'line_number', label: 'Line', num: true },
+  { key: '_sku', label: 'SKU', render: ln => `${uiId(ln.sku_code || '')} ${severityChip(ln, { size: 'sm' })}` },
+  { key: 'sku_name', label: 'Description' },
+  { key: '_uom', label: 'Type', render: ln => esc(ln.sku_type || ln.uom || '') },
+  { key: 'ordered_qty', label: 'Ordered', num: true },
+  { key: '_alloc', label: 'Allocated', num: true, render: ln => {
+      const a = Number(ln.allocated_qty || 0), o = Number(ln.ordered_qty || 0);
+      // Short lines are the reason orders stall — flag them in the row itself.
+      return a < o ? `<span class="ui-chip ui-chip-danger">${esc(a)} of ${esc(o)}</span>` : uiNum(a);
+    } },
+  { key: 'picked_qty', label: 'Picked', num: true },
+  { key: 'shipped_qty', label: 'Shipped', num: true },
+];
 
 async function openOrderDetail(id){
   COI = id;
   document.getElementById('ordListView').style.display = 'none';
   document.getElementById('ordDetailView').style.display = 'block';
-  document.getElementById('ordTransError').textContent = '';
-  document.getElementById('ordTransSuccess').textContent = '';
 
   const d = await apiGet(`/orders/${id}`);
-  if(!d){ closeOrderDetail(); return; }
+  if(!d){ uiToast('Could not load that order', 'error'); closeOrderDetail(); return; }
   COD = d;
 
-  document.getElementById('ordDetailTitle').textContent = d.order_number || '';
-  document.getElementById('ordDetailSub').textContent   = `${d.client_name || ''} · ${d.channel || ''}`;
-  const st = SM[d.status] || {c:'chip-new', l:d.status};
-  const stEl = document.getElementById('ordDetailStatus');
-  stEl.textContent = st.l;
-  stEl.className = 'chip ' + st.c;
+  document.getElementById('ordDetailTitle').innerHTML =
+    `${esc(d.order_number || '')} ${uiChip(d.status)}`;
+  document.getElementById('ordDetailSub').textContent = `${d.client_name || ''} · ${d.channel || ''}`;
 
-  // Under-allocation banner — show when any line is short on
-  // allocated qty. The order can't legitimately move past NEW until
-  // every line is fully allocated; surface this front-and-center so
-  // ops doesn't try to push it forward.
-  document.querySelectorAll('.js-ord-shortalloc-banner').forEach(el => el.remove());
+  // ---- Banners. Both live in a fixed host div now (no more DOM-insert
+  // gymnastics against detailView.children[1], which broke ordering).
+  const banners = document.getElementById('ordBanners');
+  banners.innerHTML = '';
+
+  // Under-allocated: the order cannot legitimately advance. Front and center.
   const shortLines = (d.lines || []).filter(l =>
-    Number(l.allocated_qty || 0) < Number(l.ordered_qty || 0)
-  );
+    Number(l.allocated_qty || 0) < Number(l.ordered_qty || 0));
   if(shortLines.length){
     const totalShort = shortLines.reduce((s, l) =>
       s + (Number(l.ordered_qty || 0) - Number(l.allocated_qty || 0)), 0);
-    const banner = document.createElement('div');
-    banner.className = 'js-ord-shortalloc-banner';
-    banner.style.cssText = 'background:var(--red-bg);color:var(--red);padding:12px 16px;border-radius:8px;border-left:4px solid var(--red);margin-bottom:14px;font-size:13px;font-weight:600;';
-    banner.innerHTML = `⚠ <strong>${shortLines.length} line${shortLines.length === 1 ? '' : 's'} not fully allocated</strong> — ${totalShort} unit${totalShort === 1 ? '' : 's'} short. Order can't be picked or shipped until every line is fully allocated.`;
-    const detailView = document.getElementById('ordDetailView');
-    detailView.insertBefore(banner, detailView.children[1] || detailView.firstChild?.nextSibling || null);
+    banners.innerHTML += `<div class="ui-banner ui-banner-danger">
+      ⚠ <strong>${esc(shortLines.length)} line${shortLines.length === 1 ? '' : 's'} not fully allocated</strong>
+      — ${esc(totalShort)} unit${totalShort === 1 ? '' : 's'} short. The order can't be picked or shipped
+      until every line is fully allocated.</div>`;
   }
 
-  // Pessimistic lock banner — show when another picker is actively
-  // working this order. Disables the Pick on Tablet button and the
-  // status transition buttons further down so ops doesn't re-allocate
-  // mid-pick. Lock auto-releases server-side after 30 minutes.
+  // Pessimistic pick lock — someone else is on this order. Auto-releases at 30m.
   const lockedAt = d.picking_started_at ? new Date(d.picking_started_at) : null;
   const lockFresh = lockedAt && (Date.now() - lockedAt.getTime() < 30 * 60 * 1000);
   const myId = (typeof U !== 'undefined' && U) ? U.id : null;
   const lockedByOther = d.picking_user_id && d.picking_user_id !== myId && lockFresh;
-
-  // Wipe any prior lock banner from previous detail loads
-  document.querySelectorAll('.js-ord-lock-banner').forEach(el => el.remove());
   if(lockedByOther){
-    const banner = document.createElement('div');
-    banner.className = 'js-ord-lock-banner';
-    banner.style.cssText = 'background:var(--amber-bg);color:var(--amber);padding:12px 16px;border-radius:8px;border-left:4px solid var(--amber);margin-bottom:14px;font-size:13px;font-weight:600;';
     const elapsed = Math.round((Date.now() - lockedAt.getTime()) / 60000);
-    banner.innerHTML = `🔒 Order is currently being picked by <strong>${esc(d.picking_user_name || 'another user')}</strong> — started ${elapsed}m ago. Wait for them to finish or auto-release at 30m.`;
-    const detailView = document.getElementById('ordDetailView');
-    detailView.insertBefore(banner, detailView.children[1] || detailView.firstChild?.nextSibling || null);
+    banners.innerHTML += `<div class="ui-banner ui-banner-warn">
+      🔒 Being picked by <strong>${esc(d.picking_user_name || 'another user')}</strong> — started
+      ${esc(elapsed)}m ago. Wait for them to finish, or the lock auto-releases at 30m.</div>`;
   }
-  // Disable Pick on Tablet + transition buttons when locked by someone else
   document.querySelectorAll('button[onclick*="openMobilePicker"]').forEach(b => {
     b.disabled = !!lockedByOther;
-    b.style.opacity = lockedByOther ? '0.5' : '';
     b.title = lockedByOther ? `Locked by ${d.picking_user_name}` : '';
   });
 
-  // Edit + Delete: hidden once status='SHIPPED' (the order has left
-  // the building — no more changes). Both API endpoints reject SHIPPED
-  // anyway; this keeps the UI honest.
+  // Edit + Delete disappear once SHIPPED — the order has left the building.
+  // (Both endpoints reject SHIPPED anyway; this keeps the UI honest.)
   const isShipped = d.status === 'SHIPPED';
   document.querySelectorAll('.js-ord-edit-btn, .js-ord-delete-btn').forEach(b => {
     b.style.display = isShipped ? 'none' : '';
   });
 
-  const fields = [
-    {l:'Order #',  v:d.order_number},
-    {l:'External', v:d.external_order_number || '—'},
-    {l:'PRO #',    v:d.pro_number || '—'},
-    {l:'Channel',  v:d.channel || '—'},
-    {l:'Type',     v:d.order_type || '—'},
-    {l:'Customer', v:d.customer_name || '—'},
-    {l:'Carrier',  v:`${d.carrier_code || '—'} / ${d.ship_method || '—'}`},
-    {l:'Ship By',  v:d.required_ship_date ? new Date(d.required_ship_date).toLocaleDateString() : '—'},
-    {l:'Created',  v:d.created_at ? new Date(d.created_at).toLocaleString() : '—'},
-  ];
-  document.getElementById('ordInfoGrid').innerHTML = fields.map(f =>
-    `<div><div class="detail-label">${esc(f.l)}</div><div class="detail-value">${esc(f.v)}</div></div>`
-  ).join('');
+  document.getElementById('ordInfoGrid').innerHTML = uiMeta([
+    { k: 'Order #',  v: uiId(d.order_number) },
+    { k: 'External', v: d.external_order_number ? uiId(d.external_order_number) : '<span class="ui-muted">—</span>' },
+    { k: 'PRO #',    v: d.pro_number ? uiId(d.pro_number) : '<span class="ui-muted">—</span>' },
+    { k: 'Channel',  v: esc(d.channel || '—') },
+    { k: 'Type',     v: esc(d.order_type || '—') },
+    { k: 'Customer', v: esc(d.customer_name || '—') },
+    { k: 'Carrier',  v: esc(`${d.carrier_code || '—'} / ${d.ship_method || '—'}`) },
+    { k: 'Ship by',  v: d.required_ship_date
+        ? uiId(new Date(d.required_ship_date).toLocaleDateString()) : '<span class="ui-muted">—</span>' },
+    { k: 'Created',  v: d.created_at ? uiId(fmtTimeShort(d.created_at)) : '<span class="ui-muted">—</span>' },
+  ]);
 
-  document.getElementById('ordLinesBody').innerHTML = d.lines?.map(ln => `
-    <tr>
-      <td>${esc(ln.line_number)}</td>
-      <td style="font-weight:600;color:var(--blue);">${esc(ln.sku_code || '')} ${severityChip(ln, {size:'sm'})}</td>
-      <td>${esc(ln.sku_name || '')}</td>
-      <td>${esc(ln.sku_type || ln.uom || '')}</td>
-      <td class="right">${esc(ln.ordered_qty || 0)}</td>
-      <td class="right" style="color:var(--blue);">${esc(ln.allocated_qty || 0)}</td>
-      <td class="right" style="color:var(--amber);">${esc(ln.picked_qty || 0)}</td>
-      <td class="right" style="color:var(--green);">${esc(ln.shipped_qty || 0)}</td>
-    </tr>`).join('') || '<tr><td colspan="8" class="empty-state">No lines</td></tr>';
+  uiTable('ordLinesWrap', {
+    columns: ORD_LINE_COLS, rows: d.lines || [], rowKey: 'id', empty: 'No lines on this order.',
+  });
 
   const ci = WF.indexOf(d.status);
   document.getElementById('ordWorkflowSteps').innerHTML = WF.map((s, i) => {
@@ -165,7 +154,7 @@ async function openOrderDetail(id){
   // handles all fulfilment.
   const transBtns = document.getElementById('ordTransitionBtns');
   if(typeof isPortalMode === 'function' && isPortalMode()){
-    transBtns.innerHTML = '<div style="color:var(--muted);font-size:13px;">Read-only in portal</div>';
+    transBtns.innerHTML = '<div class="ui-hint">Status is read-only here — our team handles fulfilment.</div>';
   } else {
     const tr = await apiGet(`/orders/${id}/valid-transitions`);
     // The workflow panel groups actions by intent so it doesn't feel like
@@ -181,11 +170,11 @@ async function openOrderDetail(id){
     const canUnallocateAll = ['ALLOCATED', 'PICKING'].includes(d.status) && !hasPickedAlloc;
 
     const labelFor = (t) => {
-      if (t === 'CANCELLED') return 'Cancel Order';
-      if (t === 'ALLOCATED') return '🎯 Allocate';
-      if (t === 'PICKING')   return '▶ Start Picking';
-      if (t === 'PACKING')   return '✓ Complete Picking';
-      if (t === 'STAGED')    return '📦 Mark Staged';
+      if (t === 'CANCELLED') return 'Cancel order';
+      if (t === 'ALLOCATED') return 'Allocate';
+      if (t === 'PICKING')   return 'Start picking';
+      if (t === 'PACKING')   return 'Complete picking';
+      if (t === 'STAGED')    return 'Mark staged';
       if (t === 'NEW')       return '← Back to NEW';
       return '→ ' + t;
     };
@@ -204,53 +193,43 @@ async function openOrderDetail(id){
 
     let html = '';
 
-    // PRIMARY — forward transitions. Ship Order takes precedence when
-    // status is PACKING/STAGED — collapses two clicks into one.
+    // PRIMARY — forward transitions. Ship takes precedence at PACKING/STAGED,
+    // which collapses two clicks into one.
     if(canShip){
-      html += `<button class="btn btn-success js-ship-btn" style="display:block;width:100%;padding:12px;font-size:14px;font-weight:700;margin-bottom:8px;">📦 Ship Order</button>`;
+      html += '<button class="ui-btn ui-btn-primary ord-act-primary js-ship-btn">Ship order</button>';
     }
-    primary.forEach((t, i) => {
+    primary.forEach((t) => {
       const blocked = blockForward && !exempt.has(t);
-      const style = `display:block;width:100%;padding:12px;font-size:14px;font-weight:700;margin-bottom:8px;${blocked ? 'opacity:0.5;cursor:not-allowed;' : ''}`;
-      const title = blocked ? 'Allocate every line first before advancing' : '';
-      html += `<button class="btn btn-primary js-trans-btn"
+      const title = blocked ? 'Allocate every line first' : '';
+      html += `<button class="ui-btn ui-btn-primary ord-act-primary js-trans-btn${blocked ? ' ord-act-blocked' : ''}"
                data-target="${esc(t)}" data-blocked="${blocked ? '1' : '0'}"
-               title="${esc(title)}" style="${style}">${esc(labelFor(t))}</button>`;
+               title="${esc(title)}">${esc(labelFor(t))}</button>`;
     });
 
-    // SECONDARY — backward + cancel. Smaller, side-by-side row.
+    // SECONDARY — backward + cancel, side by side, smaller.
     const secondary = [...backward, ...cancel];
     if(secondary.length){
-      html += `<div style="display:flex;gap:6px;margin-top:4px;">`;
-      secondary.forEach(t => {
-        const isCancel = t === 'CANCELLED';
-        html += `<button class="btn ${isCancel ? 'btn-danger' : 'btn-ghost'} js-trans-btn"
-                 data-target="${esc(t)}" data-blocked="0"
-                 style="flex:1;padding:8px;font-size:12px;">${esc(labelFor(t))}</button>`;
-      });
-      html += `</div>`;
+      html += '<div class="ord-act-row">' + secondary.map(t =>
+        `<button class="ui-btn ${t === 'CANCELLED' ? 'ui-btn-danger' : ''} js-trans-btn"
+                 data-target="${esc(t)}" data-blocked="0">${esc(labelFor(t))}</button>`).join('') + '</div>';
     }
 
-    // DESTRUCTIVE — Unallocate Order. Visually separated by a divider,
-    // small + amber so ops doesn't fat-finger it.
+    // DESTRUCTIVE — Unallocate. Fenced off below a divider so nobody
+    // fat-fingers it on the way to a normal transition.
     if(canUnallocateAll){
-      html += `<div style="border-top:1px solid var(--border);margin:14px 0 8px;padding-top:10px;">
-        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Edit allocations</div>
-        <button class="btn js-unallocate-all-btn"
-          style="display:block;width:100%;padding:8px;font-size:12px;background:#2a1f00;color:#ffd591;border:1px solid #4d3800;"
-          title="Release all allocations and demote order to NEW so you can edit lines freely">↺ Unallocate Order</button>
+      html += `<div class="ord-act-danger-zone">
+        <div class="ui-label">Edit allocations</div>
+        <button class="ui-btn js-unallocate-all-btn"
+          title="Release all allocations and demote the order to NEW so lines can be edited">↺ Unallocate order</button>
       </div>`;
     }
 
-    if(!html){
-      html = '<div style="color:var(--muted);font-size:13px;">Terminal state</div>';
-    }
+    if(!html) html = '<div class="ui-hint">Terminal state — no actions available.</div>';
     transBtns.innerHTML = html;
     transBtns.querySelectorAll('.js-trans-btn').forEach(btn =>
       btn.addEventListener('click', () => {
         if(btn.dataset.blocked === '1'){
-          alert('This order has lines that aren\'t fully allocated yet. Finish allocating before advancing the status.');
-          return;
+          return uiToast('Some lines aren\'t fully allocated — finish allocating before advancing', 'error');
         }
         transitionOrder(id, btn.dataset.target);
       })
@@ -270,28 +249,30 @@ async function openOrderDetail(id){
     );
   }
 
-  const shipTo = `
-    <div style="font-weight:600;font-size:15px;margin-bottom:6px;">${esc(d.ship_to_name || d.customer_name || '—')}</div>
-    <div style="color:var(--text2);line-height:1.7;">
+  document.getElementById('ordShipTo').innerHTML = `
+    <div class="ord-shipto-name">${esc(d.ship_to_name || d.customer_name || '—')}</div>
+    <div class="ord-shipto-addr">
       ${esc(d.ship_to_line1 || '')}<br>
       ${d.ship_to_line2 ? esc(d.ship_to_line2) + '<br>' : ''}
       ${esc([d.ship_to_city, d.ship_to_state, d.ship_to_postal].filter(Boolean).join(', '))}<br>
       ${esc(d.ship_to_country || 'US')}
     </div>
-    ${d.customer_email ? `<div style="color:var(--muted);margin-top:8px;">${esc(d.customer_email)}</div>` : ''}`;
-  document.getElementById('ordShipTo').innerHTML = shipTo;
+    ${d.customer_email ? `<div class="ui-hint">${esc(d.customer_email)}</div>` : ''}`;
 
-  // Attachments — supporting docs (PDFs, images) bound to the order.
-  // Rendered in both ops + portal modes.
+  // Attachments — supporting docs bound to the order. Ops + portal both.
   loadOrderAttachments(id);
 
-  document.getElementById('ordShipments').innerHTML = d.shipments?.length
-    ? d.shipments.map(sh => `
-        <div style="padding:14px 20px;border-bottom:1px solid var(--border);">
-          <div style="font-weight:600;color:var(--blue);">${esc(sh.shipment_number || '')} <span class="chip chip-success">${esc(sh.status || '')}</span></div>
-          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Tracking: ${esc(sh.tracking_number || '—')}${sh.label_url ? ` · <a href="${esc(sh.label_url)}" target="_blank" rel="noopener">🏷 Label</a>` : ''}</div>
-        </div>`).join('')
-    : '<div class="empty-state">No shipments</div>';
+  uiTable('ordShipmentsWrap', {
+    columns: [
+      { key: 'shipment_number', label: 'Shipment', mono: true },
+      { key: 'status', label: 'Status', render: sh => uiChip(sh.status) },
+      { key: 'tracking_number', label: 'Tracking', mono: true },
+      { key: '_label', label: '', render: sh => sh.label_url
+          ? `<a class="ui-link" href="${esc(sh.label_url)}" target="_blank" rel="noopener">Label ↗</a>` : '' },
+    ],
+    rows: d.shipments || [], rowKey: 'id',
+    empty: 'No shipments yet.',
+  });
 
   document.getElementById('allocPanel').style.display = 'none';
 
@@ -305,58 +286,47 @@ async function openOrderDetail(id){
   if(d.allocations?.length && !isPickable){
     ah.style.display = 'block';
     document.getElementById('allocHistBadge').textContent = d.allocations.length;
-    // Hide destructive actions if order has shipped — server rejects
-    // them anyway. Also hide for portal users (.ops-only check).
-    const isShipped = d.status === 'SHIPPED';
-    const portal = (typeof isPortalMode === 'function' && isPortalMode());
-    document.getElementById('allocHistBody').innerHTML = d.allocations.map(a => {
-      const lp = a.lp_number
-        ? `<span class="lp-badge ${a.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(a.lp_number)}</span>`
-        : '—';
-      const stChip = a.status === 'PICKED' ? 'chip-success'
-                   : a.status === 'CANCELLED' ? 'chip-danger'
-                   : 'chip-active';
+    // Destructive actions are hidden once SHIPPED (server rejects them anyway)
+    // and for portal users (they're requireOps).
+    const canEdit = !portal && d.status !== 'SHIPPED';
 
-      let actions = '';
-      if (!portal && !isShipped) {
-        if (a.status === 'PENDING') {
-          actions = `<button class="btn btn-ghost js-unallocate-btn" data-alloc-id="${esc(a.id)}" style="padding:4px 10px;font-size:11px;color:var(--amber);">↺ Unallocate</button>`;
-        } else if (a.status === 'PICKED') {
-          actions = `<button class="btn btn-ghost js-unpick-btn" data-alloc-id="${esc(a.id)}" data-sku="${esc(a.sku_code || '')}" style="padding:4px 10px;font-size:11px;color:var(--red);">↺ Unpick</button>`;
-        } else if (a.status === 'CANCELLED') {
-          actions = '<span style="font-size:11px;color:var(--muted);">cancelled</span>';
-        }
-      }
+    uiTable('allocHistWrap', {
+      columns: [
+        { key: 'sku_code', label: 'SKU', mono: true },
+        { key: '_lot', label: 'Lot', render: a => a.lot_number
+            ? uiId(a.lot_number) : '<span class="ui-muted">—</span>' },
+        { key: '_lp', label: 'LP', render: a => a.lp_number
+            ? `<span class="lp-badge ${a.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(a.lp_number)}</span>`
+            : '<span class="ui-muted">—</span>' },
+        { key: 'location_code', label: 'Location', mono: true },
+        { key: 'quantity', label: 'Qty', num: true },
+        { key: 'status', label: 'Status', render: a => uiChip(a.status || 'PENDING') },
+        { key: '_act', label: '', render: a => {
+            if (!canEdit) return '';
+            if (a.status === 'PENDING') return `<button class="ui-btn js-unallocate-btn" data-alloc-id="${esc(a.id)}">↺ Unallocate</button>`;
+            if (a.status === 'PICKED')  return `<button class="ui-btn js-unpick-btn" data-alloc-id="${esc(a.id)}">↺ Unpick</button>`;
+            return '';
+          } },
+      ],
+      rows: d.allocations, rowKey: 'id',
+    });
 
-      return `
-        <tr>
-          <td style="color:var(--blue);">${esc(a.sku_code || '')}</td>
-          <td style="color:var(--blue);">${esc(a.lot_number || '—')}</td>
-          <td>${lp}</td>
-          <td>${esc(a.location_code || '')}</td>
-          <td class="right" style="font-weight:600;">${esc(a.quantity || 0)}</td>
-          <td><span class="chip ${stChip}">${esc(a.status || 'PENDING')}</span></td>
-          <td style="text-align:right;">${actions}</td>
-        </tr>`;
-    }).join('');
-
-    // Wire the destructive buttons
-    document.querySelectorAll('.js-unallocate-btn').forEach(btn => {
+    ah.querySelectorAll('.js-unallocate-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const a = d.allocations.find(x => x.id === btn.dataset.allocId);
         showDestructiveEdit({
-          title: '⚠ Unallocate',
-          description: `Release ${a?.quantity || 0} units of <strong>${esc(a?.sku_code || '')}</strong> from lot <strong>${esc(a?.lot_number || 'no lot')}</strong> back to available inventory? The allocation will be marked CANCELLED.`,
+          title: 'Unallocate',
+          description: `Release <strong>${esc(a?.quantity || 0)}</strong> units of <strong>${esc(a?.sku_code || '')}</strong> from lot <strong>${esc(a?.lot_number || 'no lot')}</strong> back to available inventory? The allocation is marked CANCELLED and stays in history.`,
           url: `${API}/orders/${d.id}/allocations/${btn.dataset.allocId}/unallocate`,
         });
       });
     });
-    document.querySelectorAll('.js-unpick-btn').forEach(btn => {
+    ah.querySelectorAll('.js-unpick-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const a = d.allocations.find(x => x.id === btn.dataset.allocId);
         showDestructiveEdit({
-          title: '⚠ Unpick',
-          description: `Reverse the pick of <strong>${esc(a?.sku_code || '')}</strong> (${a?.picked_qty || a?.quantity || 0} units)? The allocation will go back to PENDING and the picker will need to re-pick. Billing charge from the original pick stays on the order.`,
+          title: 'Unpick',
+          description: `Reverse the pick of <strong>${esc(a?.sku_code || '')}</strong> (${esc(a?.picked_qty || a?.quantity || 0)} units)? The allocation goes back to PENDING and has to be re-picked. The billing charge from the original pick stays on the order.`,
           url: `${API}/orders/${d.id}/allocations/${btn.dataset.allocId}/unpick`,
         });
       });
@@ -455,83 +425,57 @@ function renderPickList(d, isPickable){
 
   document.getElementById('pickListBadge').textContent = `${picked} of ${total} picked`;
   document.getElementById('pickListBar').style.width = pct + '%';
-  document.getElementById('pickListError').textContent = '';
-  document.getElementById('pickListSuccess').textContent = '';
 
-  const tbody = document.getElementById('pickListBody');
-
-  // Hazmat badge + special handling banner. Only render for pending rows
-  // (don't clutter the picked rows). Both bits come straight off the
-  // joined sku columns in /orders/:id (see queries/orders.js).
+  // Hazmat + special-handling ride on the joined sku columns from /orders/:id.
+  // The picker must not be able to miss either one.
   const hazBadge = (a) => a.is_hazmat
-    ? `<span class="chip chip-danger" style="font-size:10px;margin-right:6px;">⚠ HAZMAT${a.un_number ? ' ' + esc(a.un_number) : ''}${a.hazard_class ? ' · Cl ' + esc(a.hazard_class) : ''}</span>`
-    : '';
-  const handlingRow = (a) => a.special_handling_instructions
-    ? `<tr><td colspan="8" style="background:var(--amber-bg);color:var(--amber);font-size:12px;padding:6px 10px;border-left:3px solid var(--amber);">📋 ${esc(a.special_handling_instructions)}</td></tr>`
+    ? `<span class="ui-chip ui-chip-danger">⚠ HAZMAT${a.un_number ? ' ' + esc(a.un_number) : ''}${a.hazard_class ? ' · Cl ' + esc(a.hazard_class) : ''}</span> `
     : '';
 
-  tbody.innerHTML = allocs.map((a, i) => {
-    const lpCell = a.lp_number
-      ? `<span class="lp-badge ${a.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(a.lp_number)}</span>`
-      : '—';
+  const wrap = document.getElementById('pickListWrap');
+  uiTable(wrap, {
+    columns: [
+      { key: '_n', label: '#', render: (a) => uiNum(allocs.indexOf(a) + 1) },
+      { key: '_lp', label: 'LP', render: a => a.lp_number
+          ? `<span class="lp-badge ${a.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(a.lp_number)}</span>`
+          : '<span class="ui-muted">—</span>' },
+      { key: 'location_code', label: 'Location', mono: true },
+      { key: '_lot', label: 'Lot', render: a => a.lot_number
+          ? uiId(a.lot_number) : '<span class="ui-muted">—</span>' },
+      { key: '_sku', label: 'SKU', render: a => `${uiId(a.sku_code || '')} ${severityChip(a, { size: 'sm' })}` },
+      { key: '_desc', label: 'Description', render: a =>
+          `${hazBadge(a)}${esc(a.sku_name || '')}` +
+          (a.special_handling_instructions
+            ? `<div class="ui-banner ui-banner-warn ord-pick-handling">📋 ${esc(a.special_handling_instructions)}</div>`
+            : '') },
+      { key: 'quantity', label: 'Qty', num: true },
+      { key: '_act', label: 'Action', render: a => {
+          if (a.status === 'PICKED') {
+            const ts = a.picked_at
+              ? new Date(a.picked_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+              : '';
+            return `${uiChip('PICKED')} <span class="ui-hint">${esc(a.picked_by_name || '')}${a.picked_by_name && ts ? ' · ' : ''}${esc(ts)}</span>`;
+          }
+          return `<input type="number" class="ui-input ord-pick-qty js-pick-qty" data-id="${esc(a.id)}"
+                    value="${esc(a.quantity)}" min="1" max="${esc(a.quantity)}">
+                  <button class="ui-btn ui-btn-primary js-pick-confirm" data-id="${esc(a.id)}">Confirm</button>`;
+        } },
+    ],
+    rows: allocs, rowKey: 'id',
+  });
 
-    if(a.status === 'PICKED'){
-      const ts = a.picked_at
-        ? new Date(a.picked_at).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})
-        : '';
-      const meta = a.picked_by_name || ts
-        ? `<span style="font-size:11px;color:var(--muted);margin-left:6px;">${esc(a.picked_by_name || '')}${a.picked_by_name && ts ? ' · ' : ''}${esc(ts)}</span>`
-        : '';
-      return `
-        <tr style="opacity:.7;">
-          <td>${esc(i + 1)}</td>
-          <td>${lpCell}</td>
-          <td>${esc(a.location_code || '—')}</td>
-          <td style="color:var(--blue);">${esc(a.lot_number || '—')}</td>
-          <td style="color:var(--blue);font-weight:600;">${esc(a.sku_code || '')}</td>
-          <td style="color:var(--text2);">${esc(a.sku_name || '')}</td>
-          <td class="right">${esc(a.picked_qty || a.quantity)}</td>
-          <td><span class="chip chip-success">✓ Picked</span>${meta}</td>
-        </tr>`;
-    }
-
-    // PENDING (default) — severity chip + hazmat badge inline next to sku
-    // name, special handling banner as a sub-row (full-width amber stripe
-    // so it can't be missed by the picker on a tablet).
-    const sev = severityChip(a, {size:'sm'});
-    return `
-      <tr>
-        <td>${esc(i + 1)}</td>
-        <td>${lpCell}</td>
-        <td style="font-weight:600;">${esc(a.location_code || '—')}</td>
-        <td style="color:var(--blue);">${esc(a.lot_number || '—')}</td>
-        <td style="color:var(--blue);font-weight:600;">${esc(a.sku_code || '')} ${sev}</td>
-        <td style="color:var(--text2);">${hazBadge(a)}${esc(a.sku_name || '')}</td>
-        <td class="right" style="font-weight:600;">${esc(a.quantity)}</td>
-        <td>
-          <input type="number" class="form-input js-pick-qty" data-id="${esc(a.id)}"
-                 value="${esc(a.quantity)}" min="1" max="${esc(a.quantity)}"
-                 style="width:64px;padding:4px 8px;font-size:12px;display:inline-block;margin-right:4px;">
-          <button class="btn btn-primary js-pick-confirm" data-id="${esc(a.id)}"
-                  style="padding:4px 12px;font-size:12px;">Confirm</button>
-        </td>
-      </tr>
-      ${handlingRow(a)}`;
-  }).join('');
-
-  tbody.querySelectorAll('.js-pick-confirm').forEach(btn => {
+  wrap.querySelectorAll('.js-pick-confirm').forEach(btn => {
     btn.addEventListener('click', () => {
       const allocId = btn.dataset.id;
-      const qtyInput = tbody.querySelector(`.js-pick-qty[data-id="${allocId}"]`);
-      const qty = parseInt(qtyInput?.value) || 0;
+      const qty = parseInt(wrap.querySelector(`.js-pick-qty[data-id="${allocId}"]`)?.value) || 0;
       confirmPickAllocation(d.id, allocId, qty, btn);
     });
   });
 
   const completeBtn = document.getElementById('pickListComplete');
   completeBtn.style.display = allDone ? 'inline-flex' : 'none';
-  // Complete Picking moves PICKING → PACKING (the new unified workflow,
-  // post-migration 020 — there's no separate PICKED stage anymore).
+  // Complete Picking moves PICKING → PACKING (unified workflow, post-020 —
+  // there is no separate PICKED stage anymore).
   completeBtn.onclick = () => transitionOrder(d.id, 'PACKING');
 }
 
@@ -735,10 +679,7 @@ async function submitShipOrder(){
 }
 
 async function confirmPickAllocation(orderId, allocationId, quantity, btn){
-  const err = document.getElementById('pickListError');
-  const suc = document.getElementById('pickListSuccess');
-  err.textContent = ''; suc.textContent = '';
-  if(!quantity || quantity <= 0){ err.textContent = 'Quantity must be > 0'; return; }
+  if(!quantity || quantity <= 0) return uiToast('Quantity must be greater than 0', 'error');
   if(btn) btn.disabled = true;
   try {
     const r = await fetch(`${API}/orders/${orderId}/picks/${allocationId}/confirm`, {
@@ -747,29 +688,24 @@ async function confirmPickAllocation(orderId, allocationId, quantity, btn){
       body: JSON.stringify({quantity}),
     });
     const d = await r.json();
-    if(!r.ok){ err.textContent = d.error || 'Pick failed'; return; }
-    suc.textContent = d.allPicked
-      ? 'All picks complete — click Complete Picking when ready.'
-      : `Picked. ${d.pendingPicks} remaining.`;
-    setTimeout(() => openOrderDetail(orderId), 400);
+    if(!r.ok) return uiToast(d.error || 'Pick failed', 'error');
+    uiToast(d.allPicked
+      ? 'All picks complete — hit Complete picking when you\'re ready'
+      : `Picked — ${d.pendingPicks} left`);
+    openOrderDetail(orderId);
   } catch(e){
-    err.textContent = 'Network error';
+    uiToast('Network error — pick not recorded', 'error');
   } finally {
     if(btn) btn.disabled = false;
   }
 }
 
 function closeOrderDetail(){
-  document.getElementById('ordDetailView').style.display = 'none';
-  document.getElementById('ordListView').style.display = 'block';
   COI = null; COD = null;
   loadOrders();
 }
 
 async function transitionOrder(id, ns){
-  const err = document.getElementById('ordTransError');
-  const suc = document.getElementById('ordTransSuccess');
-  err.textContent = ''; suc.textContent = '';
   if(ns === 'ALLOCATED' && COD?.status === 'NEW'){ showAllocPanel(id); return; }
   try {
     const r = await fetch(`${API}/orders/${id}/status`, {
@@ -778,11 +714,11 @@ async function transitionOrder(id, ns){
       body: JSON.stringify({status: ns}),
     });
     const d = await r.json();
-    if(!r.ok){ err.textContent = d.error || 'Failed'; return; }
-    suc.textContent = `→ ${ns}`;
-    setTimeout(() => openOrderDetail(id), 500);
+    if(!r.ok) return uiToast(d.error || 'Status change failed', 'error');
+    uiToast(`Order is now ${ns}`);
+    openOrderDetail(id);
   } catch(e){
-    err.textContent = 'Network error';
+    uiToast('Network error — status not changed', 'error');
   }
 }
 
@@ -1290,13 +1226,14 @@ async function submitNewOrder(){
 // by the API).
 // =============================================================================
 
+const ORD_ATTACH_MAX = 25 * 1024 * 1024;   // matches the API's multer limit
+
 async function loadOrderAttachments(orderId){
-  const list   = document.getElementById('ordAttachList');
-  const count  = document.getElementById('ordAttachCount');
-  const status = document.getElementById('ordAttachStatus');
+  const list  = document.getElementById('ordAttachList');
+  const count = document.getElementById('ordAttachCount');
   if(!list) return;
 
-  // Wire add-button input once (delegates to current COI on each upload).
+  // Wire the file input once — it reads COI at upload time.
   const input = document.getElementById('ordAttachInput');
   if(input && !input._wired){
     input._wired = true;
@@ -1305,115 +1242,88 @@ async function loadOrderAttachments(orderId){
       ev.target.value = '';
       const id = COI;
       if(!id || !files.length) return;
-      const MAX = 25 * 1024 * 1024;
-      let done = 0, failed = 0;
+      let done = 0;
       for(const f of files){
-        if(f.size > MAX){
-          failed++;
-          status.style.color = 'var(--red)';
-          status.textContent = `${f.name} is over 25MB — skipped`;
+        if(f.size > ORD_ATTACH_MAX){
+          uiToast(`${f.name} is ${(f.size / 1048576).toFixed(1)}MB — 25MB max`, 'error');
           continue;
         }
-        status.style.color = 'var(--text2)';
-        status.textContent = `Uploading ${f.name} (${done + 1}/${files.length})…`;
         try {
           const fd = new FormData();
           fd.append('file', f);
           const r = await fetch(`${API}/orders/${id}/attachments`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${T}` },
-            body: fd,
+            method: 'POST', headers: { Authorization: `Bearer ${T}` }, body: fd,
           });
           if(!r.ok){
-            failed++;
             const d = await r.json().catch(() => ({}));
-            status.style.color = 'var(--red)';
-            status.textContent = `${f.name} failed: ${d.error || r.status}`;
+            uiToast(`${f.name} failed: ${d.error || r.status}`, 'error');
             continue;
           }
           done++;
         } catch(e){
-          failed++;
-          status.style.color = 'var(--red)';
-          status.textContent = `${f.name} network error`;
+          uiToast(`${f.name} — network error`, 'error');
         }
       }
-      if(!failed){
-        status.style.color = 'var(--green)';
-        status.textContent = `✓ Uploaded ${done} file${done === 1 ? '' : 's'}`;
-      }
-      setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 3500);
+      if(done) uiToast(`${done} file${done === 1 ? '' : 's'} attached`);
       loadOrderAttachments(id);
     });
   }
 
-  list.innerHTML = '<div style="padding:14px 0;color:var(--muted);font-size:13px;">Loading…</div>';
+  list.innerHTML = uiSpinner('Loading attachments…');
   const rows = await apiGet(`/orders/${orderId}/attachments`);
   if(!rows){
-    list.innerHTML = '<div style="padding:14px 0;color:var(--red);font-size:13px;">Could not load attachments</div>';
+    list.innerHTML = uiError('Could not load attachments');
     if(count) count.textContent = '';
     return;
   }
-  if(count) count.textContent = rows.length ? `· ${rows.length} ${rows.length === 1 ? 'file' : 'files'}` : '';
+  if(count) count.textContent = rows.length ? `${rows.length} ${rows.length === 1 ? 'file' : 'files'}` : '';
+  if(!rows.length){ list.innerHTML = uiEmpty('No attachments'); return; }
 
-  if(!rows.length){
-    list.innerHTML = '<div style="padding:14px 0;color:var(--muted);font-size:13px;text-align:center;">No attachments</div>';
-    return;
-  }
-
-  // Hide delete button for portal users — DELETE is requireOps.
+  // DELETE is requireOps — portal users get view/open only.
   const portal = (typeof isPortalMode === 'function' && isPortalMode());
 
   list.innerHTML = rows.map(r => {
-    const sizeKb = Number(r.size_bytes || 0) / 1024;
-    const sizeMb = sizeKb / 1024;
-    const sizeLabel = (r.size_bytes || 0) > 1024 * 1024
-      ? `${sizeMb.toFixed(2)} MB`
-      : `${sizeKb.toFixed(0)} KB`;
-    const ext = (r.filename || '').split('.').pop()?.toUpperCase() || 'FILE';
-    const when = r.uploaded_at ? new Date(r.uploaded_at).toLocaleString() : '';
-    return `
-      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;">
-        <div style="width:42px;height:42px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--blue);">${esc(ext.slice(0,4))}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.filename || '')}</div>
-          <div style="font-size:11px;color:var(--text2);">${esc(sizeLabel)} · ${esc(r.uploaded_by || '')} · ${esc(when)}</div>
-        </div>
-        <button class="btn btn-ghost js-ord-att-dl" data-att-id="${esc(r.id)}"
-                style="padding:4px 12px;font-size:12px;">⬇ Open</button>
-        ${portal ? '' : `<button class="btn btn-ghost js-ord-att-rm" data-att-id="${esc(r.id)}"
-                  style="padding:4px 10px;font-size:12px;color:var(--red);">✕</button>`}
-      </div>`;
+    const bytes = Number(r.size_bytes || 0);
+    const size = bytes > 1048576 ? `${(bytes / 1048576).toFixed(2)} MB` : `${(bytes / 1024).toFixed(0)} KB`;
+    const ext = ((r.filename || '').split('.').pop() || 'FILE').toUpperCase().slice(0, 4);
+    return `<div class="ui-file">
+      <span class="ui-file-ext">${esc(ext)}</span>
+      <span class="ui-file-meta">
+        <span class="ui-file-name">${esc(r.filename || '')}</span>
+        <span class="ui-hint">${esc(size)} · ${esc(r.uploaded_by || '')} · ${esc(r.uploaded_at ? fmtTimeShort(r.uploaded_at) : '')}</span>
+      </span>
+      <button class="ui-btn js-ord-att-dl" data-att-id="${esc(r.id)}">Open</button>
+      ${portal ? '' : `<button class="ui-btn js-ord-att-rm" data-att-id="${esc(r.id)}" aria-label="Remove attachment">✕</button>`}
+    </div>`;
   }).join('');
 
   list.querySelectorAll('.js-ord-att-dl').forEach(btn =>
-    btn.addEventListener('click', () => openOrderAttachment(orderId, btn.dataset.attId))
-  );
+    btn.addEventListener('click', () => openOrderAttachment(orderId, btn.dataset.attId)));
   list.querySelectorAll('.js-ord-att-rm').forEach(btn =>
-    btn.addEventListener('click', () => deleteOrderAttachment(orderId, btn.dataset.attId))
-  );
+    btn.addEventListener('click', () => deleteOrderAttachment(orderId, btn.dataset.attId)));
 }
 
 async function openOrderAttachment(orderId, attId){
   const d = await apiGet(`/orders/${orderId}/attachments/${attId}/url`);
-  if(!d?.url){
-    alert('Could not get a download URL.');
-    return;
-  }
-  window.open(d.url, '_blank');
+  if(!d?.url) return uiToast('Could not get a download link for that file', 'error');
+  window.open(d.url, '_blank', 'noopener');
 }
 
 async function deleteOrderAttachment(orderId, attId){
-  if(!confirm('Remove this attachment?')) return;
+  const ok = await uiConfirm({
+    title: 'Remove this attachment?',
+    body: 'The file is deleted from the order. This cannot be undone.',
+    confirmLabel: 'Remove', danger: true,
+  });
+  if(!ok) return;
   const r = await fetch(`${API}/orders/${orderId}/attachments/${attId}`, {
-    method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${T}` },
+    method: 'DELETE', headers: { Authorization: `Bearer ${T}` },
   });
   if(!r.ok){
     const d = await r.json().catch(() => ({}));
-    alert(d.error || 'Delete failed');
-    return;
+    return uiToast(d.error || 'Delete failed', 'error');
   }
+  uiToast('Attachment removed');
   loadOrderAttachments(orderId);
 }
 
@@ -1425,11 +1335,11 @@ async function deleteOrderAttachment(orderId, attId){
 // =============================================================================
 
 async function printOrderDoc(kind){
-  if(!COI){ alert('No order selected'); return; }
-  // Re-fetch so we always print the latest state — saves the user from
-  // staring at stale data after a recent allocate / pick / ship.
+  if(!COI) return uiToast('No order selected', 'error');
+  // Re-fetch so we always print the latest state — nobody should print a
+  // stale doc after an allocate / pick / ship.
   const order = await apiGet(`/orders/${COI}`);
-  if(!order){ alert('Could not load order'); return; }
+  if(!order) return uiToast('Could not load the order to print', 'error');
   if(kind === 'pick')         renderPickSlip(order);
   else if(kind === 'packing') renderPackingSlip(order);
   else if(kind === 'bol')     renderBol(order);

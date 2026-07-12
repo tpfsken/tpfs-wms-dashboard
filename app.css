@@ -188,6 +188,42 @@ body.portal-mode .portal-banner{
 .portal-banner-name{font-size:30px;font-weight:700;color:var(--text);letter-spacing:-.02em}
 .portal-banner-sub {font-size:13px;color:var(--text2);margin-top:2px}
 
+/* ---- Orders detail (D3a) ---- */
+.ord-grid{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;}
+.ord-info{padding:18px 20px;margin-bottom:16px;}
+.ord-shipto{border-top:1px solid var(--border);margin-top:14px;padding-top:14px;}
+.ord-shipto-name{font-weight:600;font-size:15px;margin-bottom:4px;}
+.ord-shipto-addr{color:var(--text2);font-size:13px;line-height:1.7;}
+/* Workflow action stack: primary actions full-width, secondary side by side,
+   destructive fenced below a divider. */
+.ord-actions{padding:0 16px 16px;}
+.ord-act-primary{display:flex;width:100%;justify-content:center;padding:11px;
+  font-size:var(--fs-ui);font-weight:700;margin-bottom:8px;}
+.ord-act-blocked{opacity:.5;cursor:not-allowed;}
+.ord-act-row{display:flex;gap:6px;margin-top:4px;}
+.ord-act-row .ui-btn{flex:1;justify-content:center;}
+.ord-act-danger-zone{border-top:1px solid var(--border);margin-top:14px;padding-top:10px;}
+.ord-act-danger-zone .ui-btn{display:flex;width:100%;justify-content:center;
+  background:var(--st-warn-bg);color:var(--st-warn);border-color:var(--st-warn);}
+/* Print menu */
+.ord-print-wrap{position:relative;}
+.ord-print-menu{display:none;position:absolute;top:100%;right:0;margin-top:4px;z-index:100;
+  background:var(--panel);border:1px solid var(--border-h);border-radius:var(--radius);
+  padding:6px;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,.45);}
+.ord-print-menu.open{display:block;}
+.ord-print-menu .ui-btn{display:flex;width:100%;justify-content:flex-start;border:none;background:none;}
+.ord-print-menu .ui-btn:hover{background:var(--hover);}
+/* Pick list */
+.ord-pick-track{width:140px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;}
+.ord-pick-bar{height:100%;width:0%;background:var(--st-ok);transition:width .25s;}
+.ord-pick-foot{padding:12px 16px;border-top:1px solid var(--border);}
+.ord-pick-qty{width:64px;padding:3px 6px;display:inline-block;margin-right:6px;}
+.ord-pick-handling{margin:6px 0 0;padding:5px 8px;font-size:12px;}
+
+@media (max-width: 1100px) {
+  .ord-grid { grid-template-columns: 1fr; }
+}
+
 /* ---- Portal home: card hub (D2c) ---- */
 .portal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;}
 .portal-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;
@@ -738,6 +774,17 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .ui-group[open]>summary::before{content:'▾';}
 .ui-group-body{padding:0 var(--sp-3) var(--sp-3);}
 .ui-muted{color:var(--text2);font-weight:500;}
+
+/* ---- banners (page-level warnings above the content) ---- */
+.ui-banner{padding:11px 14px;border-radius:var(--radius-sm);margin-bottom:var(--sp-3);
+  font-size:var(--fs-body);line-height:1.5;border-left:3px solid transparent;}
+.ui-banner-danger{background:var(--st-danger-bg);color:var(--st-danger);border-left-color:var(--st-danger);}
+.ui-banner-warn{background:var(--st-warn-bg);color:var(--st-warn);border-left-color:var(--st-warn);}
+.ui-banner-info{background:var(--st-info-bg);color:var(--st-info);border-left-color:var(--st-info);}
+
+/* ---- inline link ---- */
+.ui-link{color:var(--blue);text-decoration:none;font-weight:600;}
+.ui-link:hover{text-decoration:underline;}
 
 /* ---- drop zone ---- */
 .ui-drop{background:var(--panel);border:1px dashed var(--border-h);border-radius:var(--radius);

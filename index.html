@@ -140,34 +140,34 @@
   </div>
 
   <div class="page" id="page-orders">
-    <div class="page-header"><button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button><div><div class="page-title">Orders</div><div class="page-subtitle">Outbound order management</div></div><div style="flex:1"></div><input type="text" class="form-input" id="ordSearch" placeholder="Search order #..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="ordStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadOrders()">Refresh</button><button class="btn btn-primary ops-only" onclick="showNewOrderModal()">+ New Order</button><button class="btn btn-primary portal-only" onclick="navigateTo('portalNewOrder')">+ New Order</button></div>
-    <div id="ordListView"><div class="card"><div style="overflow:auto;"><table class="data-table"><thead><tr><th>Order #</th><th>Client</th><th>Channel</th><th>Type</th><th>Customer</th><th>Ship To</th><th>Carrier</th><th class="right">Lines</th><th class="right">Units</th><th>Ship By</th><th>Status</th></tr></thead><tbody id="ordBody"></tbody></table></div></div></div>
+    <div class="page-header"><button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button><div><div class="page-title">Orders</div><div class="page-subtitle">Outbound order management</div></div><div style="flex:1"></div><input type="text" class="ui-input" id="ordSearch" placeholder="Search order #…" style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="ordStatusFilterWrap"></div><button class="ui-btn" onclick="loadOrders()">Refresh</button><button class="ui-btn ui-btn-primary ops-only" onclick="showNewOrderModal()">New order</button><button class="ui-btn ui-btn-primary portal-only" onclick="navigateTo('portalNewOrder')">New order</button></div>
+    <div id="ordListView"><div class="card"><div style="overflow:auto;" id="ordListWrap"></div></div></div>
     <div id="ordDetailView" style="display:none;">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
-        <button class="btn btn-ghost" onclick="closeOrderDetail()">← Back</button>
-        <div><div style="font-size:18px;font-weight:700;" id="ordDetailTitle"></div><div style="font-size:13px;color:var(--text2);" id="ordDetailSub"></div></div>
+      <div class="page-header">
+        <button class="ui-btn" onclick="closeOrderDetail()">← Orders</button>
+        <div><div class="page-title" id="ordDetailTitle"></div><div class="page-subtitle" id="ordDetailSub"></div></div>
         <div style="flex:1"></div>
-        <button class="btn btn-primary ops-only" onclick="openMobilePicker(COI)" title="Open mobile picker view (tablet-friendly)">📱 Pick on Tablet</button>
-        <!-- Print dropdown — collapses Pick / Packing / BOL into one menu -->
-        <div class="ord-print-wrap" style="position:relative;">
-          <button class="btn btn-ghost" onclick="document.getElementById('ordPrintMenu').style.display = document.getElementById('ordPrintMenu').style.display === 'block' ? 'none' : 'block'" title="Print pick slip / packing slip / BOL">🖨 Print ▾</button>
-          <div id="ordPrintMenu" style="display:none;position:absolute;top:100%;left:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:6px 0;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:100;margin-top:4px;">
-            <button class="btn btn-ghost ops-only" style="display:block;width:100%;text-align:left;border-radius:0;padding:8px 14px;" onclick="document.getElementById('ordPrintMenu').style.display='none';printOrderDoc('pick')"   title="Pick slip — for the warehouse picker">🖨 Pick Slip</button>
-            <button class="btn btn-ghost"          style="display:block;width:100%;text-align:left;border-radius:0;padding:8px 14px;" onclick="document.getElementById('ordPrintMenu').style.display='none';printOrderDoc('packing')" title="Packing slip — goes in the box">📦 Packing Slip</button>
-            <button class="btn btn-ghost ops-only" style="display:block;width:100%;text-align:left;border-radius:0;padding:8px 14px;" onclick="document.getElementById('ordPrintMenu').style.display='none';printOrderDoc('bol')"    title="Bill of Lading — driver / freight">📄 Bill of Lading</button>
+        <button class="ui-btn ui-btn-primary ops-only" onclick="openMobilePicker(COI)" title="Open the tablet-friendly picker">Pick on tablet</button>
+        <!-- Print menu — Pick / Packing / BOL in one dropdown -->
+        <div class="ord-print-wrap">
+          <button class="ui-btn" onclick="document.getElementById('ordPrintMenu').classList.toggle('open')" title="Print pick slip / packing slip / BOL">Print ▾</button>
+          <div id="ordPrintMenu" class="ord-print-menu">
+            <button class="ui-btn ops-only" onclick="document.getElementById('ordPrintMenu').classList.remove('open');printOrderDoc('pick')"   title="Pick slip — for the warehouse picker">Pick slip</button>
+            <button class="ui-btn"          onclick="document.getElementById('ordPrintMenu').classList.remove('open');printOrderDoc('packing')" title="Packing slip — goes in the box">Packing slip</button>
+            <button class="ui-btn ops-only" onclick="document.getElementById('ordPrintMenu').classList.remove('open');printOrderDoc('bol')"    title="Bill of Lading — driver / freight">Bill of lading</button>
           </div>
         </div>
-        <button class="btn btn-ghost ops-only js-ord-edit-btn" onclick="openEditOrderModal()" title="Edit order details">✎ Edit</button>
-        <button class="btn btn-danger ops-only js-ord-delete-btn" onclick="deleteCurrentOrder()" title="Delete this order (soft delete — preserved for audit)">🗑 Delete</button>
-        <span class="chip" id="ordDetailStatus"></span>
+        <button class="ui-btn ops-only js-ord-edit-btn" onclick="openEditOrderModal()" title="Edit order details">Edit</button>
+        <button class="ui-btn ui-btn-danger ops-only js-ord-delete-btn" onclick="deleteCurrentOrder()" title="Soft-delete this order (kept for audit)">Delete</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 360px;gap:20px;">
+      <div id="ordBanners"></div>
+      <div class="ord-grid">
         <div>
-          <!-- HEADER INFO — order metadata + ship-to address merged in -->
-          <div class="detail-panel" style="margin-bottom:16px;">
-            <div class="detail-grid" id="ordInfoGrid"></div>
-            <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px;">
-              <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-bottom:6px;">📦 Ship To</div>
+          <!-- HEADER INFO — order metadata + ship-to -->
+          <div class="card ord-info">
+            <div id="ordInfoGrid"></div>
+            <div class="ord-shipto">
+              <div class="ui-label">Ship to</div>
               <div id="ordShipTo"></div>
             </div>
           </div>
@@ -175,48 +175,36 @@
           <div class="card" id="ordAttachCard" style="margin-bottom:16px;">
             <div class="card-head">
               <div class="card-title">Attachments</div>
-              <div id="ordAttachCount" style="font-size:12px;color:var(--muted);margin-left:8px;"></div>
+              <div class="ui-hint" id="ordAttachCount"></div>
               <div style="flex:1"></div>
-              <button class="btn btn-ghost" id="ordAttachAddBtn" onclick="document.getElementById('ordAttachInput').click()">📎 Add</button>
+              <button class="ui-btn" id="ordAttachAddBtn" onclick="document.getElementById('ordAttachInput').click()">Add file</button>
               <input type="file" id="ordAttachInput" style="display:none;"
                      accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,image/*">
             </div>
-            <div id="ordAttachList" style="padding:0 20px 16px 20px;"></div>
-            <div id="ordAttachStatus" style="padding:0 20px 12px 20px;font-size:12px;"></div>
+            <div id="ordAttachList" style="padding:0 20px 16px;"></div>
           </div>
           <!-- ORDER LINES -->
-          <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Order Lines</div></div><div><table class="data-table"><thead><tr><th>Line</th><th>SKU</th><th>Description</th><th>Type</th><th class="right">Ordered</th><th class="right">Allocated</th><th class="right">Picked</th><th class="right">Shipped</th></tr></thead><tbody id="ordLinesBody"></tbody></table></div></div>
+          <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Order lines</div></div><div id="ordLinesWrap"></div></div>
           <!-- ALLOCATE INVENTORY -->
           <div id="allocPanel" class="card" style="margin-bottom:16px;display:none;"><div class="card-head"><div class="card-title">Allocate Inventory</div><div class="card-badge" style="background:var(--blue-bg);color:var(--blue);" id="allocModeBadge">FEFO</div></div><div style="padding:20px;"><div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Select lots and quantities. Override the recommendation as needed.</div><div id="allocLinesList"></div><div style="display:flex;gap:8px;margin-top:16px;"><button class="btn btn-primary" onclick="submitAllocation()">Confirm Allocation</button><button class="btn btn-ghost" onclick="document.getElementById('allocPanel').style.display='none'">Cancel</button></div><div id="allocError" style="color:var(--red);font-size:13px;margin-top:8px;"></div><div id="allocSuccess" style="color:var(--green);font-size:13px;margin-top:8px;"></div></div></div>
-          <!-- SHIPMENTS — only meaningful for multi-shipment orders, kept after allocate -->
-          <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Shipments</div></div><div id="ordShipments"></div></div>
+          <!-- SHIPMENTS -->
+          <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Shipments</div></div><div id="ordShipmentsWrap"></div></div>
           <div id="pickListPanel" class="card" style="display:none;margin-bottom:16px;">
             <div class="card-head">
-              <div class="card-title">Pick List</div>
-              <div style="flex:1;display:flex;align-items:center;gap:12px;justify-content:flex-end;">
-                <span id="pickListBadge" style="font-size:12px;color:var(--text2);font-weight:600;">0 of 0 picked</span>
-                <div style="width:140px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;">
-                  <div id="pickListBar" style="height:100%;width:0%;background:var(--green);transition:width .25s;"></div>
-                </div>
-              </div>
-            </div>
-            <div style="overflow-x:auto;">
-              <table class="data-table" style="min-width:760px;">
-                <thead><tr><th style="width:32px;">#</th><th>LP</th><th>Location</th><th>Lot</th><th>SKU</th><th>Description</th><th class="right">Qty</th><th style="width:200px;">Action</th></tr></thead>
-                <tbody id="pickListBody"></tbody>
-              </table>
-            </div>
-            <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;">
-              <button class="btn btn-success" id="pickListComplete" style="display:none;">✓ Complete Picking</button>
+              <div class="card-title">Pick list</div>
               <div style="flex:1"></div>
-              <div id="pickListError"  style="color:var(--red);font-size:13px;"></div>
-              <div id="pickListSuccess" style="color:var(--green);font-size:13px;"></div>
+              <span class="ui-hint" id="pickListBadge">0 of 0 picked</span>
+              <div class="ord-pick-track"><div id="pickListBar" class="ord-pick-bar"></div></div>
+            </div>
+            <div style="overflow-x:auto;" id="pickListWrap"></div>
+            <div class="ord-pick-foot">
+              <button class="ui-btn ui-btn-primary" id="pickListComplete" style="display:none;">✓ Complete picking</button>
             </div>
           </div>
-          <div id="allocHistPanel" class="card" style="display:none;"><div class="card-head"><div class="card-title">Allocations</div><div class="card-badge" style="background:var(--green-bg);color:var(--green);" id="allocHistBadge">0</div><div style="flex:1"></div><div style="font-size:11px;color:var(--text2);">Unallocate / Unpick require supervisor PIN</div></div><div><table class="data-table"><thead><tr><th>SKU</th><th>Lot</th><th>LP</th><th>Location</th><th class="right">Qty</th><th>Status</th><th style="width:160px;text-align:right;">Action</th></tr></thead><tbody id="allocHistBody"></tbody></table></div></div>
+          <div id="allocHistPanel" class="card" style="display:none;"><div class="card-head"><div class="card-title">Allocations</div><div class="card-badge" style="background:var(--green-bg);color:var(--green);" id="allocHistBadge">0</div><div style="flex:1"></div><div class="ui-hint">Unallocate / Unpick need a supervisor PIN</div></div><div id="allocHistWrap"></div></div>
         </div>
         <div>
-          <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Workflow</div></div><div style="padding:16px;" id="ordWorkflowSteps"></div><div style="padding:0 16px 16px;" id="ordTransitionBtns"></div><div style="padding:0 16px 8px;"><div id="ordTransError" style="color:var(--red);font-size:13px;"></div><div id="ordTransSuccess" style="color:var(--green);font-size:13px;"></div></div></div>
+          <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Workflow</div></div><div style="padding:16px;" id="ordWorkflowSteps"></div><div class="ord-actions" id="ordTransitionBtns"></div></div>
         </div>
       </div>
     </div>
