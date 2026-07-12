@@ -674,6 +674,10 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
   border-bottom:1px solid var(--border);}
 .ui-tabs-bar .ui-tabs{border-bottom:none;margin-bottom:0;}
 
+/* ---- period stepper label (‹ July 2026 ›) ---- */
+.ui-period{min-width:170px;text-align:center;font-size:var(--fs-ui);font-weight:600;
+  font-variant-numeric:tabular-nums;}
+
 /* ---- meta grid (record header key/values) ---- */
 .ui-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
   gap:var(--sp-4) var(--sp-5);}

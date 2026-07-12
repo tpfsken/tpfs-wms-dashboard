@@ -31,6 +31,7 @@ const UI_STATUS_MAP = {
   // billing runs / charges / invoices
   DRAFT: 'warn', POSTED: 'ok', DISCARDED: 'neutral', FAILED: 'danger', RUNNING: 'info',
   APPROVED: 'ok', SENT: 'info', PAID: 'ok', VOID: 'neutral',
+  OPEN: 'info', INVOICED: 'ok',   // a charge is OPEN until it lands on an invoice
   // rate cards
   ACTIVE: 'ok', SUPERSEDED: 'neutral', ARCHIVED: 'neutral',
   // inventory
