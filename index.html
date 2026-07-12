@@ -55,7 +55,7 @@
     </div>
   </div>
   <div class="side-footer">
-    <div class="nav-item ops-only" onclick="openOverridePinModal()" style="cursor:pointer;" title="Set / change the supervisor PIN that gates pick-mismatch overrides"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span class="nav-label">Settings</span></div>
+    <div class="nav-item ops-only" data-page="settings" title="Warehouse settings + billable service catalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span class="nav-label">Settings</span></div>
     <button class="collapse-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 18l-6-6 6-6"/></svg><span class="nav-label">Collapse</span></button>
     <div class="nav-item js-signout" style="margin-top:4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="nav-label">Sign Out</span></div>
   </div>
@@ -576,6 +576,7 @@
         <button class="cli-tab" data-tab="items" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">Item Master</button>
         <button class="cli-tab" data-tab="kpi" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">KPI / SLA Targets</button>
         <button class="cli-tab" data-tab="rules" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">SLA Rules</button>
+        <button class="cli-tab" data-tab="ratecard" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">Rate Card</button>
         <button class="cli-tab" data-tab="performance" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">Current Performance</button>
       </div>
       <!-- Tab panels -->
@@ -652,6 +653,53 @@
           <div id="cliRulesBody" style="padding:20px;"></div>
         </div>
       </div>
+      <div class="cli-panel" data-tab="ratecard" style="display:none;">
+
+      <div id="beCardList">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <div style="font-size:13px;color:var(--text2);">Pricing for this client — drafts are editable, active cards are frozen. Service types come from the shared catalog (Settings → Billable Service Catalog).</div>
+          <div style="flex:1"></div>
+          <button class="btn btn-ghost" onclick="beGenerateFromLegacy()">Generate from legacy rates</button>
+          <button class="btn btn-primary" onclick="beNewCard()">+ New rate card</button>
+        </div>
+        <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+          <div style="flex:1;overflow:auto;">
+            <table class="data-table">
+              <thead><tr><th>Client</th><th>Card</th><th>Status</th><th>Effective</th><th class="right">Lines</th></tr></thead>
+              <tbody id="beCardsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="beCardDetail" style="display:none;">
+        <div class="page-header" id="beCardActions" style="gap:8px;"></div>
+        <div class="card" style="padding:14px 18px;margin-bottom:12px;">
+          <div style="font-size:17px;font-weight:700;" id="beCardTitle"></div>
+          <div style="font-size:13px;color:var(--text2);" id="beCardSub"></div>
+        </div>
+        <div class="card" style="overflow:auto;">
+          <table class="data-table">
+            <thead><tr><th>Charge code</th><th>Basis</th><th>Slot</th><th>Unit</th><th class="right">Rate</th><th>Cadence</th><th class="right">Free days</th><th>Proration</th><th>Rules</th></tr></thead>
+            <tbody id="beCardLines"></tbody>
+          </table>
+        </div>
+        <div class="card" id="beCardEditor" style="display:none;margin-top:12px;">
+          <div class="card-head"><div class="card-title">Edit lines (draft)</div>
+            <div style="flex:1"></div>
+            <button class="btn btn-ghost" onclick="beAddLine()">+ Add line</button>
+            <button class="btn btn-success" onclick="beSaveCardLines()">Save lines</button>
+          </div>
+          <div style="overflow:auto;">
+            <table class="data-table">
+              <thead><tr><th>Code</th><th>Basis</th><th>Slot</th><th>Unit</th><th>Rate</th><th>Cadence</th><th>Free</th><th>Proration</th><th>Aged (JSON)</th><th>Tiers (JSON)</th><th></th></tr></thead>
+              <tbody id="beEditRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    
+      </div>
       <div class="cli-panel" data-tab="performance" style="display:none;">
         <div class="card">
           <div class="card-head"><div class="card-title">Current Performance</div><div style="flex:1"></div><button class="btn btn-ghost" onclick="loadClientPerformanceTab()">Refresh</button></div>
@@ -713,12 +761,34 @@
     </div>
   </div>
 
+  <div class="page" id="page-settings">
+    <div class="page-header">
+      <div><div class="page-title">Settings</div><div class="page-subtitle">Warehouse configuration &amp; reference data</div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-head">
+        <div class="card-title">Supervisor PIN</div>
+        <div style="flex:1"></div>
+        <button class="btn btn-primary" onclick="openOverridePinModal()">Set / change PIN</button>
+      </div>
+      <div style="padding:14px 20px;font-size:13px;color:var(--text2);">Gates pick-mismatch overrides and destructive order edits.</div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Billable Service Catalog</div>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" onclick="beSeedDefaults()">Seed defaults</button>
+        <button class="btn btn-primary" onclick="beNewCode()">+ New code</button>
+      </div>
+      <div style="padding:10px 20px 0;font-size:13px;color:var(--text2);">Shared catalog of billable service types. Per-client pricing lives on each client's Rate Card. GL accounts here feed the future Accounting section / QuickBooks export.</div>
+      <div id="beCodesWrap" style="padding:8px 12px 16px;"></div>
+    </div>
+  </div>
+
   <div class="page" id="page-billing">
     <div id="billTabs" class="bill-tabs ops-only">
       <button class="bill-tab active" data-tab="runs" onclick="beShowTab('runs')">Accrual Runs</button>
       <button class="bill-tab" data-tab="charges" onclick="beShowTab('charges')">Charges</button>
-      <button class="bill-tab" data-tab="cards" onclick="beShowTab('cards')">Rate Cards</button>
-      <button class="bill-tab" data-tab="codes" onclick="beShowTab('codes')">Charge Codes</button>
     </div>
 
     <!-- TAB: Accrual Runs (month-end workspace) -->
@@ -755,65 +825,6 @@
         <div id="beRevCharges" style="margin-top:12px;"></div>
         <div class="card" style="margin-top:12px;padding:12px 18px;display:flex;gap:10px;align-items:center;justify-content:flex-end;" id="beRevActions"></div>
       </div>
-    </div>
-
-    <!-- TAB: Rate Cards -->
-    <div id="billTab-cards" style="display:none;">
-      <div id="beCardList">
-        <div class="page-header">
-          <div><div class="page-title">Rate Cards</div><div class="page-subtitle">Per-client pricing — drafts are editable, active cards are frozen</div></div>
-          <div style="flex:1"></div>
-          <div class="cb-wrap" style="max-width:240px;" id="beCardClientWrap"></div>
-          <button class="btn btn-ghost" onclick="beGenerateFromLegacy()">Generate from legacy rates</button>
-          <button class="btn btn-primary" onclick="beNewCard()">+ New rate card</button>
-        </div>
-        <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
-          <div style="flex:1;overflow:auto;">
-            <table class="data-table">
-              <thead><tr><th>Client</th><th>Card</th><th>Status</th><th>Effective</th><th class="right">Lines</th></tr></thead>
-              <tbody id="beCardsBody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div id="beCardDetail" style="display:none;">
-        <div class="page-header" id="beCardActions" style="gap:8px;"></div>
-        <div class="card" style="padding:14px 18px;margin-bottom:12px;">
-          <div style="font-size:17px;font-weight:700;" id="beCardTitle"></div>
-          <div style="font-size:13px;color:var(--text2);" id="beCardSub"></div>
-        </div>
-        <div class="card" style="overflow:auto;">
-          <table class="data-table">
-            <thead><tr><th>Charge code</th><th>Basis</th><th>Slot</th><th>Unit</th><th class="right">Rate</th><th>Cadence</th><th class="right">Free days</th><th>Proration</th><th>Rules</th></tr></thead>
-            <tbody id="beCardLines"></tbody>
-          </table>
-        </div>
-        <div class="card" id="beCardEditor" style="display:none;margin-top:12px;">
-          <div class="card-head"><div class="card-title">Edit lines (draft)</div>
-            <div style="flex:1"></div>
-            <button class="btn btn-ghost" onclick="beAddLine()">+ Add line</button>
-            <button class="btn btn-success" onclick="beSaveCardLines()">Save lines</button>
-          </div>
-          <div style="overflow:auto;">
-            <table class="data-table">
-              <thead><tr><th>Code</th><th>Basis</th><th>Slot</th><th>Unit</th><th>Rate</th><th>Cadence</th><th>Free</th><th>Proration</th><th>Aged (JSON)</th><th>Tiers (JSON)</th><th></th></tr></thead>
-              <tbody id="beEditRows"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB: Charge Codes -->
-    <div id="billTab-codes" style="display:none;">
-      <div class="page-header">
-        <div><div class="page-title">Charge Codes</div><div class="page-subtitle">The catalog of billable services — GL accounts feed the QuickBooks export</div></div>
-        <div style="flex:1"></div>
-        <button class="btn btn-ghost" onclick="beSeedDefaults()">Seed defaults</button>
-        <button class="btn btn-primary" onclick="beNewCode()">+ New code</button>
-      </div>
-      <div id="beCodesWrap"></div>
     </div>
 
     <!-- TAB: Charges (pre-existing meter view) -->

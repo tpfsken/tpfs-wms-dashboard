@@ -1,12 +1,15 @@
 'use strict';
-/* BILLING ENGINE UI (S3b) — tabs on the Billing page.
+/* BILLING ENGINE UI (S3b, restructured).
  *
- *   Accrual Runs (default) — month-end: run, review, post/discard.
- *   Charges                — the existing per-client meter (billing.js).
- *   Rate Cards             — per-client pricing, DRAFT->ACTIVE lifecycle.
- *   Charge Codes           — the billable-service catalog + GL accounts.
+ * Screen homes (user decision — pricing is account setup, billing is workflow):
+ *   Billing page            — money workflow ONLY: Accrual Runs (default)
+ *                             + Charges. Portal users see Charges only.
+ *   Clients -> client ->    — Rate Card tab: generate-from-legacy, draft
+ *   Rate Card                 line editor, activate, view active (frozen).
+ *   Settings page           — Billable Service Catalog (charge codes + GL
+ *                             accounts). Migrates to the future Accounting
+ *                             section with the GL mapping.
  *
- * Portal users see only the Charges tab (tab bar hidden).
  * Conventions: every untrusted value through esc(); handlers via data-* +
  * addEventListener; API via apiGet / fetch with Bearer T.
  */
@@ -31,14 +34,12 @@ function beShowTab(tab) {
   BE_TAB = tab;
   document.querySelectorAll('#billTabs .bill-tab').forEach(b =>
     b.classList.toggle('active', b.dataset.tab === tab));
-  ['runs', 'charges', 'cards', 'codes'].forEach(t => {
+  ['runs', 'charges'].forEach(t => {
     const el = document.getElementById('billTab-' + t);
     if (el) el.style.display = (t === tab) ? '' : 'none';
   });
   if (tab === 'charges') loadBilling();
   if (tab === 'runs')    loadAccrualRuns();
-  if (tab === 'cards')   loadRateCardsTab();
-  if (tab === 'codes')   loadChargeCodesTab();
 }
 
 function bePrevMonth() {
@@ -170,7 +171,11 @@ async function openAccrualReview(id) {
         </tbody></table>
       </div>`;
     up.querySelectorAll('.js-fix-card').forEach(b =>
-      b.addEventListener('click', () => { BE_CARD_CLIENT = b.dataset.client; beShowTab('cards'); }));
+      b.addEventListener('click', async () => {
+        navigateTo('clients');
+        await openClientDetail(b.dataset.client);
+        switchClientTab('ratecard');
+      }));
   }
 
   // Charges grouped client -> charge code.
@@ -252,21 +257,18 @@ async function beDiscardRun(id) {
 }
 
 // ---------------------------------------------------------------------------
-// TAB: Rate Cards
+// RATE CARD — client detail tab (Clients -> client -> Rate Card). Account
+// pricing is part of onboarding, so it lives with the account, not Billing.
 // ---------------------------------------------------------------------------
-async function loadRateCardsTab() {
+async function loadClientRateCardTab() {
+  BE_CARD_CLIENT = (typeof _currentClient !== 'undefined' && _currentClient) ? _currentClient.id : BE_CARD_CLIENT;
   document.getElementById('beCardDetail').style.display = 'none';
   document.getElementById('beCardList').style.display = '';
-  if (!clientsCache || !clientsCache.length) await loadCC();
-  initCombo('beCardClientWrap', clientsCache.map(c => ({ value: c.id, label: c.name })), {
-    placeholder: 'All clients…', value: BE_CARD_CLIENT || '',
-    onChange: v => { BE_CARD_CLIENT = v; renderRateCards(); },
-  });
   renderRateCards();
 }
 
 async function renderRateCards() {
-  const q = BE_CARD_CLIENT ? `?clientId=${encodeURIComponent(BE_CARD_CLIENT)}` : '';
+  const q = `?clientId=${encodeURIComponent(BE_CARD_CLIENT || '')}`;
   const d = await apiGet(`/billing/rate-cards${q}`);
   const rows = d?.rows || [];
   const CHIP = { DRAFT: 'warning', ACTIVE: 'success', SUPERSEDED: 'muted', ARCHIVED: 'muted' };
@@ -340,7 +342,7 @@ async function openRateCard(id) {
              <button class="btn btn-success" id="beCardActivate">Activate</button>`;
   }
   acts.innerHTML = html;
-  document.getElementById('beCardBack').addEventListener('click', loadRateCardsTab);
+  document.getElementById('beCardBack').addEventListener('click', loadClientRateCardTab);
   if (editable) {
     document.getElementById('beCardActivate').addEventListener('click', async () => {
       if (!confirm(`Activate "${d.name}"?\n\nIt becomes this client's live pricing as of ${String(d.effective_from).slice(0, 10)} and supersedes the current ACTIVE card. Activated cards are frozen.`)) return;
@@ -462,8 +464,13 @@ async function beNewCard() {
 }
 
 // ---------------------------------------------------------------------------
-// TAB: Charge Codes
+// SETTINGS PAGE — hosts the Billable Service Catalog until the Accounting
+// section exists (charge codes migrate there with the GL mapping).
 // ---------------------------------------------------------------------------
+function loadSettingsPage() {
+  loadChargeCodesTab();
+}
+
 async function loadChargeCodesTab() {
   const d = await apiGet('/billing/charge-codes?all=true');
   BE_CODES = (d?.rows || []).filter(c => c.is_active);

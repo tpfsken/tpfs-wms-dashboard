@@ -116,6 +116,7 @@ function switchClientTab(tab){
   else if(tab === 'items')       loadClientItemsTab();
   else if(tab === 'kpi')         loadClientKpiTab();
   else if(tab === 'rules')       loadClientRulesTab();
+  else if(tab === 'ratecard')    loadClientRateCardTab();
   else if(tab === 'performance') loadClientPerformanceTab();
 }
 
