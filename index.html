@@ -692,6 +692,12 @@
         <div class="meta-grid" id="invDetMeta" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:13px;"></div>
       </div>
       <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);">
+          <span style="font-size:12px;color:var(--muted);">View:</span>
+          <button class="btn btn-ghost" id="invViewSummary" style="padding:3px 12px;">Summary</button>
+          <button class="btn btn-ghost" id="invViewDetailed" style="padding:3px 12px;">Detailed</button>
+          <span style="font-size:12px;color:var(--muted);" id="invViewHint"></span>
+        </div>
         <div style="flex:1;overflow:auto;">
           <table class="data-table">
             <thead><tr><th class="right">#</th><th>Description</th><th>Charge Type</th><th>Date</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">Amount</th></tr></thead>
@@ -708,6 +714,110 @@
   </div>
 
   <div class="page" id="page-billing">
+    <div id="billTabs" class="bill-tabs ops-only">
+      <button class="bill-tab active" data-tab="runs" onclick="beShowTab('runs')">Accrual Runs</button>
+      <button class="bill-tab" data-tab="charges" onclick="beShowTab('charges')">Charges</button>
+      <button class="bill-tab" data-tab="cards" onclick="beShowTab('cards')">Rate Cards</button>
+      <button class="bill-tab" data-tab="codes" onclick="beShowTab('codes')">Charge Codes</button>
+    </div>
+
+    <!-- TAB: Accrual Runs (month-end workspace) -->
+    <div id="billTab-runs" style="display:none;">
+      <div id="beRunList">
+        <div class="page-header">
+          <div><div class="page-title">Accrual Runs</div><div class="page-subtitle">Run a month, review draft charges, post</div></div>
+          <div style="flex:1"></div>
+          <span id="beCoverage" style="font-size:13px;margin-right:8px;"></span>
+          <input type="month" id="beRunPeriod" onchange="beCheckCoverage()" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);">
+          <button class="btn btn-primary" id="beRunBtn" onclick="beRunAccrual()">Run accrual</button>
+        </div>
+        <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+          <div style="flex:1;overflow:auto;">
+            <table class="data-table">
+              <thead><tr><th>Period</th><th>Status</th><th class="right">Charges</th><th class="right">Total</th><th class="right">Unbilled</th><th>By</th><th>Started</th></tr></thead>
+              <tbody id="beRunsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="beRunReview" style="display:none;">
+        <div class="page-header">
+          <button class="btn btn-ghost" onclick="loadAccrualRuns()" style="padding:6px 12px;">← Runs</button>
+          <div><div class="page-title" id="beRevTitle">Accrual</div></div>
+          <div style="flex:1"></div>
+        </div>
+        <div class="card" style="padding:14px 18px;margin-bottom:12px;">
+          <div id="beRevStrip" style="display:flex;gap:36px;flex-wrap:wrap;"></div>
+        </div>
+        <div id="beRevWarn" class="be-warn" style="display:none;"></div>
+        <div id="beUnbilled" class="card"></div>
+        <div id="beRevCharges" style="margin-top:12px;"></div>
+        <div class="card" style="margin-top:12px;padding:12px 18px;display:flex;gap:10px;align-items:center;justify-content:flex-end;" id="beRevActions"></div>
+      </div>
+    </div>
+
+    <!-- TAB: Rate Cards -->
+    <div id="billTab-cards" style="display:none;">
+      <div id="beCardList">
+        <div class="page-header">
+          <div><div class="page-title">Rate Cards</div><div class="page-subtitle">Per-client pricing — drafts are editable, active cards are frozen</div></div>
+          <div style="flex:1"></div>
+          <div class="cb-wrap" style="max-width:240px;" id="beCardClientWrap"></div>
+          <button class="btn btn-ghost" onclick="beGenerateFromLegacy()">Generate from legacy rates</button>
+          <button class="btn btn-primary" onclick="beNewCard()">+ New rate card</button>
+        </div>
+        <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+          <div style="flex:1;overflow:auto;">
+            <table class="data-table">
+              <thead><tr><th>Client</th><th>Card</th><th>Status</th><th>Effective</th><th class="right">Lines</th></tr></thead>
+              <tbody id="beCardsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="beCardDetail" style="display:none;">
+        <div class="page-header" id="beCardActions" style="gap:8px;"></div>
+        <div class="card" style="padding:14px 18px;margin-bottom:12px;">
+          <div style="font-size:17px;font-weight:700;" id="beCardTitle"></div>
+          <div style="font-size:13px;color:var(--text2);" id="beCardSub"></div>
+        </div>
+        <div class="card" style="overflow:auto;">
+          <table class="data-table">
+            <thead><tr><th>Charge code</th><th>Basis</th><th>Slot</th><th>Unit</th><th class="right">Rate</th><th>Cadence</th><th class="right">Free days</th><th>Proration</th><th>Rules</th></tr></thead>
+            <tbody id="beCardLines"></tbody>
+          </table>
+        </div>
+        <div class="card" id="beCardEditor" style="display:none;margin-top:12px;">
+          <div class="card-head"><div class="card-title">Edit lines (draft)</div>
+            <div style="flex:1"></div>
+            <button class="btn btn-ghost" onclick="beAddLine()">+ Add line</button>
+            <button class="btn btn-success" onclick="beSaveCardLines()">Save lines</button>
+          </div>
+          <div style="overflow:auto;">
+            <table class="data-table">
+              <thead><tr><th>Code</th><th>Basis</th><th>Slot</th><th>Unit</th><th>Rate</th><th>Cadence</th><th>Free</th><th>Proration</th><th>Aged (JSON)</th><th>Tiers (JSON)</th><th></th></tr></thead>
+              <tbody id="beEditRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Charge Codes -->
+    <div id="billTab-codes" style="display:none;">
+      <div class="page-header">
+        <div><div class="page-title">Charge Codes</div><div class="page-subtitle">The catalog of billable services — GL accounts feed the QuickBooks export</div></div>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" onclick="beSeedDefaults()">Seed defaults</button>
+        <button class="btn btn-primary" onclick="beNewCode()">+ New code</button>
+      </div>
+      <div id="beCodesWrap"></div>
+    </div>
+
+    <!-- TAB: Charges (pre-existing meter view) -->
+    <div id="billTab-charges" style="display:none;">
     <div id="billListView">
       <div class="page-header">
         <button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button>
@@ -758,6 +868,7 @@
         </div>
       </div>
     </div>
+    </div><!-- /billTab-charges -->
   </div>
   <div class="page" id="page-reports">
     <!-- ============ LEVEL 0: REPORTS INDEX ============ -->
@@ -1436,6 +1547,13 @@
         <div style="display:flex;align-items:center;gap:14px;margin-top:12px;">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:14px;">
             <input type="checkbox" id="cfLotTracking" style="width:18px;height:18px;">
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+            <span style="min-width:140px;">Invoice detail</span>
+            <select id="cfInvoiceMode" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);">
+              <option value="DETAILED">Detailed — one line per charge (per LP)</option>
+              <option value="SUMMARY">Summary — grouped, expandable</option>
+            </select>
             <span>📦 Lot Tracking Required</span>
           </label>
           <span style="font-size:12px;color:var(--text2);">All items under this client will be lot-tracked (mandatory) — turning this on backfills existing items.</span>
@@ -1918,6 +2036,7 @@
 <script src="js/inbound.js"></script>
 <script src="js/intake.js"></script>
 <script src="js/billing.js"></script>
+<script src="js/billingEngine.js"></script>
 <script src="js/reports.js"></script>
 <script src="js/portal.js"></script>
 <script src="js/picker.js"></script>

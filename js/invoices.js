@@ -75,16 +75,18 @@ async function openInvoice(id) {
     <div><strong>Paid</strong> ${esc(d.paid_at ? String(d.paid_at).slice(0,10) : '—')}</div>
     <div><strong>QuickBooks</strong> ${d.qb_txn_id ? esc(d.qb_txn_id) : 'not synced'}</div>`;
 
-  document.getElementById('invLinesBody').innerHTML = (d.lines || []).map(l => `
-    <tr>
-      <td class="right">${esc(l.line_number)}</td>
-      <td>${esc(l.description || '')}</td>
-      <td>${esc(l.charge_type || '')}</td>
-      <td>${esc(l.charge_date ? String(l.charge_date).slice(0,10) : '')}</td>
-      <td class="right">${esc(l.quantity)}</td>
-      <td class="right">${fmtDollars(l.unit_rate)}</td>
-      <td class="right" style="font-weight:600;">${fmtDollars(l.line_total)}</td>
-    </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">No lines</div></td></tr>';
+  // Per-client presentation toggle (S3b): the LEDGER is always per-LP; this
+  // only changes how the lines render. Per-invoice override via the buttons.
+  INV_VIEW_MODE = (d.invoice_detail_mode === 'SUMMARY') ? 'SUMMARY' : 'DETAILED';
+  INV_CURRENT = d;
+  renderInvoiceLines();
+  const bS = document.getElementById('invViewSummary');
+  const bD = document.getElementById('invViewDetailed');
+  if (bS && !bS._wired) {
+    bS._wired = true;
+    bS.addEventListener('click', () => { INV_VIEW_MODE = 'SUMMARY'; renderInvoiceLines(); });
+    bD.addEventListener('click', () => { INV_VIEW_MODE = 'DETAILED'; renderInvoiceLines(); });
+  }
 
   document.getElementById('invSubtotal').textContent = fmtDollars(d.subtotal);
   document.getElementById('invTax').textContent      = fmtDollars(d.tax_amount);
@@ -192,4 +194,88 @@ async function submitGenerateInvoice() {
     err.textContent = 'Network error';
     btn.disabled = false;
   }
+}
+
+
+// ---------------------------------------------------------------------------
+// S3b: detailed vs summary invoice rendering. Summary groups lines by
+// (charge_type, unit_rate) — "Storage — 200 x $14.50" — expandable to the
+// per-LP detail. The default comes from the client's invoice_detail_mode.
+// ---------------------------------------------------------------------------
+let INV_VIEW_MODE = 'DETAILED';
+let INV_CURRENT = null;
+
+function renderInvoiceLines() {
+  const d = INV_CURRENT;
+  if (!d) return;
+  const body = document.getElementById('invLinesBody');
+  const lines = d.lines || [];
+  const bS = document.getElementById('invViewSummary');
+  const bD = document.getElementById('invViewDetailed');
+  if (bS) {
+    bS.classList.toggle('btn-primary', INV_VIEW_MODE === 'SUMMARY');
+    bS.classList.toggle('btn-ghost', INV_VIEW_MODE !== 'SUMMARY');
+    bD.classList.toggle('btn-primary', INV_VIEW_MODE === 'DETAILED');
+    bD.classList.toggle('btn-ghost', INV_VIEW_MODE !== 'DETAILED');
+    document.getElementById('invViewHint').textContent =
+      `client default: ${d.invoice_detail_mode === 'SUMMARY' ? 'Summary' : 'Detailed'}`;
+  }
+
+  if (INV_VIEW_MODE !== 'SUMMARY') {
+    body.innerHTML = lines.map(l => `
+      <tr>
+        <td class="right">${esc(l.line_number)}</td>
+        <td>${esc(l.description || '')}</td>
+        <td>${esc(l.charge_type || '')}</td>
+        <td>${esc(l.charge_date ? String(l.charge_date).slice(0,10) : '')}</td>
+        <td class="right">${esc(l.quantity)}</td>
+        <td class="right">${fmtDollars(l.unit_rate)}</td>
+        <td class="right" style="font-weight:600;">${fmtDollars(l.line_total)}</td>
+      </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">No lines</div></td></tr>';
+    return;
+  }
+
+  // SUMMARY: group by charge type + rate.
+  const groups = {};
+  for (const l of lines) {
+    const key = `${l.charge_type || ''}|${l.unit_rate}`;
+    const g = (groups[key] = groups[key] || { type: l.charge_type, rate: l.unit_rate, qty: 0, total: 0, lines: [] });
+    g.qty += Number(l.quantity);
+    g.total += Number(l.line_total);
+    g.lines.push(l);
+  }
+  let i = 0;
+  body.innerHTML = Object.values(groups).map(g => {
+    i++;
+    const gid = 'invGrp' + i;
+    return `
+      <tr class="inv-grp-row js-inv-grp" data-target="${gid}" style="cursor:pointer;background:var(--bg);">
+        <td class="right">▸</td>
+        <td style="font-weight:600;">${esc(g.type || '')} — ${esc(g.lines.length)} item(s)</td>
+        <td>${esc(g.type || '')}</td>
+        <td></td>
+        <td class="right" style="font-weight:600;">${esc(Math.round(g.qty * 10000) / 10000)}</td>
+        <td class="right">${fmtDollars(g.rate)}</td>
+        <td class="right" style="font-weight:700;">${fmtDollars(g.total)}</td>
+      </tr>
+      ${g.lines.map(l => `
+      <tr class="${gid}" style="display:none;color:var(--text2);font-size:12px;">
+        <td class="right">${esc(l.line_number)}</td>
+        <td style="padding-left:26px;">${esc(l.description || '')}</td>
+        <td>${esc(l.charge_type || '')}</td>
+        <td>${esc(l.charge_date ? String(l.charge_date).slice(0,10) : '')}</td>
+        <td class="right">${esc(l.quantity)}</td>
+        <td class="right">${fmtDollars(l.unit_rate)}</td>
+        <td class="right">${fmtDollars(l.line_total)}</td>
+      </tr>`).join('')}`;
+  }).join('') || '<tr><td colspan="7"><div class="empty-state">No lines</div></td></tr>';
+
+  body.querySelectorAll('.js-inv-grp').forEach(tr =>
+    tr.addEventListener('click', () => {
+      const open = tr.dataset.open === '1';
+      tr.dataset.open = open ? '' : '1';
+      tr.querySelector('td').textContent = open ? '▸' : '▾';
+      body.querySelectorAll('.' + tr.dataset.target).forEach(r =>
+        r.style.display = open ? 'none' : '');
+    }));
 }

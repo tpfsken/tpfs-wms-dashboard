@@ -143,6 +143,7 @@ function renderClientProfileTab(){
     row('Phone',          c.contact_phone) +
     row('Hazmat',         c.hazmat_enabled ? 'Enabled' : 'No') +
     row('Lot Tracking',   c.lot_tracking_enabled ? 'Mandatory (all SKUs)' : 'Per-item') +
+    row('Invoice detail', c.invoice_detail_mode === 'SUMMARY' ? 'Summary (grouped)' : 'Detailed (per LP)') +
     row('Onboarded',      c.onboarded_at ? new Date(c.onboarded_at).toLocaleDateString() : null) +
     row('Status',         c.is_active ? 'Active' : 'Inactive');
 
@@ -199,6 +200,7 @@ function openClientFormModal(client){
   document.getElementById('cfContactPhone').value = client?.contact_phone|| '';
   document.getElementById('cfHazmat').checked     = !!client?.hazmat_enabled;
   document.getElementById('cfLotTracking').checked = !!client?.lot_tracking_enabled;
+  document.getElementById('cfInvoiceMode').value = client?.invoice_detail_mode || 'DETAILED';
 
   const hc = client?.hazmat_config || {};
   document.getElementById('cfHazEmergency').value = hc.emergency_contact || '';
@@ -259,6 +261,7 @@ async function submitClientForm(){
     contact_phone:  document.getElementById('cfContactPhone').value.trim() || null,
     hazmat_enabled: document.getElementById('cfHazmat').checked,
     lot_tracking_enabled: lotTrackingChecked,
+    invoice_detail_mode: document.getElementById('cfInvoiceMode').value,
   };
 
   if(!body.code) { err.textContent = 'Client code is required'; return; }

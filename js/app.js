@@ -73,7 +73,7 @@ const loaders = {
   inbound:        loadInbound,
   intake:         loadIntake,
   clients:        loadClients,
-  billing:        loadBilling,
+  billing:        loadBillingSection,
   invoices:       loadInvoices,
   reports:        loadReports,
   compliance:     loadCompliance,
