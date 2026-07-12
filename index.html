@@ -663,12 +663,7 @@
           <button class="btn btn-primary" onclick="beNewCard()">+ New rate card</button>
         </div>
         <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
-          <div style="flex:1;overflow:auto;">
-            <table class="data-table">
-              <thead><tr><th>Client</th><th>Card</th><th>Status</th><th>Effective</th><th class="right">Lines</th></tr></thead>
-              <tbody id="beCardsBody"></tbody>
-            </table>
-          </div>
+          <div style="flex:1;overflow:auto;" id="beCardsWrap"></div>
         </div>
       </div>
 
@@ -678,12 +673,7 @@
           <div style="font-size:17px;font-weight:700;" id="beCardTitle"></div>
           <div style="font-size:13px;color:var(--text2);" id="beCardSub"></div>
         </div>
-        <div class="card" style="overflow:auto;">
-          <table class="data-table">
-            <thead><tr><th>Charge code</th><th>Basis</th><th>Slot</th><th>Unit</th><th class="right">Rate</th><th>Cadence</th><th class="right">Free days</th><th>Proration</th><th>Rules</th></tr></thead>
-            <tbody id="beCardLines"></tbody>
-          </table>
-        </div>
+        <div class="card" style="overflow:auto;" id="beCardLinesWrap"></div>
         <div class="card" id="beCardEditor" style="display:none;margin-top:12px;">
           <div class="card-head"><div class="card-title">Edit lines (draft)</div>
             <div style="flex:1"></div>
@@ -786,10 +776,7 @@
   </div>
 
   <div class="page" id="page-billing">
-    <div id="billTabs" class="bill-tabs ops-only">
-      <button class="bill-tab active" data-tab="runs" onclick="beShowTab('runs')">Accrual Runs</button>
-      <button class="bill-tab" data-tab="charges" onclick="beShowTab('charges')">Charges</button>
-    </div>
+    <div id="billTabs" class="ops-only"></div>
 
     <!-- TAB: Accrual Runs (month-end workspace) -->
     <div id="billTab-runs" style="display:none;">
@@ -802,12 +789,7 @@
           <button class="btn btn-primary" id="beRunBtn" onclick="beRunAccrual()">Run accrual</button>
         </div>
         <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
-          <div style="flex:1;overflow:auto;">
-            <table class="data-table">
-              <thead><tr><th>Period</th><th>Status</th><th class="right">Charges</th><th class="right">Total</th><th class="right">Unbilled</th><th>By</th><th>Started</th></tr></thead>
-              <tbody id="beRunsBody"></tbody>
-            </table>
-          </div>
+          <div style="flex:1;overflow:auto;" id="beRunsWrap"></div>
         </div>
       </div>
 
