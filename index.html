@@ -394,18 +394,17 @@
         <div class="page-subtitle" id="portalHomeGreeting">Welcome</div>
       </div>
     </div>
-    <div id="portalMetricsRow" style="margin-bottom:20px;"></div>
-    <div id="portalSlaRow"></div>
+    <div id="portalMetricsRow" class="ui-tiles"></div>
     <!-- Your SLA Terms — operational rules + the fees that apply when
          an order falls outside them. Hidden if no rules are set. -->
     <div id="portalSlaTermsCard" class="card" style="display:none;margin-bottom:20px;">
       <div class="card-head">
-        <div class="card-title">Your SLA Terms</div>
-        <div style="font-size:12px;color:var(--text2);margin-left:12px;">Operational rules and the fees that apply when an order is outside the SLA</div>
+        <div class="card-title">Your SLA terms</div>
+        <div class="ui-hint" style="margin-left:12px;">The rules we operate to — and what gets billed when an order falls outside them</div>
       </div>
-      <div id="portalSlaTermsBody" style="padding:0;"></div>
+      <div id="portalSlaTermsBody"></div>
     </div>
-    <div class="grid-2" id="portalHomeGrid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;"></div>
+    <div class="portal-grid" id="portalHomeGrid"></div>
   </div>
 
   <!-- ============================================================ -->
@@ -418,89 +417,110 @@
         <div class="page-subtitle">Manual outbound order — our ops team will allocate and ship it.</div>
       </div>
       <div style="flex:1"></div>
-      <button class="btn btn-ghost" onclick="navigateTo('portalHome')">← Back</button>
+      <button class="ui-btn" onclick="navigateTo('portalHome')">← Back</button>
     </div>
 
-    <!-- Two-column layout: Ship To (compact, fixed-width) on the left;
-         Order Lines (flex, scrollable internally) on the right. Stacks
-         vertically on screens narrower than 1100px (mobile-friendly). -->
-    <div class="pno-grid" style="display:grid;grid-template-columns:minmax(360px,420px) 1fr;gap:20px;align-items:start;">
+    <!-- Two-column: Ship To (fixed) left, Order Lines (flex) right. Stacks
+         under 1100px — see .pno-grid in app.css. -->
+    <div class="pno-grid">
 
       <!-- Ship To column -->
-      <div class="card" style="position:sticky;top:0;">
+      <div class="card pno-shipto">
         <div class="card-head">
-          <div class="card-title">Ship To</div>
+          <div class="card-title">Ship to</div>
           <div style="flex:1"></div>
           <div class="cb-wrap" style="max-width:200px;" id="pnoPriorAddrWrap"></div>
         </div>
-        <div style="padding:16px 20px;">
-          <div class="form-group"><label class="form-label">Customer / Ship-To Name *</label><input class="form-input" id="pnoCustName"></div>
-          <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="pnoCustEmail" type="email"></div>
-          <div class="form-group"><label class="form-label">Address Line 1 *</label><input class="form-input" id="pnoAddr1"></div>
-          <div class="form-group"><label class="form-label">Address Line 2</label><input class="form-input" id="pnoAddr2"></div>
-          <div class="form-row form-row-2">
-            <div class="form-group"><label class="form-label">City *</label><input class="form-input" id="pnoCity"></div>
-            <div class="form-group"><label class="form-label">State *</label><input class="form-input" id="pnoState"></div>
+        <div class="pno-form">
+          <div class="ui-field" data-field="pnoCustName">
+            <label class="ui-label" for="pnoCustName">Customer / ship-to name *</label>
+            <input class="ui-input" id="pnoCustName">
+            <div class="ui-field-err" style="display:none;"></div>
           </div>
-          <div class="form-row form-row-2">
-            <div class="form-group"><label class="form-label">Postal *</label><input class="form-input" id="pnoPostal"></div>
-            <div class="form-group"><label class="form-label">Country</label><input class="form-input" id="pnoCountry" value="US"></div>
+          <div class="ui-field" data-field="pnoCustEmail">
+            <label class="ui-label" for="pnoCustEmail">Email</label>
+            <input class="ui-input" id="pnoCustEmail" type="email">
+            <div class="ui-field-err" style="display:none;"></div>
           </div>
-          <div class="form-group" style="margin-bottom:0;"><label class="form-label">Required Ship Date</label><input class="form-input" type="date" id="pnoShipDate"></div>
+          <div class="ui-field" data-field="pnoAddr1">
+            <label class="ui-label" for="pnoAddr1">Address line 1 *</label>
+            <input class="ui-input" id="pnoAddr1">
+            <div class="ui-field-err" style="display:none;"></div>
+          </div>
+          <div class="ui-field" data-field="pnoAddr2">
+            <label class="ui-label" for="pnoAddr2">Address line 2</label>
+            <input class="ui-input" id="pnoAddr2">
+            <div class="ui-field-err" style="display:none;"></div>
+          </div>
+          <div class="ui-field-row">
+            <div class="ui-field" data-field="pnoCity">
+              <label class="ui-label" for="pnoCity">City *</label>
+              <input class="ui-input" id="pnoCity">
+              <div class="ui-field-err" style="display:none;"></div>
+            </div>
+            <div class="ui-field" data-field="pnoState">
+              <label class="ui-label" for="pnoState">State *</label>
+              <input class="ui-input" id="pnoState">
+              <div class="ui-field-err" style="display:none;"></div>
+            </div>
+          </div>
+          <div class="ui-field-row">
+            <div class="ui-field" data-field="pnoPostal">
+              <label class="ui-label" for="pnoPostal">Postal *</label>
+              <input class="ui-input" id="pnoPostal">
+              <div class="ui-field-err" style="display:none;"></div>
+            </div>
+            <div class="ui-field" data-field="pnoCountry">
+              <label class="ui-label" for="pnoCountry">Country</label>
+              <input class="ui-input" id="pnoCountry" value="US">
+              <div class="ui-field-err" style="display:none;"></div>
+            </div>
+          </div>
+          <div class="ui-field" data-field="pnoShipDate">
+            <label class="ui-label" for="pnoShipDate">Required ship date</label>
+            <input class="ui-input" type="date" id="pnoShipDate">
+            <div class="ui-field-err" style="display:none;"></div>
+          </div>
         </div>
       </div>
 
       <!-- Order Lines column -->
-      <div class="card" style="overflow:visible;position:relative;">
+      <div class="card pno-lines">
         <div class="card-head">
-          <div class="card-title">Order Lines</div>
-          <div id="pnoLinesCount" style="font-size:12px;color:var(--muted);margin-left:8px;"></div>
+          <div class="card-title">Order lines</div>
+          <div class="ui-hint" id="pnoLinesCount"></div>
           <div style="flex:1"></div>
-          <input type="text" class="form-input" id="pnoSkuSearch" placeholder="Click to browse SKUs..." style="max-width:280px;" oninput="searchPortalSkus()" onfocus="searchPortalSkus()">
+          <input type="text" class="ui-input pno-search" id="pnoSkuSearch"
+                 placeholder="Search or click to browse SKUs…"
+                 oninput="searchPortalSkus()" onfocus="searchPortalSkus()">
         </div>
-        <!-- SKU dropdown — absolute over card, large internal scroll. -->
-        <div id="pnoSkuResults" style="display:none;position:absolute;top:62px;left:20px;right:20px;background:var(--bg);border:1px solid var(--border);border-radius:8px;max-height:min(620px,60vh);overflow-y:auto;box-shadow:0 12px 32px rgba(0,0,0,.5);z-index:50;"></div>
-        <!-- Lines table — internal scroll for many items (sticky header). -->
-        <div style="max-height:min(620px,55vh);overflow-y:auto;overflow-x:auto;">
-          <table class="data-table" style="margin:0;">
-            <thead><tr><th>SKU</th><th>Description</th><th>Lot</th><th>Expiry</th><th>UOM</th><th class="right">Available</th><th style="width:120px;">Quantity</th><th style="width:50px;"></th></tr></thead>
-            <tbody id="pnoLinesBody"></tbody>
-          </table>
-        </div>
-        <div id="pnoLinesEmpty" class="empty-state" style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">
-          No lines yet — search for a SKU above to get started.
-        </div>
+        <!-- SKU results — floats over the card, scrolls internally. -->
+        <div id="pnoSkuResults" class="pno-results"></div>
+        <div class="pno-lines-scroll" id="pnoLinesWrap"></div>
       </div>
     </div>
 
-    <!-- Supporting documents — files staged on the client, uploaded to the
-         order after it's created (since /orders/:id/attachments needs an
-         order id). Spans the full width below the two-column grid.
-         flex-shrink:0 prevents the parent flex column from squashing it
-         to 2px when the page is short. -->
+    <!-- Supporting documents — staged client-side, uploaded to the order after
+         it exists (/orders/:id/attachments needs an order id). -->
     <div class="card" style="margin-top:20px;flex:0 0 auto;">
       <div class="card-head">
-        <div class="card-title">Supporting Documents</div>
-        <div id="pnoAttachCount" style="font-size:12px;color:var(--muted);margin-left:8px;"></div>
+        <div class="card-title">Supporting documents</div>
+        <div class="ui-hint" id="pnoAttachCount"></div>
         <div style="flex:1"></div>
-        <button class="btn btn-ghost" onclick="document.getElementById('pnoAttachInput').click()">📎 Attach File</button>
+        <button class="ui-btn" onclick="document.getElementById('pnoAttachInput').click()">Attach file</button>
         <input type="file" id="pnoAttachInput" multiple style="display:none;"
                accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,image/*">
       </div>
-      <div style="padding:14px 20px;font-size:12px;color:var(--text2);">
-        Optional — upload customer POs, BOLs, packing lists, or photos. These ride along with the order for our ops team to reference. Not AI-scanned.
+      <div class="pno-attach">
+        <div class="ui-hint" style="margin-bottom:10px;">Optional — customer POs, BOLs, packing lists, or photos. They ride along with the order for our team to reference. Not AI-scanned.</div>
+        <div id="pnoAttachList"></div>
       </div>
-      <div id="pnoAttachList" style="padding:0 20px 16px 20px;"></div>
     </div>
 
-    <!-- Sticky submit bar — always visible at the bottom of the page so the
-         user never has to scroll to find Submit. -->
-    <div style="position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:12px;z-index:10;margin-top:auto;">
-      <button class="btn btn-primary" id="pnoSubmitBtn" onclick="submitPortalNewOrder()">Submit Order</button>
-      <button class="btn btn-ghost" onclick="navigateTo('portalHome')">Cancel</button>
-      <div style="flex:1"></div>
-      <div id="pnoError"   style="color:var(--red);font-size:13px;"></div>
-      <div id="pnoSuccess" style="color:var(--green);font-size:13px;"></div>
+    <!-- Sticky submit bar — Submit is always reachable without scrolling. -->
+    <div class="pno-submitbar">
+      <button class="ui-btn ui-btn-primary" id="pnoSubmitBtn" onclick="submitPortalNewOrder()">Submit order</button>
+      <button class="ui-btn" onclick="navigateTo('portalHome')">Cancel</button>
     </div>
   </div>
 
@@ -514,32 +534,27 @@
         <div class="page-subtitle">Drop a PDF — our AI extracts the data and our ops team reviews + creates the order or PO.</div>
       </div>
       <div style="flex:1"></div>
-      <button class="btn btn-ghost" onclick="navigateTo('portalHome')">← Home</button>
-      <button class="btn btn-primary" onclick="document.getElementById('portalIntakeUpload').click()">⬆ Upload PDF</button>
+      <button class="ui-btn" onclick="navigateTo('portalHome')">← Home</button>
+      <button class="ui-btn ui-btn-primary" onclick="document.getElementById('portalIntakeUpload').click()">Upload PDF</button>
       <input type="file" id="portalIntakeUpload" accept="application/pdf,.pdf" multiple style="display:none;">
     </div>
 
     <!-- Drop zone -->
-    <div id="portalIntakeDrop" class="card" style="padding:32px;border:2px dashed var(--border);text-align:center;cursor:pointer;transition:all .15s;" onclick="document.getElementById('portalIntakeUpload').click()">
-      <div style="font-size:32px;margin-bottom:8px;opacity:.5;">⬆</div>
-      <div style="font-size:15px;font-weight:600;margin-bottom:4px;">Drop PDFs here or click to browse</div>
-      <div style="font-size:13px;color:var(--text2);">PO, ASN, BOL, packing slips · 25MB max · AI classifies and extracts</div>
-      <div id="portalIntakeStatus" style="margin-top:12px;font-size:13px;"></div>
+    <div id="portalIntakeDrop" class="ui-drop" onclick="document.getElementById('portalIntakeUpload').click()">
+      <div class="ui-drop-icon">⬆</div>
+      <div class="ui-drop-title">Drop PDFs here, or click to browse</div>
+      <div class="ui-hint">PO, ASN, BOL, packing slips · 25MB max · our AI classifies and extracts them</div>
+      <div id="portalIntakeStatus"></div>
     </div>
 
-    <!-- Recent uploads list -->
-    <div class="card">
+    <!-- Recent uploads -->
+    <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
       <div class="card-head">
-        <div class="card-title">Your Uploads</div>
+        <div class="card-title">Your uploads</div>
         <div style="flex:1"></div>
-        <button class="btn btn-ghost" onclick="loadPortalIntake()">Refresh</button>
+        <button class="ui-btn" onclick="refreshPortalIntakeList()">Refresh</button>
       </div>
-      <div style="overflow:auto;max-height:60vh;">
-        <table class="data-table">
-          <thead><tr><th>Uploaded</th><th>File</th><th>Type</th><th class="right">Size</th><th>Status</th><th>Result</th></tr></thead>
-          <tbody id="portalIntakeBody"></tbody>
-        </table>
-      </div>
+      <div style="flex:1;overflow:auto;" id="portalIntakeWrap"></div>
     </div>
   </div>
 

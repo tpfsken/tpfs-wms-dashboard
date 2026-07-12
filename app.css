@@ -167,7 +167,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 body.portal-mode .nav-ops-only{display:none}
 body.portal-mode .nav-portal-only{display:block}
 body.portal-mode .ops-only{display:none !important}
-body.portal-mode .btn.portal-only{display:inline-flex !important}
+body.portal-mode .btn.portal-only,
+body.portal-mode .ui-btn.portal-only{display:inline-flex !important}
 /* Defensive: if a portal user ever lands on page-dashboard (e.g. browser
    back/forward, hand-typed nav), keep the ops Dashboard widgets — KPIs,
    Pick Waves, Performance, Alerts, Dock Schedule, etc. — completely hidden.
@@ -187,10 +188,49 @@ body.portal-mode .portal-banner{
 .portal-banner-name{font-size:30px;font-weight:700;color:var(--text);letter-spacing:-.02em}
 .portal-banner-sub {font-size:13px;color:var(--text2);margin-top:2px}
 
+/* ---- Portal home: card hub (D2c) ---- */
+.portal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;}
+.portal-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;
+  background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px;
+  font-family:var(--font);cursor:pointer;transition:border-color .15s,transform .15s;}
+.portal-card:hover{border-color:var(--blue);transform:translateY(-1px);}
+.portal-card-icon{font-size:30px;line-height:1;margin-bottom:6px;}
+.portal-card-title{font-size:16px;font-weight:700;color:var(--text);}
+.portal-card-desc{font-size:13px;color:var(--text2);line-height:1.5;}
+
+/* ---- Portal new order (D2c) ---- */
+.pno-grid{display:grid;grid-template-columns:minmax(360px,420px) 1fr;gap:20px;align-items:start;}
+.pno-shipto{position:sticky;top:0;}
+.pno-form{padding:16px 20px;}
+.pno-form .ui-field:last-child{margin-bottom:0;}
+.pno-lines{overflow:visible;position:relative;}
+.pno-search{max-width:280px;}
+.pno-lines-scroll{max-height:min(620px,55vh);overflow:auto;}
+.pno-attach{padding:14px 20px 16px;}
+.pno-results{display:none;position:absolute;top:62px;left:20px;right:20px;z-index:50;
+  background:var(--bg);border:1px solid var(--border-h);border-radius:var(--radius);
+  max-height:min(620px,60vh);overflow-y:auto;box-shadow:0 12px 32px rgba(0,0,0,.45);}
+.pno-sku{border-bottom:1px solid var(--border);}
+.pno-sku:last-child{border-bottom:none;}
+.pno-sku-row{display:flex;align-items:center;gap:12px;padding:9px 14px;cursor:pointer;
+  font-size:var(--fs-body);}
+.pno-sku-row:hover{background:var(--hover);}
+.pno-sku-arrow{color:var(--muted);font-size:10px;width:10px;}
+.pno-sku-name{flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pno-sku-avail{color:var(--st-ok);font-weight:600;font-size:12px;white-space:nowrap;}
+.pno-lots{display:none;padding:0 14px 10px 24px;background:var(--stripe);}
+.pno-lots.open{display:block;}
+.pno-add{color:var(--blue);font-weight:600;font-size:12px;}
+.pno-qty{width:90px;padding:4px 8px;}
+.pno-qty-over{border-color:var(--st-warn);color:var(--st-warn);}
+.pno-submitbar{position:sticky;bottom:0;z-index:10;margin-top:auto;
+  display:flex;align-items:center;gap:10px;
+  background:var(--bg);border-top:1px solid var(--border);padding:14px 20px;}
+
 /* Portal new-order page two-column layout — stack on narrow screens. */
 @media (max-width: 1100px) {
-  .pno-grid { grid-template-columns: 1fr !important; }
-  .pno-grid .card[style*="position:sticky"] { position: relative !important; }
+  .pno-grid { grid-template-columns: 1fr; }
+  .pno-shipto { position: relative; }
 }
 
 /* ===========================================================
@@ -620,6 +660,8 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .ui-tile-sub{font-size:12px;color:var(--text2);margin-top:var(--sp-1);}
 .ui-tile-danger{border-color:var(--st-danger);}
 .ui-tile-warn{border-color:var(--st-warn);}
+.ui-tile-ok{border-color:var(--st-ok);}
+.ui-tile-info{border-color:var(--st-info);}
 
 /* ---- tabs (the one system) ---- */
 .ui-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:var(--sp-4);}
@@ -696,6 +738,27 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .ui-group[open]>summary::before{content:'▾';}
 .ui-group-body{padding:0 var(--sp-3) var(--sp-3);}
 .ui-muted{color:var(--text2);font-weight:500;}
+
+/* ---- drop zone ---- */
+.ui-drop{background:var(--panel);border:1px dashed var(--border-h);border-radius:var(--radius);
+  padding:var(--sp-8);text-align:center;cursor:pointer;transition:border-color .15s,background .15s;
+  margin-bottom:var(--sp-4);}
+.ui-drop:hover,.ui-drop-hot{border-color:var(--blue);background:var(--hover);}
+.ui-drop-icon{font-size:26px;opacity:.5;margin-bottom:var(--sp-2);}
+.ui-drop-title{font-size:var(--fs-emph);font-weight:600;margin-bottom:var(--sp-1);}
+
+/* ---- staged file row ---- */
+.ui-file{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) 0;
+  border-bottom:1px solid var(--border);font-size:var(--fs-body);}
+.ui-file:last-child{border-bottom:none;}
+.ui-file-ext{width:40px;height:40px;border-radius:var(--radius-sm);background:var(--bg);
+  display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+  font-size:11px;font-weight:700;color:var(--text2);flex:0 0 auto;}
+.ui-file-meta{flex:1;min-width:0;}
+.ui-file-name{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* ---- two-column field row ---- */
+.ui-field-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3);}
 
 /* ---- toasts ---- */
 #uiToastHost{position:fixed;top:16px;right:16px;z-index:1100;display:flex;

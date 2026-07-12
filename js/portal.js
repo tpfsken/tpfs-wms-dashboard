@@ -1,809 +1,651 @@
-// =============================================================================
-// PORTAL — 3PL client portal mode (Phase 3).
-// =============================================================================
-// Activated by bootPortal() in app.js when the JWT carries userType='client'.
-// The portal reuses the existing inventory / orders / reports pages — the API
-// already locks those reads to req.user.clientId via scopeClient — and adds
-// two portal-only pages:
-//   - page-portalHome       : a 4-card landing hub
-//   - page-portalNewOrder   : simplified manual order entry
-//
-// Sidebar layout in portal mode is driven by the body.portal-mode class
-// (CSS in app.css): .nav-ops-only is hidden, .nav-portal-only is shown,
-// and .ops-only buttons inside pages (Case Break, ops "+ New Order") are
-// hidden too.
-// =============================================================================
+'use strict';
+/* =============================================================================
+ * PORTAL — 3PL client portal (Phase 3), on TERMINAL LEDGER (batch D2c).
+ * =============================================================================
+ * Activated by bootPortal() from app.js when the JWT carries userType='client'.
+ * The portal reuses the ops inventory / orders / billing / reports pages — the
+ * API locks those reads to req.user.clientId via scopeClient — and adds three
+ * portal-only pages:
+ *   - page-portalHome      : KPI tiles + SLA terms + a card hub
+ *   - page-portalNewOrder  : simplified manual order entry
+ *   - page-portalIntake    : PDF upload -> AI extraction
+ *
+ * Sidebar layout in portal mode is driven by body.portal-mode (CSS in app.css):
+ * .nav-ops-only hides, .nav-portal-only shows, .ops-only controls inside pages
+ * hide too.
+ *
+ * This is the screen family a CUSTOMER sees. Native dialogs, hand-formatted
+ * money, and stray inline styles are not acceptable here — everything renders
+ * through the ui.js components.
+ * ========================================================================== */
 
-let _portalNewOrderLines = [];   // pending lines in the portal new-order form
-let _portalShipToCache   = null; // prior ship-to addresses for the dropdown
-let _portalNewOrderAttachments = []; // staged File objects, uploaded post-create
+let _portalNewOrderLines       = [];   // pending lines in the new-order form
+let _portalShipToCache         = null; // prior ship-to addresses for the combo
+let _portalNewOrderAttachments = [];   // staged File objects, uploaded post-create
 
-function isPortalMode(){
+const PNO_MAX_FILE = 25 * 1024 * 1024; // matches the API's multer limit
+
+function isPortalMode() {
   return typeof U !== 'undefined' && U && U.userType === 'client';
 }
 
-// Called from app.js's DOMContentLoaded path when U.userType === 'client'.
-// Hides ops nav, primes the page-level filter combos that other modules
-// reference, and lands on the portal home.
-function bootPortal(){
+function bootPortal() {
   document.body.classList.add('portal-mode');
 
-  // Client name from JWT (login query LEFT JOINs clients). Falls back to
-  // clientCode then a generic "Customer" so the UI never shows "client".
+  // Client name from the JWT (login LEFT JOINs clients). Falls back to the
+  // client code, then a generic label — the UI never shows the word "client".
   const clientLabel = (U && (U.clientName || U.clientCode)) || 'Customer';
 
-  if(U){
+  if (U) {
     document.getElementById('userAvatar').textContent =
       (U.fullName || U.email || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
     document.getElementById('userName').textContent = U.fullName || U.email;
     const role = document.querySelector('.topbar-user-info .role');
-    if(role) role.textContent = clientLabel;
+    if (role) role.textContent = clientLabel;
   }
 
-  // Replace the generic "Customer Portal" page-title with the client name so
-  // the user sees their company branding when they land on the home.
   const portalTitle = document.querySelector('#page-portalHome .page-title');
-  if(portalTitle) portalTitle.textContent = clientLabel;
+  if (portalTitle) portalTitle.textContent = clientLabel;
 
-  // Top-of-page banner — visible on every portal page so the client always
-  // sees their company name front and center.
   const bannerName = document.getElementById('portalBannerName');
   const bannerSub  = document.getElementById('portalBannerSub');
-  if(bannerName) bannerName.textContent = clientLabel;
-  if(bannerSub && U && U.fullName) bannerSub.textContent = `Customer Portal · ${U.fullName}`;
+  if (bannerName) bannerName.textContent = clientLabel;
+  if (bannerSub && U && U.fullName) bannerSub.textContent = `Customer Portal · ${U.fullName}`;
 
-  // Stub the page-level filter combos that inventory.js / orders.js read on
-  // every load. The combos themselves are hidden in portal mode (.ops-only on
-  // their wrappers in index.html), but the JS still references _cbState[id].
+  // Stub the page-level filter combos the shared ops pages read on every load.
+  // The wraps are .ops-only (hidden) in portal mode, but the JS still reads
+  // _cbState[id].
   initCombo('invStatusFilterWrap', [
-    {value:'',label:'All statuses'},
-    {value:'available',label:'Available'},
-    {value:'allocated',label:'Allocated'},
-    {value:'damaged',label:'Damaged'},
-  ], {placeholder:'All statuses', onChange:() => loadInventory()});
+    { value: '', label: 'All statuses' },
+    { value: 'available', label: 'Available' },
+    { value: 'allocated', label: 'Allocated' },
+    { value: 'damaged', label: 'Damaged' },
+  ], { placeholder: 'All statuses', onChange: () => loadInventory() });
 
   initCombo('ordStatusFilterWrap', [
-    {value:'',label:'All statuses'},
-    {value:'NEW',label:'New'},{value:'ALLOCATED',label:'Allocated'},
-    {value:'PICKING',label:'Picking'},{value:'PICKED',label:'Picked'},
-    {value:'PACKING',label:'Packing'},{value:'PACKED',label:'Packed'},
-    {value:'SHIPPED',label:'Shipped'},{value:'CANCELLED',label:'Cancelled'},
-  ], {placeholder:'All statuses', onChange:() => loadOrders()});
+    { value: '', label: 'All statuses' },
+    { value: 'NEW', label: 'New' }, { value: 'ALLOCATED', label: 'Allocated' },
+    { value: 'PICKING', label: 'Picking' }, { value: 'PICKED', label: 'Picked' },
+    { value: 'PACKING', label: 'Packing' }, { value: 'PACKED', label: 'Packed' },
+    { value: 'SHIPPED', label: 'Shipped' }, { value: 'CANCELLED', label: 'Cancelled' },
+  ], { placeholder: 'All statuses', onChange: () => loadOrders() });
 
-  // Pre-init the Billing client-filter combo so loadBilling() skips its
-  // first-time init branch — that branch calls loadCC() -> GET /clients,
-  // which is requireOps and would 403 a portal user. The wrap itself is
-  // .ops-only in index.html, so the stub combo is never shown.
-  initCombo('billClientFilterWrap', [{value:'', label:'My Account'}],
-    {placeholder:'My Account'});
+  // Pre-stub the Billing client filter so loadBilling() skips its first-run
+  // init — that branch calls loadCC() -> GET /clients, which is requireOps and
+  // would 403 a portal user.
+  initCombo('billClientFilterWrap', [{ value: '', label: 'My Account' }],
+    { placeholder: 'My Account' });
 
-  // Clock + sign-out wiring already attached in app.js DOMContentLoaded —
-  // those run regardless of mode. Just navigate to the portal home so the
-  // active nav-item / active page line up with what the user sees.
   navigateTo('portalHome');
 }
 
-// =============================================================================
-// PORTAL HOME — card grid hub
-// =============================================================================
+/* ---------------------------------------------------------------------------
+ * PORTAL HOME — KPI tiles, SLA terms, card hub
+ * ------------------------------------------------------------------------- */
+const PORTAL_CARDS = [
+  { id: 'portalNewOrder', icon: '➕', title: 'Place an Order',
+    desc: 'Manual outbound order — choose SKUs, quantities, and a ship-to.' },
+  { id: 'portalIntake', icon: '📄', title: 'Upload Documents',
+    desc: 'Drop a PDF (PO, BOL, ASN, packing slip) — AI extracts it and creates the order.' },
+  { id: 'inventory', icon: '📦', title: 'My Inventory',
+    desc: 'On-hand SKUs, lots, and license plates at the warehouse.' },
+  { id: 'orders', icon: '📋', title: 'My Orders',
+    desc: 'Status of every order you placed — open, picking, shipped.' },
+  { id: 'billing', icon: '💵', title: 'My Billing',
+    desc: 'Charges accrued on your account, by period.' },
+  { id: 'reports', icon: '🔎', title: 'Reports',
+    desc: 'Item history and full LP traceability for compliance / recall.' },
+];
 
-async function loadPortalHome(){
-  const cards = [
-    {id:'portalNewOrder', icon:'➕', title:'Place an Order',
-     desc:'Manual outbound order — choose SKUs, quantities, and a ship-to.',
-     accent:'var(--blue)'},
-    {id:'portalIntake',   icon:'📄', title:'Upload Documents',
-     desc:'Drop a PDF (PO, BOL, ASN, packing slip) — AI extracts and creates the order.',
-     accent:'var(--purple)'},
-    {id:'inventory',      icon:'📦', title:'My Inventory',
-     desc:'On-hand SKUs, lots, and license plates at the warehouse.',
-     accent:'var(--green)'},
-    {id:'orders',         icon:'📋', title:'My Orders',
-     desc:'Status of every order you placed — open, picking, shipped.',
-     accent:'var(--amber)'},
-    {id:'billing',        icon:'💵', title:'My Billing',
-     desc:'Per-period charges and the rates set up for your account.',
-     accent:'var(--green)'},
-    {id:'reports',        icon:'🔎', title:'Reports',
-     desc:'Item history and full LP traceability for compliance / recall.',
-     accent:'var(--purple)'},
-  ];
-
+async function loadPortalHome() {
   const grid = document.getElementById('portalHomeGrid');
-  grid.innerHTML = cards.map(c => `
-    <div class="card js-portal-card" data-target="${esc(c.id)}"
-         style="padding:24px;cursor:pointer;transition:border-color .15s, transform .15s;">
-      <div style="font-size:34px;line-height:1;margin-bottom:12px;">${esc(c.icon)}</div>
-      <div style="font-size:17px;font-weight:700;color:${esc(c.accent)};margin-bottom:6px;">${esc(c.title)}</div>
-      <div style="font-size:13px;color:var(--text2);line-height:1.5;">${esc(c.desc)}</div>
-    </div>`).join('');
+  grid.innerHTML = PORTAL_CARDS.map(c => `
+    <button class="portal-card" data-target="${esc(c.id)}">
+      <span class="portal-card-icon">${esc(c.icon)}</span>
+      <span class="portal-card-title">${esc(c.title)}</span>
+      <span class="portal-card-desc">${esc(c.desc)}</span>
+    </button>`).join('');
+  grid.querySelectorAll('.portal-card').forEach(card =>
+    card.addEventListener('click', () => navigateTo(card.dataset.target)));
 
-  grid.querySelectorAll('.js-portal-card').forEach(card => {
-    card.addEventListener('mouseover', () => {
-      card.style.borderColor = 'var(--blue)';
-      card.style.transform   = 'translateY(-1px)';
-    });
-    card.addEventListener('mouseout', () => {
-      card.style.borderColor = '';
-      card.style.transform   = '';
-    });
-    card.addEventListener('click', () => navigateTo(card.dataset.target));
-  });
-
-  // Personalise the greeting
   const hi = document.getElementById('portalHomeGreeting');
-  if(hi && U) hi.textContent = `Welcome, ${U.fullName || U.email || ''}`;
+  if (hi && U) hi.textContent = `Welcome, ${U.fullName || U.email || ''}`;
 
-  // Fetch + render the client-scoped KPI / SLA cards using per-client
-  // configuration. /clients/:id/performance returns one item per
-  // ENABLED metric with its current value, target, warning_threshold,
-  // and a derived status (good/warn/breach/info) — the UI just colors
-  // against the status, no threshold logic on the client side.
-  if(U && U.clientId){
-    const perf = await apiGet(`/clients/${U.clientId}/performance`);
-    if(perf?.items) renderPortalMetrics(perf.items, perf.raw || {});
+  if (!U || !U.clientId) return;
 
-    // SLA terms — operational rules + exception fees. The two-sided
-    // SLA: top of the page shows the score, this card shows the rules
-    // and what gets billed when an order falls outside them.
-    const rules = await apiGet(`/clients/${U.clientId}/sla-rules`);
-    if(rules) renderPortalSlaTerms(rules);
-  }
+  // /clients/:id/performance returns one item per ENABLED metric with its
+  // value, target, and a server-derived status (good/warn/breach/info) — no
+  // threshold logic here, we only map status -> tone.
+  const perf = await apiGet(`/clients/${U.clientId}/performance`);
+  renderPortalMetrics(perf?.items || [], perf?.raw || {});
+
+  // The other half of the SLA: the rules themselves, and what gets billed when
+  // an order falls outside them.
+  const rules = await apiGet(`/clients/${U.clientId}/sla-rules`);
+  renderPortalSlaTerms(rules || []);
 }
 
-function renderPortalSlaTerms(rules){
-  const card = document.getElementById('portalSlaTermsCard');
-  const body = document.getElementById('portalSlaTermsBody');
-  if(!card || !body) return;
+// Metric status -> the frozen five-tone scale. Never a new color.
+const PORTAL_METRIC_TONE = { good: 'ok', warn: 'warn', breach: 'danger' };
 
-  if(!rules.length){
-    card.style.display = 'none';
-    return;
-  }
-  card.style.display = '';
-
-  body.innerHTML = `
-    <table class="data-table" style="margin:0;">
-      <thead>
-        <tr>
-          <th>Rule</th>
-          <th>Value</th>
-          <th>Exception</th>
-          <th class="right">Fee</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rules.map(r => {
-          const value = r.rule_value
-            ? `${esc(r.rule_value)}${r.unit ? ' ' + esc(r.unit) : ''}`
-            : '<span style="color:var(--muted);">—</span>';
-          const fee = r.exception_charge_amount != null
-            ? `$${Number(r.exception_charge_amount).toFixed(2)}`
-            : '<span style="color:var(--muted);">—</span>';
-          return `
-            <tr>
-              <td>
-                <div style="font-weight:600;">${esc(r.rule_label || '')}</div>
-                ${r.notes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;">${esc(r.notes)}</div>` : ''}
-              </td>
-              <td style="font-weight:600;color:var(--blue);">${value}</td>
-              <td style="color:var(--text2);">${esc(r.exception_charge_label || '—')}</td>
-              <td class="right" style="font-weight:700;color:${r.exception_charge_amount != null ? 'var(--amber)' : 'var(--muted)'};">${fee}</td>
-            </tr>`;
-        }).join('')}
-      </tbody>
-    </table>`;
-}
-
-// Format a metric value with its unit suffix (% / hrs / min / count).
-function fmtMetricValue(v, unit){
-  if(v == null) return '—';
-  if(unit === 'pct') return v + '%';
-  if(unit === 'hours') return Number(v).toLocaleString() + 'h';
-  if(unit === 'minutes') return Number(v).toLocaleString() + 'm';
+function fmtMetricValue(v, unit) {
+  if (v == null) return '—';
+  if (unit === 'pct')     return v + '%';
+  if (unit === 'hours')   return Number(v).toLocaleString() + 'h';
+  if (unit === 'minutes') return Number(v).toLocaleString() + 'm';
   return Number(v).toLocaleString();
 }
 
-// Map status -> colour. info metrics get a neutral color since they
-// don't have a target.
-function statusColor(s){
-  return s === 'good'   ? 'var(--green)'
-       : s === 'warn'   ? 'var(--amber)'
-       : s === 'breach' ? 'var(--red)'
-       :                  'var(--text)';
-}
-
-// Renders the client-scoped KPI row on the portal home page. Driven
-// by per-client config from /clients/:id/performance — items only
-// include ENABLED metrics, in display_order, with status pre-computed
-// against the saved targets.
-function renderPortalMetrics(items, raw){
-  const kpiRow = document.getElementById('portalMetricsRow');
-  const slaRow = document.getElementById('portalSlaRow');
-  if(!kpiRow) return;
-
-  if(!items.length){
-    kpiRow.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px;">No KPIs configured — ask ops to enable metrics on your account</div>';
-    if(slaRow) slaRow.innerHTML = '';
+function renderPortalMetrics(items, raw) {
+  const row = document.getElementById('portalMetricsRow');
+  if (!row) return;
+  if (!items.length) {
+    row.className = '';
+    row.innerHTML = uiEmpty('No KPIs configured on your account yet — ask us to enable them.');
     return;
   }
-
-  // Compact mini-cards — one column per metric, wraps on narrow widths.
-  kpiRow.style.display = 'grid';
-  kpiRow.style.gridTemplateColumns = `repeat(${items.length}, minmax(110px, 1fr))`;
-  kpiRow.style.gap = '10px';
-
-  kpiRow.innerHTML = items.map(it => {
-    const color = statusColor(it.status);
-    const val   = fmtMetricValue(it.value, it.unit);
-    // Sub-line: SLA target if set, otherwise contextual fact for info metrics.
+  row.className = 'ui-tiles';
+  row.innerHTML = items.map(it => {
     let sub = '';
-    if(it.direction !== 'info' && it.target_value != null){
-      const arrow = it.direction === 'higher_is_better' ? '≥' : '≤';
-      sub = `Target ${arrow} ${fmtMetricValue(it.target_value, it.unit)}`;
-    } else if(it.metric_key === 'on_time_pct'){
-      sub = `${raw._onTimeShipped || 0}/${raw._shippedWithSla || 0}`;
-    } else if(it.metric_key === 'orders_this_month'){
-      sub = `${raw._ordersLastMonth || 0} last mo`;
+    if (it.direction !== 'info' && it.target_value != null) {
+      sub = `Target ${it.direction === 'higher_is_better' ? '≥' : '≤'} ${fmtMetricValue(it.target_value, it.unit)}`;
+    } else if (it.metric_key === 'on_time_pct') {
+      sub = `${raw._onTimeShipped || 0} of ${raw._shippedWithSla || 0} on time`;
+    } else if (it.metric_key === 'orders_this_month') {
+      sub = `${raw._ordersLastMonth || 0} last month`;
     }
-    return `
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
-        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">${esc(it.custom_label || it.label)}</div>
-        <div style="font-size:20px;font-weight:700;line-height:1.1;margin-top:4px;color:${color};">${esc(val)}</div>
-        ${sub ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;">${esc(sub)}</div>` : ''}
-      </div>`;
+    return uiTile({
+      label: it.custom_label || it.label,
+      value: fmtMetricValue(it.value, it.unit),
+      tone: PORTAL_METRIC_TONE[it.status] || null,
+      sub,
+    });
   }).join('');
-
-  if(slaRow) slaRow.innerHTML = '';
 }
 
-// =============================================================================
-// PORTAL NEW ORDER — simplified manual order entry
-// =============================================================================
-// Body sent to POST /orders. clientId / channel / orderNumber are auto-filled
-// by the API for client users (see src/routes.js POST /orders handler).
+const PORTAL_SLA_COLS = [
+  { key: '_rule', label: 'Rule', render: r =>
+      `<div>${esc(r.rule_label || '')}</div>` +
+      (r.notes ? `<div class="ui-hint">${esc(r.notes)}</div>` : '') },
+  { key: '_value', label: 'Value', render: r => r.rule_value
+      ? uiId(`${r.rule_value}${r.unit ? ' ' + r.unit : ''}`)
+      : '<span class="ui-muted">—</span>' },
+  { key: '_exc', label: 'If outside the rule', render: r =>
+      `<span class="ui-muted">${esc(r.exception_charge_label || '—')}</span>` },
+  { key: '_fee', label: 'Fee', money: false, render: r => r.exception_charge_amount != null
+      ? uiMoney(r.exception_charge_amount)
+      : '<span class="ui-muted">—</span>' },
+];
 
-async function loadPortalNewOrder(){
-  // Reset form
+function renderPortalSlaTerms(rules) {
+  const card = document.getElementById('portalSlaTermsCard');
+  const body = document.getElementById('portalSlaTermsBody');
+  if (!card || !body) return;
+  if (!rules.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  uiTable(body, { columns: PORTAL_SLA_COLS, rows: rules, rowKey: 'id' });
+  // Fee column is right-aligned like the money column it is.
+  body.querySelectorAll('tr').forEach(tr => {
+    const cells = tr.children;
+    if (cells.length === 4) cells[3].classList.add('right');
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * PORTAL NEW ORDER
+ * ------------------------------------------------------------------------- */
+const PNO_FIELDS = ['pnoCustName', 'pnoCustEmail', 'pnoAddr1', 'pnoAddr2', 'pnoCity',
+                    'pnoState', 'pnoPostal', 'pnoShipDate', 'pnoSkuSearch'];
+
+async function loadPortalNewOrder() {
   _portalNewOrderLines = [];
   _portalNewOrderAttachments = [];
-  ['pnoCustName','pnoCustEmail','pnoAddr1','pnoAddr2','pnoCity','pnoState',
-   'pnoPostal','pnoShipDate','pnoSkuSearch'].forEach(id => {
+  PNO_FIELDS.forEach(id => {
     const el = document.getElementById(id);
-    if(el) el.value = '';
+    if (el) el.value = '';
+    uiFieldError(document, id, '');
   });
   document.getElementById('pnoCountry').value = 'US';
   document.getElementById('pnoSkuResults').style.display = 'none';
-  document.getElementById('pnoError').textContent = '';
-  document.getElementById('pnoSuccess').textContent = '';
   renderPortalNewOrderLines();
   renderPortalNewOrderAttachments();
 
-  // Wire attachment input (idempotent — only the first time the page loads)
   const attachInput = document.getElementById('pnoAttachInput');
-  if(attachInput && !attachInput._wired){
+  if (attachInput && !attachInput._wired) {
     attachInput._wired = true;
     attachInput.addEventListener('change', e => {
-      const files = Array.from(e.target.files || []);
-      // 25MB ceiling matches the API's multer limit. Also enforce in browser
-      // so we don't make the user wait for an upload that's going to 413.
-      const MAX = 25 * 1024 * 1024;
-      for(const f of files){
-        if(f.size > MAX){
-          alert(`${f.name} is ${(f.size/1024/1024).toFixed(1)}MB — max is 25MB`);
+      for (const f of Array.from(e.target.files || [])) {
+        if (f.size > PNO_MAX_FILE) {
+          uiToast(`${f.name} is ${(f.size / 1024 / 1024).toFixed(1)}MB — 25MB max`, 'error');
           continue;
         }
         _portalNewOrderAttachments.push(f);
       }
       renderPortalNewOrderAttachments();
-      e.target.value = ''; // allow re-pick of same file
+      e.target.value = '';   // allow re-picking the same file
     });
   }
 
-  // Prior ship-to addresses (if any) — populated as a dropdown for quick reuse.
+  // Prior ship-to addresses, for one-click reuse.
   const addrs = await apiGet('/ship-to-addresses');
   _portalShipToCache = Array.isArray(addrs) ? addrs : [];
   initCombo('pnoPriorAddrWrap',
-    [{value:'', label:'— Use saved ship-to —'}].concat(
+    [{ value: '', label: '— Use a saved ship-to —' }].concat(
       _portalShipToCache.map((a, i) => ({
         value: String(i),
         label: `${a.ship_to_name || a.customer_name || ''} — ${[a.ship_to_city, a.ship_to_state].filter(Boolean).join(', ')}`,
-      }))
-    ),
+      }))),
     {
-      placeholder: '— Use saved ship-to —',
+      placeholder: '— Use a saved ship-to —',
       onChange: (v) => {
-        if(v === '' || v == null) return;
+        if (v === '' || v == null) return;
         const a = _portalShipToCache[parseInt(v)];
-        if(!a) return;
-        document.getElementById('pnoCustName').value  = a.ship_to_name || a.customer_name || '';
-        document.getElementById('pnoCustEmail').value = a.customer_email || '';
-        document.getElementById('pnoAddr1').value     = a.ship_to_line1 || '';
-        document.getElementById('pnoAddr2').value     = a.ship_to_line2 || '';
-        document.getElementById('pnoCity').value      = a.ship_to_city || '';
-        document.getElementById('pnoState').value     = a.ship_to_state || '';
-        document.getElementById('pnoPostal').value    = a.ship_to_postal || '';
-        document.getElementById('pnoCountry').value   = a.ship_to_country || 'US';
+        if (!a) return;
+        const set = (id, val) => { document.getElementById(id).value = val || ''; };
+        set('pnoCustName',  a.ship_to_name || a.customer_name);
+        set('pnoCustEmail', a.customer_email);
+        set('pnoAddr1',     a.ship_to_line1);
+        set('pnoAddr2',     a.ship_to_line2);
+        set('pnoCity',      a.ship_to_city);
+        set('pnoState',     a.ship_to_state);
+        set('pnoPostal',    a.ship_to_postal);
+        set('pnoCountry',   a.ship_to_country || 'US');
+        uiToast('Ship-to filled in');
       },
-    }
-  );
+    });
 
   document.getElementById('pnoCustName').focus?.();
 }
 
-// SKU search — debounced. /skus is auto-scoped to req.user.clientId via
-// scopeClient on the API for portal users, so we don't pass clientId here.
-const searchPortalSkus = debounce(async function(){
-  const s = document.getElementById('pnoSkuSearch').value.trim();
+// SKU search — /skus is auto-scoped to the user's client by the API.
+const searchPortalSkus = debounce(async function () {
+  const s   = document.getElementById('pnoSkuSearch').value.trim();
   const div = document.getElementById('pnoSkuResults');
-  let url = '/skus';
-  if(s) url += `?search=${encodeURIComponent(s)}`;
-  const list = await apiGet(url);
-  if(!list){ div.style.display = 'none'; return; }
+  const list = await apiGet('/skus' + (s ? `?search=${encodeURIComponent(s)}` : ''));
+  if (!list) { div.style.display = 'none'; return; }
   const rows = Array.isArray(list) ? list : (list.rows || list.data || []);
-  if(!rows.length){
-    div.innerHTML = `<div class="empty-state" style="padding:12px;">No SKUs found${s ? ` matching "${esc(s)}"` : ''}</div>`;
-    div.style.display = 'block';
+  div.style.display = 'block';
+  if (!rows.length) {
+    div.innerHTML = uiEmpty(s ? `No SKUs matching “${s}”` : 'No SKUs on your account yet');
     return;
   }
   div.innerHTML = rows.map(r => `
-    <div style="border-bottom:1px solid var(--border);">
-      <div class="js-pno-sku-row"
-           data-payload='${esc(JSON.stringify({
+    <div class="pno-sku">
+      <div class="pno-sku-row js-pno-sku" data-payload='${esc(JSON.stringify({
              skuId: r.id, sku_code: r.sku_code, sku_name: r.name || '',
              uom: r.uom || 'EA', sku_type: r.sku_type || '',
              qty_available: Number(r.qty_available || 0),
-           }))}'
-           style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:12px;font-size:13px;">
-        <span style="font-weight:600;color:var(--blue);min-width:120px;">${esc(r.sku_code)}</span>
-        <span style="color:var(--text2);flex:1;">${esc(r.name || '')}</span>
-        <span style="color:var(--text2);font-size:11px;">${esc(r.uom || '')}</span>
-        <span style="font-weight:600;color:var(--green);min-width:90px;text-align:right;">
-          ${esc(Number(r.qty_available || 0).toLocaleString())} avail
-        </span>
-        <span class="js-pno-sku-arrow" style="color:var(--muted);font-size:11px;">▶</span>
+           }))}'>
+        <span class="pno-sku-arrow">▸</span>
+        ${uiId(r.sku_code)}
+        <span class="pno-sku-name">${esc(r.name || '')}</span>
+        <span class="ui-muted">${esc(r.uom || '')}</span>
+        <span class="pno-sku-avail">${uiNum(Number(r.qty_available || 0).toLocaleString())} available</span>
       </div>
-      <div class="sku-lots js-pno-sku-lots" id="pnoLots_${esc(r.id)}" style="display:none;"></div>
+      <div class="pno-lots" id="pnoLots_${esc(r.id)}"></div>
     </div>`).join('');
-  div.style.display = 'block';
 
-  div.querySelectorAll('.js-pno-sku-row').forEach(row => {
-    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
-    row.addEventListener('mouseout',  () => row.style.background = '');
+  div.querySelectorAll('.js-pno-sku').forEach(row =>
     row.addEventListener('click', () => {
       try { expandPortalSkuLots(row, JSON.parse(row.dataset.payload)); }
-      catch(e){ console.error('pno sku parse', e); }
-    });
-  });
+      catch (e) { uiToast('Could not read that SKU row', 'error'); }
+    }));
 }, 250);
 
-// Click a SKU result -> fetch its available lots and let the customer pick one.
-async function expandPortalSkuLots(skuRow, sku){
-  const lotsDiv = document.getElementById('pnoLots_' + sku.skuId);
-  if(!lotsDiv) return;
+// Click a SKU -> show its available lots; click a lot -> add the line.
+async function expandPortalSkuLots(skuRow, sku) {
+  const lots  = document.getElementById('pnoLots_' + sku.skuId);
+  const arrow = skuRow.querySelector('.pno-sku-arrow');
+  if (!lots) return;
 
-  const arrow = skuRow.querySelector('.js-pno-sku-arrow');
-
-  // Toggle close
-  if(lotsDiv.style.display === 'block'){
-    lotsDiv.style.display = 'none';
-    if(arrow) arrow.textContent = '▶';
+  if (lots.classList.contains('open')) {          // toggle closed
+    lots.classList.remove('open');
+    lots.innerHTML = '';
+    if (arrow) arrow.textContent = '▸';
     return;
   }
+  lots.classList.add('open');
+  if (arrow) arrow.textContent = '▾';
+  lots.innerHTML = uiSpinner('Loading lots…');
 
-  if(arrow) arrow.textContent = '▼';
-  lotsDiv.style.display = 'block';
-  lotsDiv.innerHTML = '<div style="padding:8px 16px 8px 32px;color:var(--muted);font-size:12px;">Loading lots…</div>';
+  const d = await apiGet(
+    `/inventory?limit=200&status=available&skuCode=${encodeURIComponent('%' + sku.sku_code + '%')}`);
+  // Match on sku_code (sku_id representation varies) and require positive qty.
+  const rows = (d?.rows || d || []).filter(r => r.sku_code === sku.sku_code && Number(r.quantity) > 0);
+  if (!rows.length) { lots.innerHTML = uiEmpty('No available inventory for this SKU.'); return; }
 
-  // /inventory is auto-scoped to the user's client_id by scopeClient on the API.
-  const d = await apiGet(`/inventory?limit=200&status=available&skuCode=${encodeURIComponent('%' + sku.sku_code + '%')}`);
-  // Filter by sku_code (more reliable than sku_id which can vary by representation)
-  // and require positive qty.
-  const allRows = (d?.rows || d || []).filter(r =>
-    r.sku_code === sku.sku_code && Number(r.quantity) > 0
-  );
-
-  if(!allRows.length){
-    lotsDiv.innerHTML = '<div style="padding:8px 16px 8px 32px;color:var(--muted);font-size:12px;">No available inventory.</div>';
-    return;
-  }
-
-  const header = `
-    <div style="padding:6px 16px 6px 32px;display:grid;grid-template-columns:140px 110px 130px 60px 80px;gap:8px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;border-top:1px solid var(--border);background:rgba(0,0,0,.15);">
-      <span>Lot</span><span>Expiry</span><span>Location</span><span>Qty</span><span></span>
-    </div>`;
-
-  const body = allRows.map(r => {
-    const expiringSoon = r.expiry_date && new Date(r.expiry_date) < new Date(Date.now() + 30 * 864e5);
-    return `
-      <div class="js-pno-lot-row"
-           data-payload='${esc(JSON.stringify({
-             skuId:    sku.skuId,
-             sku_code: sku.sku_code,
-             sku_name: sku.sku_name,
-             uom:      sku.uom,
-             sku_type: sku.sku_type,
-             lot_id:   r.lot_id || null,
-             lot_number: r.lot_number || null,
-             expiry_date: r.expiry_date || null,
-             location_code: r.location_code || null,
-             qty_available: Number(r.quantity || 0),
-           }))}'
-           style="padding:8px 16px 8px 32px;border-top:1px solid var(--border);display:grid;grid-template-columns:140px 110px 130px 60px 80px;align-items:center;gap:8px;font-size:12px;cursor:pointer;transition:background .1s;">
-        <span style="color:var(--blue);font-weight:600;">${esc(r.lot_number || 'No lot')}</span>
-        <span style="color:${expiringSoon ? 'var(--red)' : 'var(--text2)'};">${esc(r.expiry_date ? new Date(r.expiry_date).toLocaleDateString() : '—')}</span>
-        <span style="color:var(--muted);">${esc(r.location_code || '—')}</span>
-        <span style="font-weight:600;color:var(--green);">${esc(r.quantity)}</span>
-        <span style="color:var(--blue);font-size:11px;font-weight:600;">+ Add</span>
-      </div>`;
-  }).join('');
-
-  lotsDiv.innerHTML = header + body;
-
-  lotsDiv.querySelectorAll('.js-pno-lot-row').forEach(row => {
-    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
-    row.addEventListener('mouseout',  () => row.style.background = '');
-    row.addEventListener('click', e => {
-      e.stopPropagation();
-      try { addPortalNewOrderLine(JSON.parse(row.dataset.payload)); }
-      catch(err){ console.error('pno lot parse', err); }
-    });
+  uiTable(lots, {
+    columns: [
+      { key: 'lot_number', label: 'Lot', render: r => uiId(r.lot_number || 'No lot') },
+      { key: '_exp', label: 'Expiry', render: r => {
+          if (!r.expiry_date) return '<span class="ui-muted">—</span>';
+          const soon = new Date(r.expiry_date) < new Date(Date.now() + 30 * 864e5);
+          const txt = new Date(r.expiry_date).toLocaleDateString();
+          return soon ? `<span class="ui-chip ui-chip-danger">${esc(txt)}</span>` : uiId(txt);
+        } },
+      { key: 'location_code', label: 'Location', mono: true },
+      { key: 'quantity', label: 'Available', num: true },
+      { key: '_add', label: '', render: () => '<span class="pno-add">+ Add</span>' },
+    ],
+    rows, rowKey: 'lp_number',
+    onRowClick: (r) => addPortalNewOrderLine({
+      skuId: sku.skuId, sku_code: sku.sku_code, sku_name: sku.sku_name,
+      uom: sku.uom, sku_type: sku.sku_type,
+      lot_id: r.lot_id || null, lot_number: r.lot_number || null,
+      expiry_date: r.expiry_date || null, location_code: r.location_code || null,
+      qty_available: Number(r.quantity || 0),
+    }),
   });
 }
 
-function addPortalNewOrderLine(p){
-  // De-dupe by (skuId, lot_id) so the same SKU at different lots can be
-  // ordered as separate lines.
+function addPortalNewOrderLine(p) {
+  // De-dupe by (sku, lot) so one SKU across two lots is two lines.
   const key = p.skuId + '_' + (p.lot_id || 'nolot');
   const exists = _portalNewOrderLines.find(l => l._key === key);
-  if(exists){
+  if (exists) {
     exists.qty = (Number(exists.qty) || 0) + 1;
   } else {
-    _portalNewOrderLines.push({
-      _key: key,
-      skuId:         p.skuId,
-      sku_code:      p.sku_code,
-      sku_name:      p.sku_name,
-      uom:           p.uom,
-      sku_type:      p.sku_type || '',
-      lot_id:        p.lot_id || null,
-      lot_number:    p.lot_number || null,
-      expiry_date:   p.expiry_date || null,
-      location_code: p.location_code || null,
-      qty_available: p.qty_available,
-      qty:           1,
-    });
+    _portalNewOrderLines.push({ _key: key, ...p, qty: 1 });
   }
   document.getElementById('pnoSkuSearch').value = '';
   document.getElementById('pnoSkuResults').style.display = 'none';
   renderPortalNewOrderLines();
+  uiToast(`${p.sku_code} added`);
 }
 
-function renderPortalNewOrderLines(){
-  const body  = document.getElementById('pnoLinesBody');
-  const empty = document.getElementById('pnoLinesEmpty');
+const PNO_LINE_COLS = [
+  { key: 'sku_code', label: 'SKU', mono: true },
+  { key: 'sku_name', label: 'Description' },
+  { key: '_lot', label: 'Lot', render: l => l.lot_number
+      ? uiId(l.lot_number) : '<span class="ui-muted">—</span>' },
+  { key: '_exp', label: 'Expiry', render: l => {
+      if (!l.expiry_date) return '<span class="ui-muted">—</span>';
+      const soon = new Date(l.expiry_date) < new Date(Date.now() + 30 * 864e5);
+      const txt = new Date(l.expiry_date).toLocaleDateString();
+      return soon ? `<span class="ui-chip ui-chip-danger">${esc(txt)}</span>` : uiId(txt);
+    } },
+  { key: 'uom', label: 'UOM' },
+  { key: 'qty_available', label: 'Available', num: true },
+  { key: '_qty', label: 'Quantity', render: (l) => {
+      const over = Number(l.qty) > Number(l.qty_available);
+      return `<input type="number" min="1" step="1" class="ui-input pno-qty js-pno-qty${over ? ' pno-qty-over' : ''}"
+                data-key="${esc(l._key)}" value="${esc(l.qty)}">`;
+    } },
+  { key: '_rm', label: '', render: (l) =>
+      `<button class="ui-btn js-pno-rm" data-key="${esc(l._key)}" aria-label="Remove line">✕</button>` },
+];
+
+function renderPortalNewOrderLines() {
   const count = document.getElementById('pnoLinesCount');
-
-  // Header line counter
-  if(count){
+  if (count) {
     const n = _portalNewOrderLines.length;
-    const totalQty = _portalNewOrderLines.reduce((s, l) => s + (Number(l.qty) || 0), 0);
-    count.textContent = n ? `· ${n} ${n === 1 ? 'line' : 'lines'} · ${totalQty} units` : '';
+    const qty = _portalNewOrderLines.reduce((s, l) => s + (Number(l.qty) || 0), 0);
+    count.textContent = n ? `${n} ${n === 1 ? 'line' : 'lines'} · ${qty} units` : '';
   }
 
-  if(!_portalNewOrderLines.length){
-    body.innerHTML = '';
-    empty.style.display = 'block';
-    return;
-  }
-  empty.style.display = 'none';
-  body.innerHTML = _portalNewOrderLines.map((l, i) => {
-    const expiringSoon = l.expiry_date && new Date(l.expiry_date) < new Date(Date.now() + 30 * 864e5);
-    return `
-    <tr>
-      <td style="font-weight:600;color:var(--blue);">${esc(l.sku_code)}</td>
-      <td>${esc(l.sku_name)}</td>
-      <td style="color:var(--blue);font-size:12px;">${esc(l.lot_number || '—')}</td>
-      <td style="font-size:12px;color:${expiringSoon ? 'var(--red)' : 'var(--text2)'};">${esc(l.expiry_date ? new Date(l.expiry_date).toLocaleDateString() : '—')}</td>
-      <td>${esc(l.uom)}</td>
-      <td class="right" style="color:var(--text2);font-size:12px;">
-        ${esc(Number(l.qty_available || 0).toLocaleString())}
-      </td>
-      <td>
-        <input type="number" min="1" step="1" class="form-input js-pno-qty"
-               data-idx="${esc(i)}" value="${esc(l.qty)}"
-               style="width:90px;padding:6px 8px;font-size:13px;">
-      </td>
-      <td>
-        <button class="btn btn-ghost js-pno-rm" data-idx="${esc(i)}"
-                style="padding:4px 10px;font-size:12px;color:var(--red);">✕</button>
-      </td>
-    </tr>`;
-  }).join('');
-  body.querySelectorAll('.js-pno-qty').forEach(inp => {
-    inp.addEventListener('input', e => {
-      const idx = parseInt(e.target.dataset.idx);
-      _portalNewOrderLines[idx].qty = parseInt(e.target.value) || 0;
-    });
+  const host = document.getElementById('pnoLinesWrap');
+  uiTable(host, {
+    columns: PNO_LINE_COLS, rows: _portalNewOrderLines, rowKey: '_key',
+    empty: 'No lines yet — search a SKU above, then pick the lot you want.',
   });
-  body.querySelectorAll('.js-pno-rm').forEach(btn => {
-    btn.addEventListener('click', () => {
-      _portalNewOrderLines.splice(parseInt(btn.dataset.idx), 1);
+
+  host.querySelectorAll('.js-pno-qty').forEach(inp =>
+    inp.addEventListener('input', () => {
+      const l = _portalNewOrderLines.find(x => x._key === inp.dataset.key);
+      if (!l) return;
+      l.qty = parseInt(inp.value) || 0;
+      inp.classList.toggle('pno-qty-over', Number(l.qty) > Number(l.qty_available));
+      const n = _portalNewOrderLines.length;
+      const qty = _portalNewOrderLines.reduce((s, x) => s + (Number(x.qty) || 0), 0);
+      if (count) count.textContent = `${n} ${n === 1 ? 'line' : 'lines'} · ${qty} units`;
+    }));
+  host.querySelectorAll('.js-pno-rm').forEach(btn =>
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _portalNewOrderLines = _portalNewOrderLines.filter(l => l._key !== btn.dataset.key);
       renderPortalNewOrderLines();
-    });
-  });
+    }));
 }
 
-// Renders the staged attachment list on the portal new-order page. Files
-// only exist client-side until the order is created; then we POST each
-// to /orders/:id/attachments.
-function renderPortalNewOrderAttachments(){
+function renderPortalNewOrderAttachments() {
   const wrap  = document.getElementById('pnoAttachList');
   const count = document.getElementById('pnoAttachCount');
-  if(!wrap) return;
-
-  if(count){
+  if (!wrap) return;
+  if (count) {
     const n = _portalNewOrderAttachments.length;
-    count.textContent = n ? `· ${n} ${n === 1 ? 'file' : 'files'}` : '';
+    count.textContent = n ? `${n} ${n === 1 ? 'file' : 'files'}` : '';
   }
-
-  if(!_portalNewOrderAttachments.length){
-    wrap.innerHTML = '<div class="empty-state" style="padding:18px;text-align:center;color:var(--muted);font-size:13px;">No documents attached</div>';
+  if (!_portalNewOrderAttachments.length) {
+    wrap.innerHTML = uiEmpty('No documents attached');
     return;
   }
-
   wrap.innerHTML = _portalNewOrderAttachments.map((f, i) => {
-    const sizeKb = (f.size / 1024).toFixed(0);
-    const sizeMb = (f.size / 1024 / 1024).toFixed(2);
-    const sizeLabel = f.size > 1024 * 1024 ? `${sizeMb} MB` : `${sizeKb} KB`;
-    const ext = (f.name.split('.').pop() || '').toUpperCase();
-    return `
-      <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
-        <div style="width:42px;height:42px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--blue);">${esc(ext.slice(0,4) || 'FILE')}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name)}</div>
-          <div style="font-size:11px;color:var(--text2);">${esc(sizeLabel)} · ${esc(f.type || 'unknown')}</div>
-        </div>
-        <button class="btn btn-ghost js-pno-att-rm" data-idx="${esc(i)}"
-                style="padding:4px 10px;font-size:12px;color:var(--red);">✕</button>
-      </div>`;
+    const size = f.size > 1024 * 1024
+      ? `${(f.size / 1048576).toFixed(2)} MB`
+      : `${(f.size / 1024).toFixed(0)} KB`;
+    const ext = (f.name.split('.').pop() || 'FILE').toUpperCase().slice(0, 4);
+    return `<div class="ui-file">
+      <span class="ui-file-ext">${esc(ext)}</span>
+      <span class="ui-file-meta">
+        <span class="ui-file-name">${esc(f.name)}</span>
+        <span class="ui-hint">${esc(size)} · ${esc(f.type || 'unknown type')}</span>
+      </span>
+      <button class="ui-btn js-att-rm" data-idx="${esc(i)}" aria-label="Remove file">✕</button>
+    </div>`;
   }).join('');
-
-  wrap.querySelectorAll('.js-pno-att-rm').forEach(btn => {
+  wrap.querySelectorAll('.js-att-rm').forEach(btn =>
     btn.addEventListener('click', () => {
       _portalNewOrderAttachments.splice(parseInt(btn.dataset.idx), 1);
       renderPortalNewOrderAttachments();
-    });
-  });
+    }));
 }
 
-// Upload all staged attachments to /orders/:id/attachments. Failures are
-// logged but don't block — the order is already created.
-async function uploadPortalNewOrderAttachments(orderId){
-  if(!_portalNewOrderAttachments.length) return;
-  for(const file of _portalNewOrderAttachments){
+// Attachments upload after the order exists (/orders/:id/attachments is
+// multipart, one file per call, and needs the order id).
+async function uploadPortalNewOrderAttachments(orderId) {
+  let failed = 0;
+  for (const file of _portalNewOrderAttachments) {
     try {
       const fd = new FormData();
       fd.append('file', file);
       const r = await fetch(`${API}/orders/${orderId}/attachments`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${T}` },
-        body: fd,
+        method: 'POST', headers: { Authorization: `Bearer ${T}` }, body: fd,
       });
-      if(!r.ok){
-        const d = await r.json().catch(() => ({}));
-        console.error(`Attachment ${file.name} failed:`, d.error || r.status);
-      }
-    } catch(e){
-      console.error(`Attachment ${file.name} network error:`, e);
+      if (!r.ok) { failed++; uiToast(`${file.name} did not upload — you can add it later`, 'error'); }
+    } catch (e) {
+      failed++;
+      uiToast(`${file.name} did not upload — network error`, 'error');
     }
   }
+  return failed;
 }
 
-async function submitPortalNewOrder(){
-  const err = document.getElementById('pnoError');
-  const suc = document.getElementById('pnoSuccess');
-  err.textContent = '';
-  suc.textContent = '';
-
-  const custName = document.getElementById('pnoCustName').value.trim();
-  const addr1    = document.getElementById('pnoAddr1').value.trim();
-  const city     = document.getElementById('pnoCity').value.trim();
-  const state    = document.getElementById('pnoState').value.trim();
-  const postal   = document.getElementById('pnoPostal').value.trim();
-  const country  = document.getElementById('pnoCountry').value.trim() || 'US';
-
-  if(!custName){ err.textContent = 'Customer / Ship-to name is required'; return; }
-  if(!addr1)   { err.textContent = 'Address line 1 is required'; return; }
-  if(!city || !state || !postal){
-    err.textContent = 'City, State, and Postal Code are required';
-    return;
+async function submitPortalNewOrder() {
+  const val = (id) => document.getElementById(id).value.trim();
+  const req = {
+    pnoCustName: 'Ship-to name is required',
+    pnoAddr1:    'Address line 1 is required',
+    pnoCity:     'City is required',
+    pnoState:    'State is required',
+    pnoPostal:   'Postal code is required',
+  };
+  let bad = null;
+  for (const [id, msg] of Object.entries(req)) {
+    const empty = !val(id);
+    uiFieldError(document, id, empty ? msg : '');
+    if (empty && !bad) bad = id;
   }
-  if(!_portalNewOrderLines.length){ err.textContent = 'Add at least one SKU'; return; }
-  for(const l of _portalNewOrderLines){
-    if(!l.qty || l.qty <= 0){
-      err.textContent = `Quantity must be > 0 for ${l.sku_code}`;
-      return;
-    }
+  if (bad) {
+    document.getElementById(bad).focus();
+    return uiToast('Check the highlighted fields', 'error');
+  }
+  if (!_portalNewOrderLines.length) return uiToast('Add at least one SKU', 'error');
+  const badQty = _portalNewOrderLines.find(l => !l.qty || l.qty <= 0);
+  if (badQty) return uiToast(`Quantity must be greater than 0 for ${badQty.sku_code}`, 'error');
+
+  const over = _portalNewOrderLines.filter(l => Number(l.qty) > Number(l.qty_available));
+  if (over.length) {
+    const ok = await uiConfirm({
+      title: 'Order more than is available?',
+      body: `${over.map(l => `<strong>${esc(l.sku_code)}</strong>: ${esc(l.qty)} requested, ${esc(l.qty_available)} available`).join('<br>')}
+             <br><br>We will place the order and backorder the shortfall.`,
+      confirmLabel: 'Place it anyway',
+    });
+    if (!ok) return;
   }
 
+  // clientId / channel='PORTAL' / orderNumber are auto-filled by the API for
+  // client users — the JWT is the source of truth, so we don't send them.
   const body = {
-    // clientId / channel='PORTAL' / orderNumber are auto-filled by the API
-    // for client users (see POST /orders in src/routes.js). We deliberately
-    // do not send them — the JWT is the source of truth.
-    customerName:     custName,
-    customerEmail:    document.getElementById('pnoCustEmail').value.trim() || null,
+    customerName:     val('pnoCustName'),
+    customerEmail:    val('pnoCustEmail') || null,
     requiredShipDate: document.getElementById('pnoShipDate').value || null,
     shipTo: {
-      name:    custName,
-      line1:   addr1,
-      line2:   document.getElementById('pnoAddr2').value.trim() || null,
-      city, state, postal, country,
+      name:  val('pnoCustName'),
+      line1: val('pnoAddr1'),
+      line2: val('pnoAddr2') || null,
+      city:  val('pnoCity'),
+      state: val('pnoState'),
+      postal: val('pnoPostal'),
+      country: val('pnoCountry') || 'US',
     },
     lines: _portalNewOrderLines.map(l => ({
-      skuId:      l.skuId,
-      qty:        Number(l.qty),
-      uom:        l.uom || 'EACH',
-      // Customer's preferred lot — passed through so ops can honor it during
-      // allocation. Backend currently logs these in order notes; in a future
-      // pass we'll auto-allocate from the requested lot.
-      lotId:      l.lot_id || null,
-      lotNumber:  l.lot_number || null,
+      skuId: l.skuId, qty: Number(l.qty), uom: l.uom || 'EACH',
+      // Requested lot — ops honors it during allocation.
+      lotId: l.lot_id || null, lotNumber: l.lot_number || null,
     })),
   };
-
-  // Build a customer-readable summary of lot preferences so ops sees it on
-  // the order even before we add a dedicated requested_lot_id column.
   const lotSummary = _portalNewOrderLines
     .filter(l => l.lot_number)
     .map(l => `${l.sku_code} → ${l.lot_number}${l.expiry_date ? ` (exp ${new Date(l.expiry_date).toLocaleDateString()})` : ''}`)
     .join('; ');
-  if(lotSummary) body.notes = `Customer requested lots: ${lotSummary}`;
+  if (lotSummary) body.notes = `Customer requested lots: ${lotSummary}`;
 
-  const submitBtn = document.getElementById('pnoSubmitBtn');
-  submitBtn.disabled = true;
+  const btn = document.getElementById('pnoSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
   try {
     const r = await fetch(`${API}/orders`, {
-      method:  'POST',
-      headers: {'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
-      body:    JSON.stringify(body),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` },
+      body: JSON.stringify(body),
     });
     const d = await r.json();
-    if(!r.ok){
-      err.textContent = d.error || 'Order create failed';
-      return;
-    }
+    if (!r.ok) return uiToast(d.error || 'Order could not be created', 'error');
 
-    // Upload any staged attachments to the new order. Done here (not in the
-    // POST /orders body) because /orders/:id/attachments is a multipart
-    // endpoint per file — and because it needs the order's id back from
-    // the server first.
-    const attachCount = _portalNewOrderAttachments.length;
-    if(attachCount){
-      suc.textContent = `Order ${d.order_number} created — uploading ${attachCount} document${attachCount === 1 ? '' : 's'}…`;
-      await uploadPortalNewOrderAttachments(d.id);
+    const n = _portalNewOrderAttachments.length;
+    let failed = 0;
+    if (n) {
+      btn.textContent = `Uploading ${n} document${n === 1 ? '' : 's'}…`;
+      failed = await uploadPortalNewOrderAttachments(d.id);
     }
+    uiToast(`Order ${d.order_number} placed${n ? ` with ${n - failed} document(s)` : ''} — we'll allocate and ship it`);
 
-    suc.textContent = `Order ${d.order_number} created${attachCount ? ` with ${attachCount} attachment${attachCount === 1 ? '' : 's'}` : ''}. Our ops team will allocate and ship it.`;
     _portalNewOrderLines = [];
     _portalNewOrderAttachments = [];
     renderPortalNewOrderLines();
     renderPortalNewOrderAttachments();
-    setTimeout(() => navigateTo('orders'), 1500);
-  } catch(e){
-    err.textContent = 'Network error';
+    setTimeout(() => navigateTo('orders'), 900);
+  } catch (e) {
+    uiToast('Network error — the order was not placed', 'error');
   } finally {
-    submitBtn.disabled = false;
+    btn.disabled = false;
+    btn.textContent = 'Submit order';
   }
 }
 
-// =============================================================================
-// PORTAL INTAKE — upload PDFs (POs, BOLs, ASNs, supporting docs)
-// =============================================================================
-
-const PORTAL_INTAKE_CHIP = {
-  UPLOADED:'chip-new', EXTRACTING:'chip-active', EXTRACTED:'chip-warning',
-  EXTRACTION_FAILED:'chip-danger', APPROVED:'chip-success', REJECTED:'chip-danger',
-};
-
-function loadPortalIntake(){
-  // Wire drop-zone (once)
+/* ---------------------------------------------------------------------------
+ * PORTAL INTAKE — PDF upload -> AI extraction -> ops review
+ * ------------------------------------------------------------------------- */
+function loadPortalIntake() {
   const drop = document.getElementById('portalIntakeDrop');
-  if(drop && !drop._wired){
+  if (drop && !drop._wired) {
     drop._wired = true;
-    ['dragenter','dragover'].forEach(e => drop.addEventListener(e, ev => {
+    ['dragenter', 'dragover'].forEach(e => drop.addEventListener(e, ev => {
       ev.preventDefault(); ev.stopPropagation();
-      drop.style.borderColor = 'var(--blue)'; drop.style.background = 'var(--blue-bg)';
+      drop.classList.add('ui-drop-hot');
     }));
-    ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => {
+    ['dragleave', 'drop'].forEach(e => drop.addEventListener(e, ev => {
       ev.preventDefault(); ev.stopPropagation();
-      drop.style.borderColor = 'var(--border)'; drop.style.background = 'transparent';
+      drop.classList.remove('ui-drop-hot');
     }));
     drop.addEventListener('drop', ev => {
       const files = Array.from(ev.dataTransfer.files || [])
         .filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
-      if(files.length) uploadPortalIntakeFiles(files);
+      if (files.length) uploadPortalIntakeFiles(files);
+      else uiToast('PDFs only — that file type is not supported', 'error');
     });
   }
 
-  // Wire file input (once)
   const input = document.getElementById('portalIntakeUpload');
-  if(input && !input._wired){
+  if (input && !input._wired) {
     input._wired = true;
     input.addEventListener('change', ev => {
       const files = Array.from(ev.target.files || []);
-      if(files.length) uploadPortalIntakeFiles(files);
-      ev.target.value = ''; // allow re-pick of same file
+      if (files.length) uploadPortalIntakeFiles(files);
+      ev.target.value = '';
     });
   }
 
-  // Refresh the list
   refreshPortalIntakeList();
 }
 
-async function uploadPortalIntakeFiles(files){
+async function uploadPortalIntakeFiles(files) {
   const status = document.getElementById('portalIntakeStatus');
-  status.style.color = 'var(--text2)';
-  let done = 0, failed = 0;
-  for(const file of files){
-    status.textContent = `Uploading ${file.name} (${done + 1}/${files.length})…`;
+  let done = 0;
+  for (const file of files) {
+    if (file.size > PNO_MAX_FILE) {
+      uiToast(`${file.name} is ${(file.size / 1048576).toFixed(1)}MB — 25MB max`, 'error');
+      continue;
+    }
+    status.innerHTML = uiSpinner(`Uploading ${file.name} (${done + 1} of ${files.length})…`);
     try {
-      const fd = new FormData(); fd.append('file', file);
+      const fd = new FormData();
+      fd.append('file', file);
       const r = await fetch(`${API}/intake/upload`, {
-        method:'POST', headers:{'Authorization':`Bearer ${T}`}, body:fd,
+        method: 'POST', headers: { Authorization: `Bearer ${T}` }, body: fd,
       });
       const d = await r.json();
-      if(!r.ok) throw new Error(d.error || 'Upload failed');
+      if (!r.ok) throw new Error(d.error || 'Upload failed');
       done++;
-      // Kick off extraction in background — endpoint is now scopeClient.
+      // Kick extraction off in the background.
       fetch(`${API}/intake/${d.id}/extract`, {
-        method:'POST', headers:{'Authorization':`Bearer ${T}`},
+        method: 'POST', headers: { Authorization: `Bearer ${T}` },
       }).catch(() => {});
-    } catch(e){
-      failed++;
-      status.style.color = 'var(--red)';
-      status.textContent = `Failed on ${file.name}: ${e.message}`;
+    } catch (e) {
+      uiToast(`${file.name}: ${e.message}`, 'error');
     }
   }
-  if(!failed){
-    status.style.color = 'var(--green)';
-    status.textContent = `✓ Uploaded ${done} document${done !== 1 ? 's' : ''} · AI is reading…`;
-  }
-  setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 4000);
-  // Refresh list after a brief delay so extraction has a head start.
-  setTimeout(refreshPortalIntakeList, 1500);
+  status.innerHTML = '';
+  if (done) uiToast(`${done} document${done === 1 ? '' : 's'} uploaded — our AI is reading ${done === 1 ? 'it' : 'them'} now`);
   refreshPortalIntakeList();
+  setTimeout(refreshPortalIntakeList, 2500);   // extraction usually lands by now
 }
 
-async function refreshPortalIntakeList(){
-  const tbody = document.getElementById('portalIntakeBody');
-  if(!tbody) return;
+const PORTAL_INTAKE_COLS = [
+  { key: '_when', label: 'Uploaded', render: r => uiId(fmtTimeShort(r.uploaded_at)) },
+  { key: '_file', label: 'File', render: r => uiId((r.pdf_filename || '').slice(0, 60)) },
+  { key: '_type', label: 'Type', render: r =>
+      `<span class="ui-chip ui-chip-neutral">${esc(r.doc_type || '—')}</span>` },
+  { key: '_size', label: 'Size', render: r => uiNum(fmtBytes(r.pdf_size_bytes)) },
+  { key: 'status', label: 'Status', render: r => uiChip(r.status) },
+  { key: '_result', label: 'Result', render: r => {
+      if (r.created_order_number) return `<span class="ui-chip ui-chip-ok">SO ${esc(r.created_order_number)}</span>`;
+      if (r.created_po_number)    return `<span class="ui-chip ui-chip-ok">PO ${esc(r.created_po_number)}</span>`;
+      if (r.status === 'REJECTED') return '<span class="ui-muted">Not accepted — we will contact you</span>';
+      if (r.status === 'APPROVED') return '<span class="ui-muted">—</span>';
+      return '<span class="ui-muted">Pending our review</span>';
+    } },
+];
+
+async function refreshPortalIntakeList() {
+  const host = document.getElementById('portalIntakeWrap');
+  if (!host) return;
+  uiTableLoading(host, PORTAL_INTAKE_COLS);
   const data = await apiGet('/intake?limit=100');
-  if(!data){
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Could not load uploads</td></tr>';
-    return;
-  }
-  if(!data.length){
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No uploads yet — drop a PDF above to get started</td></tr>';
-    return;
-  }
-  tbody.innerHTML = data.map(r => {
-    const chipCls = PORTAL_INTAKE_CHIP[r.status] || 'chip-new';
-    const result = r.created_order_number
-      ? `<span class="chip chip-success" style="font-size:11px;">SO ${esc(r.created_order_number)}</span>`
-      : r.created_po_number
-        ? `<span class="chip chip-success" style="font-size:11px;">PO ${esc(r.created_po_number)}</span>`
-        : (r.status === 'REJECTED' ? '<span style="color:var(--red);font-size:12px;">Rejected</span>'
-          : r.status === 'APPROVED' ? '—'
-          : '<span style="color:var(--muted);font-size:12px;">Pending review</span>');
-    return `
-      <tr>
-        <td>${esc(fmtTimeShort(r.uploaded_at))}</td>
-        <td><span style="font-family:monospace;font-size:12px;">${esc((r.pdf_filename || '').slice(0, 60))}</span></td>
-        <td><span class="chip" style="font-size:11px;">${esc(r.doc_type || '—')}</span></td>
-        <td class="right">${esc(fmtBytes(r.pdf_size_bytes))}</td>
-        <td><span class="chip ${chipCls}" style="font-size:11px;">${esc(r.status)}</span></td>
-        <td>${result}</td>
-      </tr>`;
-  }).join('');
+  if (!data) return uiTableError(host, PORTAL_INTAKE_COLS, 'Could not load your uploads', refreshPortalIntakeList);
+  uiTable(host, {
+    columns: PORTAL_INTAKE_COLS, rows: data, rowKey: 'id',
+    empty: 'No uploads yet — drop a PDF above to get started.',
+  });
 }
