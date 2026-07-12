@@ -698,55 +698,37 @@
       </div>
     </div>
   </div>
-  <!-- INVOICES — billing_invoices + billing_invoice_lines -->
+  <!-- INVOICES — billing_invoices + billing_invoice_lines (design system: D2) -->
   <div class="page" id="page-invoices">
     <div id="invListView" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
       <div class="page-header">
-        <div><div class="page-title">Invoices</div><div class="page-subtitle">Roll billing charges into client invoices</div></div>
+        <div><div class="page-title">Invoices</div><div class="page-subtitle">Roll posted charges into client invoices</div></div>
         <div style="flex:1"></div>
         <div class="cb-wrap" style="max-width:220px;" id="invcClientFilterWrap"></div>
         <div class="cb-wrap" style="max-width:150px;" id="invcStatusFilterWrap"></div>
-        <button class="btn btn-ghost" onclick="loadInvoices()">Refresh</button>
-        <button class="btn btn-primary" onclick="showGenerateInvoiceModal()">+ Generate Invoice</button>
+        <button class="ui-btn" onclick="loadInvoices()">Refresh</button>
+        <button class="ui-btn ui-btn-primary" onclick="showGenerateInvoiceModal()">Generate invoice</button>
       </div>
       <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
-        <div style="flex:1;overflow:auto;">
-          <table class="data-table">
-            <thead><tr><th>Invoice #</th><th>Client</th><th>Period</th><th class="right">Lines</th><th class="right">Total</th><th>Status</th><th>Issued</th></tr></thead>
-            <tbody id="invListBody"></tbody>
-          </table>
-        </div>
+        <div style="flex:1;overflow:auto;" id="invListWrap"></div>
       </div>
     </div>
 
     <div id="invDetailView" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
       <div class="page-header">
-        <button class="btn btn-ghost" onclick="closeInvoiceDetail()" style="padding:6px 12px;">← Invoices</button>
-        <div><div class="page-title" id="invDetTitle">Invoice</div><div class="page-subtitle" id="invDetChip"></div></div>
+        <button class="ui-btn" onclick="closeInvoiceDetail()">← Invoices</button>
+        <div><div class="page-title" id="invDetTitle">Invoice</div><div class="page-subtitle" id="invDetSub"></div></div>
         <div style="flex:1"></div>
         <div id="invDetActions" style="display:flex;gap:8px;"></div>
       </div>
-      <div class="card" style="padding:18px 20px;margin-bottom:12px;">
-        <div class="meta-grid" id="invDetMeta" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:13px;"></div>
-      </div>
+      <div id="invDetStrip" class="ui-tiles"></div>
+      <div class="card" style="padding:16px 20px;margin-bottom:12px;" id="invDetMeta"></div>
       <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
-        <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);">
-          <span style="font-size:12px;color:var(--muted);">View:</span>
-          <button class="btn btn-ghost" id="invViewSummary" style="padding:3px 12px;">Summary</button>
-          <button class="btn btn-ghost" id="invViewDetailed" style="padding:3px 12px;">Detailed</button>
-          <span style="font-size:12px;color:var(--muted);" id="invViewHint"></span>
+        <div class="ui-tabs-bar">
+          <div id="invViewTabs"></div>
+          <span class="ui-hint" id="invViewHint"></span>
         </div>
-        <div style="flex:1;overflow:auto;">
-          <table class="data-table">
-            <thead><tr><th class="right">#</th><th>Description</th><th>Charge Type</th><th>Date</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">Amount</th></tr></thead>
-            <tbody id="invLinesBody"></tbody>
-          </table>
-        </div>
-        <div style="border-top:1px solid var(--border);padding:14px 20px;display:flex;justify-content:flex-end;gap:28px;font-size:14px;">
-          <div>Subtotal <strong id="invSubtotal">$0.00</strong></div>
-          <div>Tax <strong id="invTax">$0.00</strong></div>
-          <div style="font-size:16px;">Total <strong id="invTotal" style="color:var(--green);">$0.00</strong></div>
-        </div>
+        <div style="flex:1;overflow:auto;padding:0 12px 12px;" id="invLinesWrap"></div>
       </div>
     </div>
   </div>
@@ -1415,41 +1397,8 @@
   </div>
 </div>
 
-<!-- GENERATE INVOICE MODAL -->
-<div id="genInvoiceModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
-  <div class="modal" style="max-width:560px;">
-    <div class="modal-head">
-      <div class="modal-title">Generate Invoice</div>
-      <div style="flex:1"></div>
-      <button class="btn btn-ghost" onclick="closeModal('genInvoiceModal')" style="padding:6px 12px;">✕</button>
-    </div>
-    <div class="modal-body">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">
-        Gathers every <strong>uninvoiced</strong> charge for this client in the date range,
-        rolls them into a DRAFT invoice (one line per charge), and marks those charges invoiced.
-        Voiding the invoice later releases the charges again.
-      </div>
-      <div class="form-group">
-        <label class="form-label">Client *</label>
-        <div class="cb-wrap" id="genInvClientWrap"></div>
-      </div>
-      <div class="form-row form-row-2">
-        <div class="form-group"><label class="form-label">From *</label><input type="date" class="form-input" id="genInvFrom"></div>
-        <div class="form-group"><label class="form-label">To *</label><input type="date" class="form-input" id="genInvTo"></div>
-      </div>
-      <div class="form-row form-row-2">
-        <div class="form-group"><label class="form-label">Due Date</label><input type="date" class="form-input" id="genInvDue"></div>
-        <div class="form-group"><label class="form-label">Notes</label><input type="text" class="form-input" id="genInvNotes" placeholder="Optional..."></div>
-      </div>
-      <div id="genInvError"   style="color:var(--red);font-size:13px;margin-top:8px;"></div>
-      <div id="genInvSuccess" style="color:var(--green);font-size:13px;margin-top:8px;"></div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="closeModal('genInvoiceModal')">Cancel</button>
-      <button class="btn btn-primary" id="genInvSubmitBtn" onclick="submitGenerateInvoice()">Generate</button>
-    </div>
-  </div>
-</div>
+<!-- Generate-invoice modal retired in D2 — it is a uiModal form now
+     (showGenerateInvoiceModal() in js/invoices.js). -->
 
 <!-- RATES MODAL — bulk-edits a client's active billing_rates -->
 <div id="rateCardModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">

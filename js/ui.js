@@ -329,6 +329,18 @@ function uiTile({ label, value, money = false, tone = null, sub = '' }) {
 }
 
 /* ---------------------------------------------------------------------------
+ * META GRID — key/value record metadata (invoice header, order header…).
+ *   uiMeta([{ k:'Client', v: esc(name) }, { k:'Due', v: uiId(date) }])
+ * `v` is HTML: pass it through esc()/uiId()/uiMoney() yourself.
+ * ------------------------------------------------------------------------- */
+function uiMeta(pairs) {
+  return `<div class="ui-meta">${pairs.map(p => `<div>
+    <span class="ui-meta-k">${esc(p.k)}</span>
+    <span class="ui-meta-v">${p.v ?? '—'}</span>
+  </div>`).join('')}</div>`;
+}
+
+/* ---------------------------------------------------------------------------
  * TABS — the one tab system (replaces .cli-tab, .bill-tab, .cmp-tab in the
  * screen batches).
  *   uiTabs('hostEl', [{id:'runs',label:'Accrual Runs'},...], { active:'runs',
