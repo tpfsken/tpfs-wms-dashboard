@@ -16,11 +16,9 @@ const INTAKE_STATUSES = [
   {value:'REJECTED',label:'Rejected'},
 ];
 
-const INTAKE_STATUS_CHIP = {
-  UPLOADED:'chip-new', EXTRACTING:'chip-active', EXTRACTED:'chip-warning',
-  EXTRACTION_FAILED:'chip-danger', APPROVED:'chip-success', REJECTED:'chip-danger',
-};
-
+/* Extraction confidence. The tiers drive whether ops can trust a field without
+ * checking it against the PDF, so they map onto the frozen status tones —
+ * NOT a separate colour scheme. */
 function confTier(c){
   if(c == null || c === '') return null;
   const n = Number(c);
@@ -31,51 +29,57 @@ function confTier(c){
 }
 
 function confColor(t){
-  return t === 'high' ? 'var(--green)'
-       : t === 'med'  ? 'var(--amber)'
-       : t === 'low'  ? 'var(--red)'
+  return t === 'high' ? 'var(--st-ok)'
+       : t === 'med'  ? 'var(--st-warn)'
+       : t === 'low'  ? 'var(--st-danger)'
        : 'var(--muted)';
 }
+
+const INTAKE_COLS = [
+  { key: '_when', label: 'Uploaded', sortValue: r => r.uploaded_at,
+    render: r => uiId(fmtTimeShort(r.uploaded_at)) },
+  { key: 'pdf_filename', label: 'File', render: r => uiId((r.pdf_filename || '').slice(0, 40)) },
+  { key: 'doc_type', label: 'Type', render: r =>
+      `<span class="ui-chip ui-chip-neutral">${esc(r.doc_type || '—')}</span>` },
+  { key: '_client', label: 'Client', sortValue: r => r.client_name,
+    render: r => r.client_name
+      ? esc(r.client_name)
+      // Unassigned blocks approval — it's not a neutral "—".
+      : '<span class="ui-chip ui-chip-warn">unassigned</span>' },
+  { key: 'pdf_size_bytes', label: 'Size', num: true, render: r => uiNum(fmtBytes(r.pdf_size_bytes)) },
+  { key: 'extraction_cost_usd', label: 'AI cost', num: true,
+    render: r => uiNum(fmtCost(r.extraction_cost_usd)) },
+  { key: 'status', label: 'Status', render: r => uiChip(r.status) },
+  { key: '_linked', label: 'Result', sortable: false, render: r =>
+      r.created_order_number ? `<span class="ui-chip ui-chip-ok">SO ${esc(r.created_order_number)}</span>`
+    : r.created_po_number    ? `<span class="ui-chip ui-chip-ok">PO ${esc(r.created_po_number)}</span>`
+    : '<span class="ui-muted">—</span>' },
+];
 
 async function loadIntake(){
   const status = (_cbState['intakeStatusFilterWrap']?.selected?.value) || '';
   let u = '/intake?limit=100';
   if(status) u += `&status=${encodeURIComponent(status)}`;
-  const d = await apiGet(u);
-  if(!d) return;
-  const b = document.getElementById('intakeBody');
-  if(!d.length){
-    b.innerHTML = '<tr><td colspan="9" class="empty-state">No intake documents yet — upload a PDF to get started</td></tr>';
-    return;
-  }
-  b.innerHTML = d.map(r => {
-    const chipCls = INTAKE_STATUS_CHIP[r.status] || 'chip-new';
-    const linked = r.created_order_number
-      ? `<span class="chip chip-success" style="font-size:11px;">SO ${esc(r.created_order_number)}</span>`
-      : r.created_po_number
-        ? `<span class="chip chip-success" style="font-size:11px;">PO ${esc(r.created_po_number)}</span>`
-        : '—';
-    const clientCell = r.client_name
-      ? esc(r.client_name)
-      : '<span style="color:var(--muted);">unassigned</span>';
-    const btnLabel = ['EXTRACTED','EXTRACTION_FAILED','UPLOADED'].includes(r.status) ? 'Review' : 'View';
-    return `
-      <tr>
-        <td>${esc(fmtTimeShort(r.uploaded_at))}</td>
-        <td><span style="font-family:monospace;font-size:12px;">${esc((r.pdf_filename || '').slice(0, 40))}</span></td>
-        <td><span class="chip" style="font-size:11px;">${esc(r.doc_type || '—')}</span></td>
-        <td>${clientCell}</td>
-        <td class="right">${esc(fmtBytes(r.pdf_size_bytes))}</td>
-        <td class="right">${esc(fmtCost(r.extraction_cost_usd))}</td>
-        <td><span class="chip ${chipCls}" style="font-size:11px;">${esc(r.status)}</span></td>
-        <td>${linked}</td>
-        <td><button class="btn btn-ghost js-intake-review" data-id="${esc(r.id)}" style="padding:6px 12px;font-size:12px;">${btnLabel}</button></td>
-      </tr>`;
-  }).join('');
 
-  b.querySelectorAll('.js-intake-review').forEach(btn =>
-    btn.addEventListener('click', () => openIntakeReview(btn.dataset.id))
-  );
+  uiTableLoading('intakeListWrap', INTAKE_COLS);
+  const d = await apiGet(u);
+  if(d === null) return uiTableError('intakeListWrap', INTAKE_COLS, 'Could not load intake documents', loadIntake);
+
+  uiTable('intakeListWrap', {
+    columns: INTAKE_COLS, rows: d, rowKey: 'id',
+    sortable: true,
+    onRowClick: r => openIntakeReview(r.id),
+    empty: status ? 'No documents with that status.' : 'No documents yet — drop a PDF above.',
+  });
+
+  // This endpoint returns a flat array with no total. If we got exactly the
+  // limit, there are more — don't let the screen imply otherwise.
+  const note = document.getElementById('intakeCount');
+  if(note){
+    note.innerHTML = d.length >= 100
+      ? '<span class="ui-chip ui-chip-warn">showing the newest 100 — filter by status to narrow</span>'
+      : (d.length ? `${esc(d.length)} document${d.length === 1 ? '' : 's'}` : '');
+  }
 }
 
 // ----- UPLOAD -----
@@ -86,16 +90,17 @@ function setupIntakeDropzone(){
   z._wired = true;
   ['dragenter','dragover'].forEach(e => z.addEventListener(e, ev => {
     ev.preventDefault(); ev.stopPropagation();
-    z.style.borderColor = 'var(--blue)'; z.style.background = 'var(--blue-bg)';
+    z.classList.add('ui-drop-hot');
   }));
   ['dragleave','drop'].forEach(e => z.addEventListener(e, ev => {
     ev.preventDefault(); ev.stopPropagation();
-    z.style.borderColor = 'var(--border)'; z.style.background = 'transparent';
+    z.classList.remove('ui-drop-hot');
   }));
   z.addEventListener('drop', ev => {
-    const f = Array.from(ev.dataTransfer.files || []).filter(f =>
+    const pdfs = Array.from(ev.dataTransfer.files || []).filter(f =>
       f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
-    if(f.length) uploadIntakeFiles(f);
+    if(pdfs.length) uploadIntakeFiles(pdfs);
+    else uiToast('PDFs only — that file type can\'t be extracted', 'error');
   });
 }
 
@@ -105,12 +110,18 @@ function onIntakeFilesPicked(ev){
   ev.target.value = '';
 }
 
+const INTAKE_MAX = 25 * 1024 * 1024;
+
 async function uploadIntakeFiles(files){
   const status = document.getElementById('intakeUploadStatus');
-  status.style.color = 'var(--text2)';
-  let done = 0, failed = 0, lastId = null;
+  let done = 0, lastId = null;
+
   for(const file of files){
-    status.textContent = `Uploading ${file.name} (${done + 1}/${files.length})...`;
+    if(file.size > INTAKE_MAX){
+      uiToast(`${file.name} is ${(file.size / 1048576).toFixed(1)}MB — 25MB max`, 'error');
+      continue;
+    }
+    status.innerHTML = uiSpinner(`Uploading ${file.name} (${done + 1} of ${files.length})…`);
     try {
       const fd = new FormData(); fd.append('file', file);
       const r = await fetch(`${API}/intake/upload`, {
@@ -119,24 +130,22 @@ async function uploadIntakeFiles(files){
       const d = await r.json();
       if(!r.ok) throw new Error(d.error || 'Upload failed');
       lastId = d.id; done++;
+      // Kick extraction off in the background.
       fetch(`${API}/intake/${d.id}/extract`, {
         method:'POST', headers:{'Authorization':`Bearer ${T}`},
       }).catch(() => {});
     } catch(e){
-      failed++;
-      status.style.color = 'var(--red)';
-      status.textContent = `Failed on ${file.name}: ${e.message}`;
+      uiToast(`${file.name}: ${e.message}`, 'error');
     }
   }
-  if(!failed){
-    status.style.color = 'var(--green)';
-    status.textContent = `✓ Uploaded ${done} document${done !== 1 ? 's' : ''} · extraction running in background`;
-  }
-  setTimeout(() => { status.textContent = ''; status.style.color = ''; loadIntake(); }, 3500);
+
+  status.innerHTML = '';
+  if(done) uiToast(`${done} document${done === 1 ? '' : 's'} uploaded — Claude is reading ${done === 1 ? 'it' : 'them'}`);
   loadIntake();
-  if(lastId && files.length === 1){
-    setTimeout(() => openIntakeReview(lastId), 2500);
-  }
+  setTimeout(loadIntake, 3500);   // extraction usually lands by now
+
+  // Single upload: drop the user straight into the review.
+  if(lastId && files.length === 1) setTimeout(() => openIntakeReview(lastId), 2500);
 }
 
 // ----- REVIEW -----
@@ -157,12 +166,8 @@ async function openIntakeReview(id){
   if(doc.extraction_cost_usd != null) subBits.push(`Cost ${fmtCost(doc.extraction_cost_usd)}`);
   document.getElementById('intakeRevSub').textContent = subBits.join(' · ');
 
-  const status = document.getElementById('intakeRevStatus');
-  status.className = `chip ${INTAKE_STATUS_CHIP[doc.status] || 'chip-new'}`;
-  status.textContent = doc.status;
+  document.getElementById('intakeRevStatus').innerHTML = uiChip(doc.status);
   document.getElementById('intakeRevDocType').textContent = doc.doc_type || '—';
-  document.getElementById('intakeRevError').textContent = '';
-  document.getElementById('intakeRevSuccess').textContent = '';
 
   const pdfData = await apiGet(`/intake/${id}/pdf-url`);
   if(pdfData?.url){
@@ -416,25 +421,22 @@ function addIntakeLine(){
 
 async function runIntakeExtract(force){
   const id = _intakeCurrent?.id; if(!id) return;
-  const err = document.getElementById('intakeRevError'); err.textContent = '';
-  document.getElementById('intakeRevForm').innerHTML = '<div class="empty-state" style="padding:40px;">Running Claude extraction...</div>';
+  document.getElementById('intakeRevForm').innerHTML = uiSpinner('Claude is reading the document…');
   try {
     const r = await fetch(`${API}/intake/${id}/extract${force ? '?force=true' : ''}`, {
       method:'POST', headers:{'Authorization':`Bearer ${T}`},
     });
     const d = await r.json();
-    if(!r.ok){ err.textContent = d.error || 'Extraction failed'; openIntakeReview(id); return; }
+    if(!r.ok) uiToast(d.error || 'Extraction failed', 'error');
     openIntakeReview(id);
   } catch(e){
-    err.textContent = 'Network error';
+    uiToast('Network error during extraction', 'error');
     openIntakeReview(id);
   }
 }
 
 async function saveIntakeEdits(){
   const id = _intakeCurrent?.id; if(!id) return;
-  const err = document.getElementById('intakeRevError'); err.textContent = '';
-  const suc = document.getElementById('intakeRevSuccess'); suc.textContent = '';
   try {
     const r = await fetch(`${API}/intake/${id}/edits`, {
       method:'PATCH',
@@ -442,43 +444,69 @@ async function saveIntakeEdits(){
       body: JSON.stringify({editedJson: _intakeEdited}),
     });
     const d = await r.json();
-    if(!r.ok){ err.textContent = d.error || 'Save failed'; return; }
-    suc.textContent = `Saved · ${d.diffs} field${d.diffs !== 1 ? 's' : ''} changed`;
-    setTimeout(() => suc.textContent = '', 2500);
+    if(!r.ok) return uiToast(d.error || 'Save failed', 'error');
+    uiToast(d.diffs
+      ? `Saved — ${d.diffs} field${d.diffs === 1 ? '' : 's'} changed from what Claude read`
+      : 'Saved — nothing changed');
   } catch(e){
-    err.textContent = 'Network error';
+    uiToast('Network error — edits not saved', 'error');
   }
 }
 
 async function assignIntakeClient(clientId){
   const id = _intakeCurrent?.id; if(!id) return;
-  const err = document.getElementById('intakeRevError'); err.textContent = '';
   try {
     const r = await fetch(`${API}/intake/${id}/client`, {
       method:'PATCH',
       headers:{'Content-Type':'application/json','Authorization':`Bearer ${T}`},
       body: JSON.stringify({clientId}),
     });
-    if(!r.ok){ const d = await r.json(); err.textContent = d.error || 'Failed'; return; }
+    if(!r.ok){
+      const d = await r.json();
+      return uiToast(d.error || 'Could not assign the client', 'error');
+    }
+    uiToast('Client assigned');
     openIntakeReview(id);
   } catch(e){
-    err.textContent = 'Network error';
+    uiToast('Network error', 'error');
   }
 }
 
 async function approveIntakeDoc(){
   const id = _intakeCurrent?.id; if(!id) return;
-  const err = document.getElementById('intakeRevError'); err.textContent = '';
-  const suc = document.getElementById('intakeRevSuccess'); suc.textContent = '';
-  if(!_intakeCurrent.client_id){ err.textContent = 'Client must be assigned before approval'; return; }
+  if(!_intakeCurrent.client_id){
+    return uiToast('Assign a client before approving — the order can\'t be created without one', 'error');
+  }
 
+  // Approving turns AI-extracted text into a real order or PO. If Claude was
+  // unsure about anything, say so BEFORE it becomes a live document — that is
+  // the entire point of a review step.
+  const conf = _intakeCurrent.confidence_json || {};
+  const shaky = Object.entries(conf)
+    .filter(([, v]) => confTier(v) === 'low')
+    .map(([k]) => k);
+  if(shaky.length){
+    const ok = await uiConfirm({
+      title: 'Approve with low-confidence fields?',
+      body: `Claude was <strong>unsure</strong> about ${shaky.length} field(s): ` +
+            `<strong>${esc(shaky.slice(0, 8).join(', '))}</strong>` +
+            (shaky.length > 8 ? ` and ${shaky.length - 8} more` : '') +
+            `.<br><br>Approving creates a real ${_intakeCurrent.doc_type === 'INBOUND_PO' ? 'PO' : 'order'} from this data. Check those fields against the PDF first.`,
+      confirmLabel: 'Approve anyway',
+    });
+    if(!ok) return;
+  }
+
+  // Persist edits first — approve reads the saved record, not what's on screen.
   try {
     await fetch(`${API}/intake/${id}/edits`, {
       method:'PATCH',
       headers:{'Content-Type':'application/json','Authorization':`Bearer ${T}`},
       body: JSON.stringify({editedJson: _intakeEdited}),
     });
-  } catch(e){}
+  } catch(e){
+    return uiToast('Could not save your edits — not approving', 'error');
+  }
 
   try {
     const r = await fetch(`${API}/intake/${id}/approve`, {
@@ -491,27 +519,31 @@ async function approveIntakeDoc(){
       if(d.error && d.error.includes('Unknown SKU code')){
         const codes = d.error.replace(/.*: /, '').replace(/\..*$/, '').split(',').map(s => s.trim()).filter(Boolean);
         _intakeMissingSkus = codes;
-        err.textContent = `${codes.length} SKU(s) not found: ${codes.join(', ')} — click "Create SKU" below to add them.`;
+        uiToast(`${codes.length} SKU(s) don't exist yet: ${codes.join(', ')} — create them to continue`, 'error');
         promptCreateNextMissingSku();
         return;
       }
-      err.textContent = d.error || 'Approval failed';
-      return;
+      return uiToast(d.error || 'Approval failed', 'error');
     }
     const created = d.created;
-    suc.textContent = created.type === 'ORDER'
-      ? `✓ Order created (${created.orderId.slice(0, 8)})`
-      : `✓ PO created (${created.poId.slice(0, 8)})`;
-    setTimeout(() => closeIntakeReview(), 1500);
+    uiToast(created.type === 'ORDER' ? 'Order created from this document' : 'PO created from this document');
+    closeIntakeReview();
   } catch(e){
-    err.textContent = 'Network error';
+    uiToast('Network error — nothing was created', 'error');
   }
 }
 
 async function rejectIntakeDoc(){
   const id = _intakeCurrent?.id; if(!id) return;
-  const reason = prompt('Rejection reason (optional):') || '';
-  if(reason === null) return;
+  const reason = await uiPrompt({
+    title: 'Reject this document?',
+    body: 'It stays on file, marked REJECTED. Nothing is created from it.',
+    label: 'Reason (optional)',
+    placeholder: 'e.g. duplicate, wrong client, illegible scan',
+    confirmLabel: 'Reject',
+    danger: true,
+  });
+  if(reason === null) return;   // cancelled
   try {
     const r = await fetch(`${API}/intake/${id}/reject`, {
       method:'POST',
@@ -520,12 +552,12 @@ async function rejectIntakeDoc(){
     });
     if(!r.ok){
       const d = await r.json();
-      document.getElementById('intakeRevError').textContent = d.error || 'Reject failed';
-      return;
+      return uiToast(d.error || 'Reject failed', 'error');
     }
+    uiToast('Document rejected');
     closeIntakeReview();
   } catch(e){
-    document.getElementById('intakeRevError').textContent = 'Network error';
+    uiToast('Network error', 'error');
   }
 }
 
