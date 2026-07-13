@@ -26,189 +26,135 @@ async function loadDashboard(){
 // Render the "Performance by Client" panel — one row per active
 // client showing their on-time % vs their saved target, past-due, and
 // a status chip. Click a row to drill to that client's detail page.
+// A client is judged against THEIR contracted target, not a house default —
+// falling back to 95/85 only when no SLA is configured.
+const CLI_PERF_COLS = [
+  { key: '_client', label: 'Client', sortValue: r => r.client_code, render: r =>
+      `<div>${uiId(r.client_code || '')}</div><div class="ui-hint">${esc(r.client_name || '')}</div>` },
+  { key: 'on_time_pct', label: 'On time', num: true, render: r => {
+      if(r.on_time_pct == null) return '<span class="ui-muted">—</span>';
+      const t = r.on_time_target ?? 95;
+      const w = r.on_time_warning ?? 85;
+      const tone = r.on_time_pct >= t ? 'ok' : r.on_time_pct >= w ? 'warn' : 'danger';
+      return `<span class="ui-chip ui-chip-${tone}">${esc(r.on_time_pct)}%</span>`;
+    } },
+  { key: '_target', label: 'Target', sortValue: r => r.on_time_target, render: r =>
+      r.on_time_target == null ? '<span class="ui-muted">not set</span>' : uiNum(r.on_time_target + '%') },
+  { key: 'past_due', label: 'Past due', num: true, render: r => {
+      const n = Number(r.past_due ?? 0);
+      return n > 0 ? `<span class="ui-chip ui-chip-danger">${esc(n)}</span>` : uiNum(0);
+    } },
+  { key: 'open_count', label: 'Open', num: true },
+  { key: 'shipped_30d', label: 'Shipped 30d', num: true },
+  { key: '_sla', label: 'SLA', sortable: false, render: r => {
+      const breaches = [];
+      if(r.on_time_target != null && r.on_time_pct != null && r.on_time_pct < r.on_time_target) breaches.push('on-time');
+      if(r.past_due_target != null && r.past_due != null && r.past_due > r.past_due_target) breaches.push('past-due');
+      if(r.on_time_target == null && r.past_due_target == null){
+        return '<span class="ui-chip ui-chip-neutral">no SLA set</span>';
+      }
+      return breaches.length
+        ? `<span class="ui-chip ui-chip-danger">below SLA — ${esc(breaches.join(', '))}</span>`
+        : '<span class="ui-chip ui-chip-ok">meeting SLA</span>';
+    } },
+];
+
 async function loadClientsPerformance(){
-  const body = document.getElementById('clientsPerformanceBody');
-  if(!body) return;
-  body.innerHTML = '<tr><td colspan="7" class="empty-state">Loading…</td></tr>';
+  const host = document.getElementById('clientsPerformanceBody');
+  if(!host) return;
 
+  uiTableLoading(host, CLI_PERF_COLS);
   const rows = await apiGet('/dashboard/clients-performance');
-  if(!rows){
-    body.innerHTML = '<tr><td colspan="7" class="empty-state">Could not load</td></tr>';
-    return;
-  }
-  if(!rows.length){
-    body.innerHTML = '<tr><td colspan="7" class="empty-state">No active clients</td></tr>';
-    return;
-  }
+  if(rows === null) return uiTableError(host, CLI_PERF_COLS, 'Could not load client performance', loadClientsPerformance);
 
-  // Tier color for on-time %: respects the client's saved target if any,
-  // otherwise falls back to the 95/85 industry-default tiers.
-  const onTimeColor = (pct, target, warning) => {
-    if(pct == null) return 'var(--muted)';
-    const t = target ?? 95;
-    const w = warning ?? 85;
-    return pct >= t ? 'var(--green)' : pct >= w ? 'var(--amber)' : 'var(--red)';
-  };
-  const pastDueColor = (n, target, warning) => {
-    if(n == null) return 'var(--muted)';
-    const t = target ?? 0;
-    const w = warning ?? 5;
-    return n <= t ? 'var(--green)' : n <= w ? 'var(--amber)' : 'var(--red)';
-  };
-  const statusChip = (pct, target, pastDue, pdTarget) => {
-    // If neither metric is configured, show "Info"; otherwise compute
-    // the worst status across the two and chip-ify it.
-    const tiers = [];
-    if(target != null && pct != null){
-      tiers.push(pct >= target ? 'good' : 'breach');
-    }
-    if(pdTarget != null && pastDue != null){
-      tiers.push(pastDue <= pdTarget ? 'good' : 'breach');
-    }
-    if(!tiers.length) return '<span class="chip chip-new">No SLA set</span>';
-    if(tiers.includes('breach')) return '<span class="chip chip-danger">✕ Below SLA</span>';
-    return '<span class="chip chip-success">✓ Meeting SLA</span>';
-  };
-
-  body.innerHTML = rows.map(r => {
-    const pct  = r.on_time_pct;
-    const otc  = onTimeColor(pct, r.on_time_target, r.on_time_warning);
-    const pdc  = pastDueColor(r.past_due, r.past_due_target, r.past_due_warning);
-    const targetTxt = r.on_time_target == null ? '—' : `${r.on_time_target}%`;
-    return `
-      <tr class="js-cli-perf-row" data-id="${esc(r.client_id)}" style="cursor:pointer;">
-        <td>
-          <div style="font-weight:600;color:var(--blue);">${esc(r.client_code || '')}</div>
-          <div style="font-size:12px;color:var(--text2);">${esc(r.client_name || '')}</div>
-        </td>
-        <td class="right" style="font-weight:700;color:${otc};">${pct == null ? '—' : esc(pct) + '%'}</td>
-        <td class="right" style="color:var(--text2);">${esc(targetTxt)}</td>
-        <td class="right" style="font-weight:700;color:${pdc};">${esc(r.past_due ?? 0)}</td>
-        <td class="right">${esc(r.open_count ?? 0)}</td>
-        <td class="right" style="color:var(--text2);">${esc(r.shipped_30d ?? 0)}</td>
-        <td>${statusChip(pct, r.on_time_target, r.past_due, r.past_due_target)}</td>
-      </tr>`;
-  }).join('');
-
-  body.querySelectorAll('.js-cli-perf-row').forEach(row => {
-    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
-    row.addEventListener('mouseout',  () => row.style.background = '');
-    row.addEventListener('click', () => {
-      navigateTo('clients');
-      setTimeout(() => openClientDetail(row.dataset.id), 100);
-    });
+  uiTable(host, {
+    columns: CLI_PERF_COLS, rows, rowKey: 'client_id',
+    sortable: true,
+    onRowClick: (r) => { navigateTo('clients'); openClientDetail(r.client_id); },
+    empty: 'No active clients.',
   });
 }
 
 function renderSLA(s){
   const wrap = document.getElementById('slaRow');
   if(!wrap) return;
-  // Color the on-time % by tier: green ≥95, amber 85-94, red <85
-  const pct = s.onTimePct;
-  const pctColor = pct == null ? 'var(--muted)'
-                 : pct >= 95   ? 'var(--green)'
-                 : pct >= 85   ? 'var(--amber)'
-                                : 'var(--red)';
-  const pastColor = s.pastDue > 0 ? 'var(--red)' : 'var(--green)';
+  wrap.className = 'ui-tiles';
 
-  wrap.innerHTML = `
-    <div class="kpi"><div class="kpi-label">On-Time Ship</div>
-      <div class="kpi-val" style="color:${pctColor}">${pct == null ? '—' : pct + '%'}</div>
-      <div class="kpi-delta">${esc(s.onTimeShipped || 0)} of ${esc(s.totalWithSla || 0)} shipped on-time</div>
-    </div>
-    <div class="kpi"><div class="kpi-label">Past-Due Open</div>
-      <div class="kpi-val" style="color:${pastColor}">${esc(s.pastDue ?? 0)}</div>
-      <div class="kpi-delta">orders past required ship date</div>
-    </div>
-    <div class="kpi"><div class="kpi-label">Avg Turnaround</div>
-      <div class="kpi-val" style="color:var(--blue)">${s.avgTurnaroundHours == null ? '—' : esc(s.avgTurnaroundHours) + 'h'}</div>
-      <div class="kpi-delta">received → shipped (last 30d)</div>
-    </div>
-    <div class="kpi"><div class="kpi-label">Avg Pick Time</div>
-      <div class="kpi-val" style="color:var(--amber)">${s.avgPickMinutes == null ? '—' : esc(s.avgPickMinutes) + 'm'}</div>
-      <div class="kpi-delta">${esc(s.picksCount || 0)} picks in last 30d</div>
-    </div>`;
+  const pct = s.onTimePct;
+  // Past-due leads. On-time % is a score you review; a past-due order is work
+  // that is already late and needs somebody to move.
+  wrap.innerHTML =
+    uiTile({ label: 'Past due', value: s.pastDue ?? 0,
+             tone: (s.pastDue > 0 ? 'danger' : 'ok'),
+             sub: 'open orders past their required ship date' }) +
+    uiTile({ label: 'On-time ship', value: pct == null ? '—' : pct + '%',
+             tone: pct == null ? null : pct >= 95 ? 'ok' : pct >= 85 ? 'warn' : 'danger',
+             sub: `${s.onTimeShipped || 0} of ${s.totalWithSla || 0} shipped on time` }) +
+    uiTile({ label: 'Avg turnaround',
+             value: s.avgTurnaroundHours == null ? '—' : s.avgTurnaroundHours + 'h',
+             sub: 'received to shipped, last 30 days' }) +
+    uiTile({ label: 'Avg pick time',
+             value: s.avgPickMinutes == null ? '—' : s.avgPickMinutes + 'm',
+             sub: `${s.picksCount || 0} picks, last 30 days` });
 }
 
 function renderKPIs(k){
-  const cards = [
-    {l:'Orders Today',  v:k.ordersToday?.value ?? 0, c:'var(--blue)'},
-    {l:'Shipped',       v:k.shipped?.value ?? 0,     c:'var(--green)'},
-    {l:'In Progress',   v:k.inProgress?.value ?? 0,  c:'var(--amber)'},
-    {l:'Total SKUs',    v:k.totalSKUs?.value ?? 0,   c:'var(--text)'},
-    {l:'Total Units',   v:(k.totalUnits?.value ?? 0).toLocaleString(), c:'var(--text)'},
-    {l:'License Plates',v:k.licensePlates?.active ?? 0, c:'var(--purple)',
-     s:`${k.licensePlates?.original ?? 0} orig · ${k.licensePlates?.child ?? 0} child`},
-  ];
-  document.getElementById('kpiRow').innerHTML = cards.map(x => `
-    <div class="kpi">
-      <div class="kpi-label">${esc(x.l)}</div>
-      <div class="kpi-val" style="color:${x.c}">${esc(x.v)}</div>
-      ${x.s ? `<div class="kpi-delta">${esc(x.s)}</div>` : ''}
-    </div>
-  `).join('');
+  const row = document.getElementById('kpiRow');
+  row.className = 'ui-tiles';
+  row.innerHTML =
+    uiTile({ label: 'Orders today', value: k.ordersToday?.value ?? 0 }) +
+    uiTile({ label: 'Shipped', value: k.shipped?.value ?? 0 }) +
+    uiTile({ label: 'In progress', value: k.inProgress?.value ?? 0 }) +
+    uiTile({ label: 'Total SKUs', value: k.totalSKUs?.value ?? 0 }) +
+    uiTile({ label: 'Total units', value: (k.totalUnits?.value ?? 0).toLocaleString() }) +
+    uiTile({ label: 'Licence plates', value: k.licensePlates?.active ?? 0,
+             sub: `${k.licensePlates?.original ?? 0} original · ${k.licensePlates?.child ?? 0} child` });
 }
 
 function renderQ(list){
-  const c = document.getElementById('orderQueue');
   const b = document.getElementById('orderCountBadge');
-  if(!list?.length){
-    c.innerHTML = '<div class="empty-state">No open orders</div>';
-    b.textContent = '0';
-    return;
-  }
-  b.textContent = list.length + ' open';
-  c.innerHTML = list.map(o => {
-    const s = SM[o.status] || {c:'chip-new', l:o.status};
-    const sd = o.required_ship_date
-      ? new Date(o.required_ship_date).toLocaleDateString('en-US', {month:'short', day:'numeric'})
-      : '—';
-    return `
-      <div class="js-queue-row" data-order-id="${esc(o.id)}"
-           style="display:grid;grid-template-columns:2fr 1fr 90px 70px 70px 80px;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;">
-        <div>
-          <div style="font-weight:600;color:var(--blue);">${esc(o.order_number || '')}</div>
-          <div style="color:var(--text2);font-size:12px;">${esc(o.client_name || '')}</div>
-        </div>
-        <div style="color:var(--text2);">${esc(o.channel || '')}</div>
-        <div><span class="chip ${s.c}">${esc(s.l)}</span></div>
-        <div style="color:var(--text2);">${esc(o.priority || 5)}</div>
-        <div style="color:${o.is_past_sla ? 'var(--red)' : 'var(--text2)'};">${esc(sd)}</div>
-        <div style="text-align:right;color:var(--text2);">${esc(o.line_count || 0)}L/${esc(o.total_units || 0)}u</div>
-      </div>`;
-  }).join('');
+  b.textContent = (list?.length || 0) + ' open';
 
-  // Wire row clicks (delegated)
-  c.querySelectorAll('.js-queue-row').forEach(row => {
-    row.addEventListener('click', () => {
-      const id = row.dataset.orderId;
-      navigateTo('orders');
-      setTimeout(() => openOrderDetail(id), 100);
-    });
+  uiTable('orderQueue', {
+    columns: [
+      { key: '_ord', label: 'Order', render: o =>
+          `<div>${uiId(o.order_number || '')}</div><div class="ui-hint">${esc(o.client_name || '')}</div>` },
+      { key: 'channel', label: 'Channel' },
+      { key: 'status', label: 'Status', render: o => uiChip(o.status) },
+      { key: 'priority', label: 'Priority', num: true },
+      { key: '_due', label: 'Ship by', render: o => {
+          if(!o.required_ship_date) return '<span class="ui-muted">—</span>';
+          const d = new Date(o.required_ship_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          return o.is_past_sla
+            ? `<span class="ui-chip ui-chip-danger">${esc(d)}</span>`
+            : uiId(d);
+        } },
+      { key: 'line_count', label: 'Lines', num: true },
+      { key: 'total_units', label: 'Units', num: true },
+    ],
+    rows: list || [], rowKey: 'id',
+    onRowClick: (o) => { navigateTo('orders'); openOrderDetail(o.id); },
+    empty: 'No open orders.',
   });
 }
 
 function renderAlerts(a){
   const c = document.getElementById('alertList');
   const b = document.getElementById('alertBadge');
-  if(!a?.length){
-    c.innerHTML = '<div class="empty-state">No alerts</div>';
-    b.textContent = '0';
-    return;
-  }
-  b.textContent = a.length;
+  b.textContent = a?.length || 0;
+  if(!a?.length){ c.innerHTML = uiEmpty('No alerts.'); return; }
+
   c.innerHTML = a.slice(0, 6).map(x => {
-    const sev = x.severity === 'critical' ? 'var(--red-bg)'
-              : x.severity === 'warning'  ? 'var(--amber-bg)'
-              : 'var(--blue-bg)';
-    const icon = x.severity === 'critical' ? '!' : '⚠';
+    const tone = x.severity === 'critical' ? 'danger'
+               : x.severity === 'warning'  ? 'warn'
+               : 'info';
     return `
-      <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start;">
-        <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;background:${sev};">${icon}</div>
-        <div>
-          <div style="font-weight:600;font-size:13px;">${esc(x.title || x.alert_type || 'Alert')}</div>
-          <div style="font-size:12px;color:var(--text2);">${esc(x.client_name || '')}</div>
-        </div>
+      <div class="dash-alert">
+        <span class="ui-chip ui-chip-${tone}">${esc((x.severity || 'info').toUpperCase())}</span>
+        <span class="dash-alert-body">
+          <span class="dash-alert-title">${esc(x.title || x.alert_type || 'Alert')}</span>
+          <span class="ui-hint">${esc(x.client_name || '')}</span>
+        </span>
       </div>`;
   }).join('');
 }
@@ -216,82 +162,71 @@ function renderAlerts(a){
 function renderWaves(w){
   const c = document.getElementById('waveList');
   const b = document.getElementById('waveBadge');
-  if(!w?.length){
-    c.innerHTML = '<div class="empty-state">No active waves</div>';
-    b.textContent = '0';
-    return;
-  }
-  b.textContent = w.length;
+  b.textContent = w?.length || 0;
+  if(!w?.length){ c.innerHTML = uiEmpty('No active waves.'); return; }
+
   c.innerHTML = w.map(v => `
-    <div style="background:var(--bg);border-radius:8px;padding:12px;margin-bottom:8px;">
-      <div style="font-weight:600;color:var(--blue);">${esc(v.wave_number || '')}</div>
-      <div style="font-size:12px;color:var(--text2);">${esc(v.status)} · ${esc(v.order_count || 0)} orders</div>
+    <div class="dash-row">
+      ${uiId(v.wave_number || '')}
+      <span class="ui-hint">${esc(v.status)} · ${esc(v.order_count || 0)} order(s)</span>
     </div>`).join('');
 }
 
 function renderDock(s){
-  const c = document.getElementById('dockList');
   const b = document.getElementById('dockBadge');
-  if(!s?.length){
-    c.innerHTML = '<div class="empty-state">No appointments today</div>';
-    b.textContent = '0';
-    return;
-  }
-  b.textContent = s.length;
-  c.innerHTML = s.map(d => `
-    <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:80px 1fr 100px 90px;align-items:center;gap:12px;">
-      <div style="text-align:center;">
-        <div style="font-weight:700;font-size:16px;color:var(--blue);">${esc(d.door_code || '?')}</div>
-        <div style="font-size:10px;color:var(--muted);">${esc((d.appt_type || '').toUpperCase())}</div>
-      </div>
-      <div>
-        <div style="font-weight:600;font-size:13px;">${esc(d.client_name || '')}</div>
-        <div style="font-size:12px;color:var(--text2);">${esc(d.carrier_name || '')}</div>
-      </div>
-      <div style="color:var(--text2);font-size:13px;">${d.scheduled_start ? esc(new Date(d.scheduled_start).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})) : '—'}</div>
-      <div><span class="chip chip-active">${esc(d.status || '')}</span></div>
-    </div>`).join('');
+  b.textContent = s?.length || 0;
+
+  uiTable('dockList', {
+    columns: [
+      { key: 'door_code', label: 'Door', mono: true },
+      { key: '_appt', label: 'Type', render: d =>
+          `<span class="ui-chip ui-chip-neutral">${esc((d.appt_type || '').toUpperCase())}</span>` },
+      { key: '_who', label: 'Client', render: d =>
+          `<div>${esc(d.client_name || '')}</div><div class="ui-hint">${esc(d.carrier_name || '')}</div>` },
+      { key: '_time', label: 'Scheduled', render: d => d.scheduled_start
+          ? uiId(new Date(d.scheduled_start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }))
+          : '<span class="ui-muted">—</span>' },
+      { key: 'status', label: 'Status', render: d => uiChip(d.status) },
+    ],
+    rows: s || [], rowKey: 'id',
+    empty: 'No appointments today.',
+  });
 }
 
 function renderDI(items){
-  const c = document.getElementById('inventoryList');
-  if(!items?.length){
-    c.innerHTML = '<div class="empty-state">No inventory</div>';
-    return;
-  }
-  c.innerHTML = items.map(r => {
-    const statusColor = r.status === 'expiring' ? 'var(--red)'
-                      : r.status === 'low'      ? 'var(--amber)'
-                      : 'var(--green)';
-    return `
-      <div class="js-inv-row" style="display:grid;grid-template-columns:1fr 80px 80px 80px;padding:12px 20px;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer;">
-        <div>
-          <div style="font-weight:600;">${esc(r.sku_code || '')}</div>
-          <div style="font-size:12px;color:var(--text2);">${esc(r.client_name || '')}</div>
-        </div>
-        <div style="text-align:right;font-weight:600;">${esc(Number(r.qty_total || 0).toLocaleString())}</div>
-        <div style="text-align:right;color:var(--blue);">${esc(Number(r.qty_allocated || 0).toLocaleString())}</div>
-        <div style="text-align:right;color:${statusColor};font-size:12px;">${esc((r.status || 'OK').toUpperCase())}</div>
-      </div>`;
-  }).join('');
-  c.querySelectorAll('.js-inv-row').forEach(row => row.addEventListener('click', () => navigateTo('inventory')));
+  uiTable('inventoryList', {
+    columns: [
+      { key: '_sku', label: 'SKU', render: r =>
+          `<div>${uiId(r.sku_code || '')}</div><div class="ui-hint">${esc(r.client_name || '')}</div>` },
+      { key: 'qty_total', label: 'On hand', num: true },
+      { key: 'qty_allocated', label: 'Allocated', num: true },
+      { key: '_st', label: 'Status', render: r => {
+          const s = (r.status || 'ok').toLowerCase();
+          const tone = s === 'expiring' ? 'danger' : s === 'low' ? 'warn' : 'ok';
+          return `<span class="ui-chip ui-chip-${tone}">${esc(s.toUpperCase())}</span>`;
+        } },
+    ],
+    rows: items || [], rowKey: 'sku_code',
+    onRowClick: () => navigateTo('inventory'),
+    empty: 'No inventory.',
+  });
 }
 
 function renderCarriers(cs){
   const c = document.getElementById('carrierList');
-  if(!cs?.length){
-    c.innerHTML = '<div class="empty-state">No data</div>';
-    return;
-  }
+  if(!cs?.length){ c.innerHTML = uiEmpty('No shipments.'); return; }
+
+  // Bars are relative to the busiest carrier, not to a fixed 100 — the old
+  // version capped the width at the raw shipment count, so any carrier with
+  // 100+ shipments pegged the bar and they all looked identical.
+  const max = Math.max(...cs.map(x => Number(x.total_shipments) || 0), 1);
   c.innerHTML = cs.map(x => {
-    const pct = Math.min(100, parseInt(x.total_shipments) || 0);
+    const n = Number(x.total_shipments) || 0;
     return `
-      <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;font-size:13px;">
-        <div style="font-weight:600;width:60px;">${esc(x.carrier || '?')}</div>
-        <div style="flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;">
-          <div style="height:100%;border-radius:3px;width:${pct}%;background:var(--blue);"></div>
-        </div>
-        <div style="color:var(--text2);width:40px;text-align:right;">${esc(x.total_shipments || 0)}</div>
+      <div class="dash-bar-row">
+        <span class="dash-bar-label">${esc(x.carrier || '—')}</span>
+        <span class="dash-bar-track"><span class="dash-bar-fill" style="width:${Math.round((n / max) * 100)}%;"></span></span>
+        <span class="dash-bar-val">${uiNum(n)}</span>
       </div>`;
   }).join('');
 }

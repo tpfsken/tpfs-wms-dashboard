@@ -110,27 +110,12 @@
          to that client's detail page. -->
     <div class="card" style="margin-top:16px;">
       <div class="card-head">
-        <div class="card-title">Performance by Client</div>
-        <div style="font-size:12px;color:var(--text2);margin-left:12px;">SLA status across all active clients · last 30 days</div>
+        <div class="card-title">Performance by client</div>
+        <div class="ui-hint" style="margin-left:12px;">SLA status across active clients · last 30 days</div>
         <div style="flex:1"></div>
-        <button class="btn btn-ghost" onclick="loadClientsPerformance()">Refresh</button>
+        <button class="ui-btn" onclick="loadClientsPerformance()">Refresh</button>
       </div>
-      <div style="overflow:auto;max-height:400px;">
-        <table class="data-table" style="margin:0;">
-          <thead>
-            <tr>
-              <th>Client</th>
-              <th class="right">On-Time %</th>
-              <th class="right">Target</th>
-              <th class="right">Past-Due</th>
-              <th class="right">Open</th>
-              <th class="right">Shipped 30d</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="clientsPerformanceBody"></tbody>
-        </table>
-      </div>
+      <div style="overflow:auto;max-height:400px;" id="clientsPerformanceBody"></div>
     </div>
   </div>
 

@@ -236,6 +236,20 @@ body.portal-mode .portal-banner{
   text-transform:uppercase;color:var(--muted);padding:8px 12px 4px;
   border-top:1px solid var(--border);margin-top:4px;}
 
+/* ---- Dashboard (D6c) ---- */
+.dash-alert{display:flex;align-items:flex-start;gap:10px;padding:12px 20px;
+  border-bottom:1px solid var(--border);font-size:var(--fs-body);}
+.dash-alert-body{display:flex;flex-direction:column;gap:2px;}
+.dash-alert-title{font-weight:600;}
+.dash-row{display:flex;align-items:center;gap:10px;padding:10px 20px;
+  border-bottom:1px solid var(--border);font-size:var(--fs-body);}
+.dash-bar-row{display:flex;align-items:center;gap:12px;padding:10px 20px;
+  border-bottom:1px solid var(--border);font-size:var(--fs-body);}
+.dash-bar-label{width:64px;font-weight:600;}
+.dash-bar-track{flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;}
+.dash-bar-fill{display:block;height:100%;background:var(--blue);border-radius:3px;}
+.dash-bar-val{width:48px;text-align:right;color:var(--text2);}
+
 /* ---- Severity chips (hazmat handling tier) ----
    These classes were referenced by severityChip() but NEVER DEFINED — the badge
    was legible only because it carried an emoji. A hazmat tier is not decoration:
