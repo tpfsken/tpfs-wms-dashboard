@@ -315,33 +315,28 @@ async function showNewPoModal(){
     title: 'New purchase order',
     width: 800,
     body: `
-      <!-- TWO different numbers, and conflating them is how a receipt gets
-           filed under a customer's PO number:
-             receipt #   = OURS. System-assigned from the sequence. Not typed.
-             customer PO = THEIRS. The number on their paperwork. -->
+      <!-- Our receipt number is NOT a field. It is assigned by the sequence on
+           save (migration 063) and doesn't exist yet at this point, so there is
+           nothing to show and nothing to type. The only number ops enters here
+           is the CUSTOMER's — the one on their paperwork. -->
       <div class="ui-field-row">
         <div class="ui-field" data-field="npClientWrap">
           <label class="ui-label">Client *</label>
           <div class="cb-wrap" id="npClientWrap"></div>
           <div class="ui-field-err" style="display:none;"></div>
         </div>
-        <div class="ui-field">
-          <label class="ui-label">Receipt # (ours)</label>
-          <input class="ui-input" id="npPoNum" value="" placeholder="Assigned on save — PO-600000, PO-600001…" readonly>
-          <div class="ui-hint">Our inbound number. The system assigns it — nothing to type.</div>
-        </div>
+        ${uiField({ id: 'npExtPo', label: 'Customer PO #',
+                    placeholder: 'e.g. 15487',
+                    hint: 'The number on the customer’s paperwork. Ours is assigned automatically on save.' })}
       </div>
       <div class="no-row-3">
         <div class="ui-field">
           <label class="ui-label">Supplier</label>
           <div class="cb-wrap" id="npSupplierWrap"></div>
         </div>
-        ${uiField({ id: 'npExtPo', label: 'Customer PO # (theirs)',
-                    placeholder: 'e.g. 15487',
-                    hint: 'The number on the customer’s paperwork.' })}
         ${uiField({ id: 'npArrival', label: 'Expected arrival', type: 'date' })}
+        ${uiField({ id: 'npNotes', label: 'Notes' })}
       </div>
-      ${uiField({ id: 'npNotes', label: 'Notes' })}
 
       <div class="eo-section">
         <div class="no-section-head">
@@ -482,8 +477,8 @@ async function submitNewPo(m){
       body: JSON.stringify({
         clientId: cid,
         // Always null: OUR receipt number comes from the sequence (migration
-        // 063). The field is read-only in the form, so nothing can end up here
-        // by accident — a customer's PO number in particular.
+        // 063). There is no field for it, so a customer's PO number can never
+        // end up in it by accident.
         poNumber: null,
         supplierName: cbVal('npSupplierWrap') || null,
         // THEIR number, off the customer's paperwork.
