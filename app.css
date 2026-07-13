@@ -224,6 +224,11 @@ body.portal-mode .portal-banner{
   .ord-grid { grid-template-columns: 1fr; }
 }
 
+/* ---- Inventory detail (D4c) ---- */
+.inv-sec{margin-bottom:var(--sp-3);}
+.inv-sec-body{padding:14px 18px;}
+.inv-lp-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+
 /* ---- Case break (D4b) ---- */
 .cb-results{display:none;background:var(--bg);border:1px solid var(--border-h);
   border-radius:var(--radius);margin-bottom:var(--sp-3);max-height:220px;overflow-y:auto;}

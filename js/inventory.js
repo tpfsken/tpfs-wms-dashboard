@@ -1631,168 +1631,157 @@ async function uploadItemAttachments(skuId, files){
 // =============================================================================
 
 async function openInventoryDetail(invId){
-  const modal = document.getElementById('invDetailModal');
-  const body  = document.getElementById('invDetailBody');
-  body.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
-  modal.style.display = 'flex';
+  const m = uiModal({
+    title: 'Inventory',
+    width: 880,
+    body: uiSpinner('Loading…'),
+    actions: [{ label: 'Close' }],
+  });
+  const body = m.el.querySelector('.ui-modal-body');
 
   const d = await apiGet(`/inventory/${invId}`);
-  if(!d){
-    body.innerHTML = '<div style="color:var(--red);padding:24px;text-align:center;">Could not load inventory detail</div>';
-    return;
-  }
+  if(!d){ body.innerHTML = uiError('Could not load this inventory record'); return; }
 
   const inv = d.inventory;
-  document.getElementById('invDetailTitle').textContent =
-    `${inv.sku_code || ''} — ${inv.sku_name || ''}`;
+  m.el.querySelector('.ui-dialog-title').innerHTML =
+    `${uiId(inv.sku_code || '')} <span class="ui-muted">${esc(inv.sku_name || '')}</span>`;
 
-  // Wire Edit Item Master button to jump into the SKU edit modal
-  const editBtn = document.getElementById('invDetailEditItemBtn');
-  editBtn.onclick = () => {
-    closeModal('invDetailModal');
-    openItemFormModal(inv.sku_id);
-  };
+  // Ledger hero — the five facts you open this modal to see.
+  const expSoon = inv.expiry_date && new Date(inv.expiry_date) < new Date(Date.now() + 30 * 864e5);
+  const header =
+    `<div class="ui-tiles">` +
+    uiTile({ label: 'Quantity', value: Number(inv.quantity || 0).toLocaleString(), sub: inv.sku_uom || 'EA' }) +
+    uiTile({ label: 'Status', value: (inv.status || '').toUpperCase(),
+             tone: inv.status === 'damaged' ? 'danger' : inv.status === 'available' ? 'ok' : null }) +
+    uiTile({ label: 'Location', value: inv.location_code || '—', sub: inv.zone_name || '' }) +
+    uiTile({ label: 'License plate', value: inv.lp_number || '—', sub: inv.lp_type || '' }) +
+    uiTile({ label: 'Lot', value: inv.lot_number || '—',
+             tone: expSoon ? 'warn' : null,
+             sub: inv.expiry_date ? 'Exp ' + new Date(inv.expiry_date).toLocaleDateString() : '' }) +
+    `</div>`;
 
-  // ---- HEADER STATS ----
-  const statusColor = inv.status === 'available' ? 'var(--green)'
-                    : inv.status === 'allocated' ? 'var(--blue)'
-                    : inv.status === 'damaged'   ? 'var(--red)'
-                    :                              'var(--amber)';
-
-  const headerHtml = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px;">
-      <div style="background:var(--bg);border-radius:8px;padding:12px;">
-        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Quantity</div>
-        <div style="font-size:22px;font-weight:700;color:var(--blue);margin-top:2px;">${esc(Number(inv.quantity || 0).toLocaleString())}</div>
-        <div style="font-size:11px;color:var(--text2);">${esc(inv.sku_uom || 'EA')}</div>
-      </div>
-      <div style="background:var(--bg);border-radius:8px;padding:12px;">
-        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Status</div>
-        <div style="font-size:14px;font-weight:700;color:${statusColor};margin-top:6px;">${esc((inv.status || '').toUpperCase())}</div>
-      </div>
-      <div style="background:var(--bg);border-radius:8px;padding:12px;">
-        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Location</div>
-        <div style="font-size:14px;font-weight:700;color:var(--text);margin-top:6px;font-family:ui-monospace,monospace;">${esc(inv.location_code || '—')}</div>
-        <div style="font-size:11px;color:var(--text2);">${esc(inv.zone_name || '')}</div>
-      </div>
-      <div style="background:var(--bg);border-radius:8px;padding:12px;">
-        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">License Plate</div>
-        <div style="font-size:13px;font-weight:700;color:var(--blue);margin-top:6px;font-family:ui-monospace,monospace;">${esc(inv.lp_number || '—')}</div>
-        <div style="font-size:11px;color:var(--text2);">${esc(inv.lp_type || '')}</div>
-      </div>
-      <div style="background:var(--bg);border-radius:8px;padding:12px;">
-        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Lot</div>
-        <div style="font-size:13px;font-weight:700;color:var(--blue);margin-top:6px;font-family:ui-monospace,monospace;">${esc(inv.lot_number || '—')}</div>
-        <div style="font-size:11px;color:${inv.expiry_date && new Date(inv.expiry_date) < new Date(Date.now() + 30*864e5) ? 'var(--red)' : 'var(--text2)'};">
-          ${inv.expiry_date ? 'Exp ' + esc(new Date(inv.expiry_date).toLocaleDateString()) : ''}
-        </div>
-      </div>
-    </div>`;
-
-  // ---- ITEM MASTER ----
+  // ---- Item master ----
   const dims = [inv.length_in, inv.width_in, inv.height_in].some(x => x != null)
-    ? `${inv.length_in ?? '—'} × ${inv.width_in ?? '—'} × ${inv.height_in ?? '—'} in`
-    : '—';
-  const hazmatChips = inv.is_hazmat
-    ? `<span class="chip chip-danger" style="font-size:10px;">⚠ HAZMAT${inv.un_number ? ' ' + esc(inv.un_number) : ''}${inv.hazard_class ? ' · Cl ' + esc(inv.hazard_class) : ''}${inv.packing_group ? ' · PG ' + esc(inv.packing_group) : ''}</span>`
-    : '';
-  const itemHtml = `
-    <div class="card" style="margin-bottom:14px;">
-      <div class="card-head"><div class="card-title">Item Master</div><div style="flex:1"></div>${hazmatChips}</div>
-      <div style="padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:12px;">
-        <div><span style="color:var(--text2);">SKU Code:</span> <span style="font-weight:600;">${esc(inv.sku_code || '—')}</span></div>
-        <div><span style="color:var(--text2);">Type:</span> ${esc(inv.sku_type || '—')}</div>
-        <div><span style="color:var(--text2);">Client:</span> ${esc(inv.client_name || '')} <span style="color:var(--muted);">(${esc(inv.client_code || '')})</span></div>
-        <div><span style="color:var(--text2);">UPC:</span> ${esc(inv.upc || '—')}</div>
-        <div><span style="color:var(--text2);">Dimensions:</span> ${esc(dims)}</div>
-        <div><span style="color:var(--text2);">Weight:</span> ${inv.weight_lbs != null ? esc(inv.weight_lbs) + ' lbs' : '—'}</div>
-        <div><span style="color:var(--text2);">NMFC:</span> ${esc(inv.nmfc_code || '—')}</div>
-        <div><span style="color:var(--text2);">Freight Class:</span> ${esc(inv.freight_class || '—')}</div>
+    ? `${inv.length_in ?? '—'} × ${inv.width_in ?? '—'} × ${inv.height_in ?? '—'} in` : '—';
+  const item = `
+    <div class="card inv-sec">
+      <div class="card-head">
+        <div class="card-title">Item master</div>
+        <div style="flex:1"></div>
+        ${inv.is_hazmat ? `<span class="ui-chip ui-chip-danger">⚠ HAZMAT${inv.un_number ? ' ' + esc(inv.un_number) : ''}${inv.hazard_class ? ' · Cl ' + esc(inv.hazard_class) : ''}${inv.packing_group ? ' · PG ' + esc(inv.packing_group) : ''}</span>` : ''}
       </div>
-      ${inv.description ? `<div style="padding:0 18px 14px;font-size:12px;color:var(--text2);"><strong style="color:var(--text);">Description:</strong> ${esc(inv.description)}</div>` : ''}
-      ${inv.special_handling_instructions ? `<div style="margin:0 18px 14px;padding:8px 12px;background:var(--amber-bg);color:var(--amber);font-size:12px;border-left:3px solid var(--amber);">📋 <strong>Special handling:</strong> ${esc(inv.special_handling_instructions)}</div>` : ''}
+      <div class="inv-sec-body">
+        ${uiMeta([
+          { k: 'SKU code', v: uiId(inv.sku_code || '—') },
+          { k: 'Type', v: esc(inv.sku_type || '—') },
+          { k: 'Client', v: `${esc(inv.client_name || '')} <span class="ui-muted">${esc(inv.client_code || '')}</span>` },
+          { k: 'UPC', v: inv.upc ? uiId(inv.upc) : '<span class="ui-muted">—</span>' },
+          { k: 'Dimensions', v: esc(dims) },
+          { k: 'Weight', v: inv.weight_lbs != null ? esc(inv.weight_lbs) + ' lbs' : '<span class="ui-muted">—</span>' },
+          { k: 'NMFC', v: esc(inv.nmfc_code || '—') },
+          { k: 'Freight class', v: esc(inv.freight_class || '—') },
+        ])}
+        ${inv.description ? `<div class="ui-hint" style="margin-top:12px;">${esc(inv.description)}</div>` : ''}
+        ${inv.special_handling_instructions
+          ? `<div class="ui-banner ui-banner-warn" style="margin-top:12px;">📋 <strong>Special handling:</strong> ${esc(inv.special_handling_instructions)}</div>` : ''}
+      </div>
     </div>`;
 
-  // ---- LOT DETAILS ----
-  const lotHtml = inv.lot_id ? `
-    <div class="card" style="margin-bottom:14px;">
-      <div class="card-head"><div class="card-title">Lot Detail</div></div>
-      <div style="padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:12px;">
-        <div><span style="color:var(--text2);">Lot Number:</span> <span style="font-weight:600;color:var(--blue);font-family:ui-monospace,monospace;">${esc(inv.lot_number || '—')}</span></div>
-        <div><span style="color:var(--text2);">Expiry Date:</span> ${inv.expiry_date ? esc(new Date(inv.expiry_date).toLocaleDateString()) : '—'}</div>
-        <div><span style="color:var(--text2);">Manufacture Date:</span> ${inv.manufacture_date ? esc(new Date(inv.manufacture_date).toLocaleDateString()) : '—'}</div>
+  // ---- Lot ----
+  const lot = inv.lot_id ? `
+    <div class="card inv-sec">
+      <div class="card-head"><div class="card-title">Lot</div></div>
+      <div class="inv-sec-body">
+        ${uiMeta([
+          { k: 'Lot number', v: uiId(inv.lot_number || '—') },
+          { k: 'Expiry', v: inv.expiry_date
+              ? (expSoon ? `<span class="ui-chip ui-chip-warn">${esc(new Date(inv.expiry_date).toLocaleDateString())}</span>`
+                         : uiId(new Date(inv.expiry_date).toLocaleDateString()))
+              : '<span class="ui-muted">—</span>' },
+          { k: 'Manufactured', v: inv.manufacture_date
+              ? uiId(new Date(inv.manufacture_date).toLocaleDateString()) : '<span class="ui-muted">—</span>' },
+        ])}
       </div>
     </div>` : '';
 
-  // ---- LP FAMILY (parent + children) ----
-  const familyHtml = (d.parent_lp || (d.child_lps && d.child_lps.length)) ? `
-    <div class="card" style="margin-bottom:14px;">
-      <div class="card-head"><div class="card-title">LP Family</div></div>
-      <div style="padding:14px 18px;font-size:12px;">
-        ${d.parent_lp ? `
-          <div style="margin-bottom:8px;">
-            <span style="color:var(--text2);">Parent LP (this is a case-break child of):</span>
-            <span class="lp-badge lp-original" style="margin-left:8px;">${esc(d.parent_lp.lp_number)}</span>
-          </div>` : ''}
-        ${d.child_lps && d.child_lps.length ? `
-          <div>
-            <span style="color:var(--text2);">Child LPs (this LP was case-broken into):</span>
-            <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;">
-              ${d.child_lps.map(c => `<span class="lp-badge ${c.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(c.lp_number)}</span>`).join('')}
-            </div>
-          </div>` : ''}
+  // ---- LP family (case-break lineage) ----
+  const family = (d.parent_lp || d.child_lps?.length) ? `
+    <div class="card inv-sec">
+      <div class="card-head"><div class="card-title">LP family</div></div>
+      <div class="inv-sec-body">
+        ${d.parent_lp ? `<div style="margin-bottom:10px;">
+          <span class="ui-hint">Case-break child of</span>
+          <span class="lp-badge lp-original" style="margin-left:8px;">${esc(d.parent_lp.lp_number)}</span></div>` : ''}
+        ${d.child_lps?.length ? `<div>
+          <span class="ui-hint">Broken into</span>
+          <div class="inv-lp-list">${d.child_lps.map(c =>
+            `<span class="lp-badge ${c.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(c.lp_number)}</span>`).join('')}</div>
+        </div>` : ''}
       </div>
     </div>` : '';
 
-  // ---- INBOUND ORIGIN ----
-  const inboundHtml = d.inbound ? `
-    <div class="card" style="margin-bottom:14px;">
-      <div class="card-head"><div class="card-title">Inbound Origin</div></div>
-      <div style="padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:12px;">
-        <div><span style="color:var(--text2);">Received:</span> ${d.inbound.received_at ? esc(new Date(d.inbound.received_at).toLocaleString()) : '—'}</div>
-        <div><span style="color:var(--text2);">Received By:</span> ${esc(d.inbound.received_by_name || d.inbound.received_by_email || '—')}</div>
-        <div><span style="color:var(--text2);">PO Number:</span> ${d.inbound.po_number ? `<span style="font-weight:600;color:var(--blue);">${esc(d.inbound.po_number)}</span>` : '—'}</div>
-        <div><span style="color:var(--text2);">Customer PO:</span> ${esc(d.inbound.external_po || '—')}</div>
-        <div><span style="color:var(--text2);">Supplier:</span> ${esc(d.inbound.supplier_name || '—')}</div>
-        <div><span style="color:var(--text2);">Received Qty:</span> ${esc(d.inbound.received_qty || 0)}</div>
-        <div><span style="color:var(--text2);">Condition:</span> ${esc(d.inbound.condition || '—')}</div>
-        ${d.inbound.notes ? `<div style="grid-column:1/-1;"><span style="color:var(--text2);">Notes:</span> ${esc(d.inbound.notes)}</div>` : ''}
+  // ---- Inbound origin ----
+  const inbound = d.inbound ? `
+    <div class="card inv-sec">
+      <div class="card-head"><div class="card-title">Inbound origin</div></div>
+      <div class="inv-sec-body">
+        ${uiMeta([
+          { k: 'Received', v: d.inbound.received_at ? uiId(fmtTimeShort(d.inbound.received_at)) : '<span class="ui-muted">—</span>' },
+          { k: 'Received by', v: esc(d.inbound.received_by_name || d.inbound.received_by_email || '—') },
+          { k: 'PO number', v: d.inbound.po_number ? uiId(d.inbound.po_number) : '<span class="ui-muted">—</span>' },
+          { k: 'Customer PO', v: esc(d.inbound.external_po || '—') },
+          { k: 'Supplier', v: esc(d.inbound.supplier_name || '—') },
+          { k: 'Received qty', v: uiNum(d.inbound.received_qty || 0) },
+          { k: 'Condition', v: esc(d.inbound.condition || '—') },
+        ])}
+        ${d.inbound.notes ? `<div class="ui-hint" style="margin-top:12px;">${esc(d.inbound.notes)}</div>` : ''}
       </div>
     </div>` : `
-    <div class="card" style="margin-bottom:14px;">
-      <div class="card-head"><div class="card-title">Inbound Origin</div></div>
-      <div style="padding:14px 18px;color:var(--muted);font-size:12px;">No receiving record found for this LP. May have been entered directly or pre-existed before this WMS install.</div>
+    <div class="card inv-sec">
+      <div class="card-head"><div class="card-title">Inbound origin</div></div>
+      <div class="inv-sec-body">${uiEmpty('No receiving record for this LP — entered directly, or it predates this WMS.')}</div>
     </div>`;
 
-  // ---- CURRENT ALLOCATIONS ----
-  const allocHtml = d.current_allocations && d.current_allocations.length ? `
-    <div class="card" style="margin-bottom:14px;">
-      <div class="card-head"><div class="card-title">Current Allocations</div><div style="font-size:11px;color:var(--text2);margin-left:8px;">orders holding this LP</div></div>
-      <table class="data-table" style="margin:0;font-size:12px;">
-        <thead><tr><th>Order</th><th>Ship To</th><th>Required Ship</th><th class="right">Qty</th><th>Status</th></tr></thead>
-        <tbody>
-          ${d.current_allocations.map(a => `
-            <tr class="js-inv-alloc-row" data-order-id="${esc(a.order_id)}" style="cursor:pointer;">
-              <td style="font-weight:600;color:var(--blue);">${esc(a.order_number || '')}</td>
-              <td style="color:var(--text2);">${esc(a.ship_to_name || '—')}</td>
-              <td>${a.required_ship_date ? esc(new Date(a.required_ship_date).toLocaleDateString()) : '—'}</td>
-              <td class="right">${esc(a.quantity || 0)}</td>
-              <td><span class="chip ${a.allocation_status === 'PICKED' ? 'chip-success' : 'chip-active'}">${esc(a.allocation_status)}</span> · ${esc(a.order_status || '')}</td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
+  // ---- Current allocations ----
+  const allocs = d.current_allocations || [];
+  const alloc = allocs.length ? `
+    <div class="card inv-sec">
+      <div class="card-head">
+        <div class="card-title">Current allocations</div>
+        <div class="ui-hint" style="margin-left:8px;">orders holding this LP</div>
+      </div>
+      <div id="invAllocWrap"></div>
     </div>` : '';
 
-  body.innerHTML = headerHtml + itemHtml + lotHtml + familyHtml + inboundHtml + allocHtml;
+  body.innerHTML = header + item + lot + family + inbound + alloc;
 
-  // Wire allocation rows -> jump to that order
-  body.querySelectorAll('.js-inv-alloc-row').forEach(row => {
-    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
-    row.addEventListener('mouseout',  () => row.style.background = '');
-    row.addEventListener('click', () => {
-      closeModal('invDetailModal');
-      navigateTo('orders');
-      setTimeout(() => openOrderDetail(row.dataset.orderId), 100);
+  if(allocs.length){
+    uiTable('invAllocWrap', {
+      columns: [
+        { key: 'order_number', label: 'Order', mono: true },
+        { key: 'ship_to_name', label: 'Ship to' },
+        { key: '_req', label: 'Required ship', render: a => a.required_ship_date
+            ? uiId(new Date(a.required_ship_date).toLocaleDateString()) : '<span class="ui-muted">—</span>' },
+        { key: 'quantity', label: 'Qty', num: true },
+        { key: '_st', label: 'Status', render: a =>
+            `${uiChip(a.allocation_status)} <span class="ui-muted">${esc(a.order_status || '')}</span>` },
+      ],
+      rows: allocs, rowKey: 'order_id',
+      onRowClick: (a) => {
+        m.close();
+        navigateTo('orders');
+        openOrderDetail(a.order_id);
+      },
     });
-  });
+  }
+
+  // Ops can jump straight from "what is this" to "fix the item master".
+  if(!(typeof isPortalMode === 'function' && isPortalMode()) && inv.sku_id){
+    const acts = m.el.querySelector('.ui-dialog-actions');
+    const btn = document.createElement('button');
+    btn.className = 'ui-btn';
+    btn.textContent = 'Edit item master';
+    btn.addEventListener('click', () => { m.close(); openItemFormModal(inv.sku_id); });
+    acts.insertBefore(btn, acts.firstChild);
+  }
 }
