@@ -21,6 +21,15 @@ const ORD_COLS = [
   { key: 'carrier_code', label: 'Carrier' },
   { key: 'line_count', label: 'Lines', num: true },
   { key: 'total_units', label: 'Units', num: true },
+  // Short date to keep the row dense; full timestamp on hover.
+  { key: '_created', label: 'Created', render: o => {
+      if(!o.created_at) return '<span class="ui-muted">—</span>';
+      const d = new Date(o.created_at);
+      const thisYear = d.getFullYear() === new Date().getFullYear();
+      const short = d.toLocaleDateString('en-US',
+        thisYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: '2-digit' });
+      return `<span class="ui-id" title="${esc(d.toLocaleString())}">${esc(short)}</span>`;
+    } },
   { key: '_shipBy', label: 'Ship by', render: o => {
       if (!o.required_ship_date) return '<span class="ui-muted">—</span>';
       const d = new Date(o.required_ship_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
