@@ -877,58 +877,29 @@
           <div style="flex:1"></div>
           <div style="font-size:12px;color:var(--muted);">search SKU or lot · click row to follow LPs</div>
         </div>
-        <div style="padding:20px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;">
-          <div class="form-group ops-only" style="margin-bottom:0;min-width:240px;max-width:320px;">
-            <label class="form-label">Client</label>
+        <div class="rep-search">
+          <div class="ui-field ops-only" style="min-width:240px;max-width:320px;margin-bottom:0;">
+            <label class="ui-label">Client</label>
             <div class="cb-wrap" id="reportsClientWrap"></div>
           </div>
-          <div class="form-group" style="margin-bottom:0;flex:1;min-width:180px;max-width:240px;">
-            <label class="form-label">SKU Code</label>
-            <input type="text" class="form-input" id="reportSkuInput" placeholder="BAG-001, partial OK" onkeydown="if(event.key==='Enter')runItemHistory()">
+          <div class="ui-field" style="flex:1;min-width:180px;max-width:240px;margin-bottom:0;">
+            <label class="ui-label" for="reportSkuInput">SKU code</label>
+            <input type="text" class="ui-input" id="reportSkuInput" placeholder="BAG-001 — partial is fine" onkeydown="if(event.key==='Enter')runItemHistory()">
           </div>
-          <div class="form-group" style="margin-bottom:0;flex:1;min-width:180px;max-width:240px;">
-            <label class="form-label">Lot Number</label>
-            <input type="text" class="form-input" id="reportLotInput" placeholder="L2024-04, partial OK" onkeydown="if(event.key==='Enter')runItemHistory()">
+          <div class="ui-field" style="flex:1;min-width:180px;max-width:240px;margin-bottom:0;">
+            <label class="ui-label" for="reportLotInput">Lot number</label>
+            <input type="text" class="ui-input" id="reportLotInput" placeholder="L2024-04 — partial is fine" onkeydown="if(event.key==='Enter')runItemHistory()">
           </div>
-          <button class="btn btn-primary" onclick="runItemHistory()">Search</button>
+          <button class="ui-btn ui-btn-primary" onclick="runItemHistory()">Search</button>
           <div style="flex:1"></div>
-          <div style="font-size:11px;color:var(--muted);">Leave blank to see recent activity</div>
+          <div class="ui-hint">Leave blank for recent activity</div>
         </div>
-        <div id="itemHistoryError" style="color:var(--red);font-size:13px;padding:0 20px 12px;"></div>
       </div>
 
-      <div id="itemHistoryEmpty" class="card" style="padding:40px;text-align:center;color:var(--muted);font-size:14px;">
-        Loading recent activity…
-      </div>
+      <div id="ihSummary" class="ui-tiles"></div>
 
-      <div id="itemHistoryCard" class="card" style="display:none;">
-        <div class="grid-3" style="grid-template-columns:repeat(6, 1fr);gap:0;border-bottom:1px solid var(--border);">
-          <div style="padding:14px 18px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Items</div><div style="font-size:22px;font-weight:700;color:var(--blue);" id="ihSumItems">0</div></div>
-          <div style="padding:14px 18px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Received</div><div style="font-size:22px;font-weight:700;" id="ihSumReceived">0</div></div>
-          <div style="padding:14px 18px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Picked</div><div style="font-size:22px;font-weight:700;color:var(--amber);" id="ihSumPicked">0</div></div>
-          <div style="padding:14px 18px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Shipped</div><div style="font-size:22px;font-weight:700;color:var(--green);" id="ihSumShipped">0</div></div>
-          <div style="padding:14px 18px;border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">On Hand</div><div style="font-size:22px;font-weight:700;" id="ihSumOnHand">0</div></div>
-          <div style="padding:14px 18px;"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">LPs</div><div style="font-size:22px;font-weight:700;color:var(--purple);" id="ihSumLps">0</div></div>
-        </div>
-        <div style="overflow:auto;">
-          <table class="data-table">
-            <thead><tr>
-              <th>SKU</th>
-              <th>Client</th>
-              <th>Lot</th>
-              <th>Expiry</th>
-              <th class="right">Received</th>
-              <th class="right">Picked</th>
-              <th class="right">Shipped</th>
-              <th class="right">On Hand</th>
-              <th class="right">Allocated</th>
-              <th class="right">LPs</th>
-              <th>Last Activity</th>
-              <th></th>
-            </tr></thead>
-            <tbody id="itemHistoryBody"></tbody>
-          </table>
-        </div>
+      <div class="card">
+        <div style="overflow:auto;" id="itemHistoryWrap"></div>
       </div>
     </div>
 

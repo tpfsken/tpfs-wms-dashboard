@@ -45,33 +45,24 @@ function loadReports(){
 
 function renderReportsIndex(){
   const grid = document.getElementById('reportsIndexGrid');
+  grid.className = 'portal-grid';   // same card-hub grid as the portal home
   grid.innerHTML = REPORTS_CATALOG.map(r => {
     const live = r.status === 'live';
-    const opacity = live ? '1' : '.55';
-    const cursor  = live ? 'cursor:pointer;' : 'cursor:default;';
-    const badge   = live
-      ? `<span class="chip chip-success" style="font-size:10px;">Live</span>`
-      : `<span class="chip chip-new" style="font-size:10px;">Coming soon</span>`;
     return `
-      <div class="card js-report-card" data-id="${esc(r.id)}"
-           style="padding:20px;${cursor}opacity:${opacity};transition:border-color .15s;">
-        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;">
-          <div style="font-size:24px;line-height:1;">${esc(r.icon || '📄')}</div>
-          <div style="flex:1;">
-            <div style="font-size:15px;font-weight:700;">${esc(r.title)}</div>
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;">Phase ${esc(r.phase || '')}</div>
-          </div>
-          ${badge}
-        </div>
-        ${r.desc ? `<div style="font-size:13px;color:var(--text2);line-height:1.5;">${esc(r.desc)}</div>` : ''}
-      </div>`;
+      <button class="portal-card js-report-card${live ? '' : ' report-card-soon'}"
+              data-id="${esc(r.id)}" ${live ? '' : 'disabled'}>
+        <span class="portal-card-icon">${esc(r.icon || '📄')}</span>
+        <span class="portal-card-title">${esc(r.title)}</span>
+        <span class="portal-card-desc">${esc(r.desc || '')}</span>
+        <span style="margin-top:8px;">${live
+          ? '<span class="ui-chip ui-chip-ok">LIVE</span>'
+          : '<span class="ui-chip ui-chip-neutral">COMING SOON</span>'}</span>
+      </button>`;
   }).join('');
 
   grid.querySelectorAll('.js-report-card').forEach(card => {
     const r = REPORTS_CATALOG.find(x => x.id === card.dataset.id);
     if(!r || r.status !== 'live') return;
-    card.addEventListener('mouseover', () => card.style.borderColor = 'var(--blue)');
-    card.addEventListener('mouseout',  () => card.style.borderColor = '');
     card.addEventListener('click', () => r.open());
   });
 }
@@ -93,7 +84,6 @@ async function openItemHistoryReport(){
 
   document.getElementById('itemHistoryView').style.display = 'block';
   document.getElementById('traceView').style.display = 'none';
-  document.getElementById('itemHistoryError').textContent = '';
 
   // Phase 3: in portal mode the client picker is hidden (.ops-only on the
   // form-group in index.html) and /clients is requireOps anyway, so skip
@@ -128,108 +118,84 @@ async function openItemHistoryReport(){
   document.getElementById('reportSkuInput').focus?.();
 }
 
+const IH_COLS = [
+  { key: '_sku', label: 'SKU', sortValue: r => r.sku_code, render: r =>
+      `<div>${uiId(r.sku_code)}</div><div class="ui-hint">${esc(r.sku_name || '')}</div>` },
+  { key: 'client_code', label: 'Client', mono: true },
+  { key: '_lot', label: 'Lot', sortValue: r => r.lot_number, render: r => {
+      if(!r.lot_number) return '<span class="ui-muted">—</span>';
+      const soon = r.expiry_date && new Date(r.expiry_date) < new Date(Date.now() + 30 * 864e5);
+      return soon
+        ? `<span class="ui-chip ui-chip-warn">${esc(r.lot_number)}</span>`
+        : uiId(r.lot_number);
+    } },
+  { key: '_exp', label: 'Expiry', sortValue: r => r.expiry_date, render: r => r.expiry_date
+      ? uiId(new Date(r.expiry_date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }))
+      : '<span class="ui-muted">—</span>' },
+  { key: 'total_received', label: 'Received', num: true },
+  { key: 'total_picked', label: 'Picked', num: true },
+  { key: 'total_shipped', label: 'Shipped', num: true },
+  { key: 'on_hand', label: 'On hand', num: true },
+  { key: 'allocated_qty', label: 'Allocated', num: true },
+  { key: '_lps', label: 'LPs', num: true, sortValue: r => Number(r.lp_count || 0), render: r =>
+      `<span title="${esc(r.lp_original_count)} original / ${esc(r.lp_child_count)} child · ${esc(r.lp_active_count)} active / ${esc(r.lp_empty_count)} empty / ${esc(r.lp_shipped_count)} shipped">${uiNum(r.lp_count)}</span>` },
+  { key: '_last', label: 'Last activity', sortValue: r => r.last_activity_at, render: r => r.last_activity_at
+      ? uiId(new Date(r.last_activity_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))
+      : '<span class="ui-muted">—</span>' },
+];
+
 async function runItemHistory(){
   const sku = document.getElementById('reportSkuInput').value.trim();
   const lot = document.getElementById('reportLotInput').value.trim();
-  const err = document.getElementById('itemHistoryError');
-  err.textContent = '';
 
-  let url = '/reports/item-history?';
   const qs = [];
   if(sku) qs.push(`skuCode=${encodeURIComponent(sku)}`);
   if(lot) qs.push(`lotNumber=${encodeURIComponent(lot)}`);
   if(_reportsClient) qs.push(`clientId=${encodeURIComponent(_reportsClient)}`);
-  url += qs.join('&');
 
-  document.getElementById('itemHistoryEmpty').style.display = 'block';
-  document.getElementById('itemHistoryEmpty').textContent = 'Loading…';
-  document.getElementById('itemHistoryCard').style.display = 'none';
-
-  const data = await apiGet(url);
-  if(!data){ err.textContent = 'Search failed (network or auth error)'; return; }
+  uiTableLoading('itemHistoryWrap', IH_COLS);
+  const data = await apiGet(`/reports/item-history?${qs.join('&')}`);
+  if(data === null) return uiTableError('itemHistoryWrap', IH_COLS, 'Search failed', runItemHistory);
   _itemHistory = data;
   renderItemHistory();
 }
 
 function renderItemHistory(){
   const rows = _itemHistory?.rows || [];
-  const card  = document.getElementById('itemHistoryCard');
-  const empty = document.getElementById('itemHistoryEmpty');
-  const tbody = document.getElementById('itemHistoryBody');
 
-  if(!rows.length){
-    card.style.display = 'none';
-    empty.style.display = 'block';
-    empty.textContent = 'No activity matches your search.';
-    return;
-  }
-  card.style.display = 'block';
-  empty.style.display = 'none';
+  // Recall totals. On a recall these are the numbers someone reads down the
+  // phone — "how much went out" is the one that matters, so it leads.
+  const t = rows.reduce((a, r) => ({
+    received: a.received + Number(r.total_received || 0),
+    picked:   a.picked   + Number(r.total_picked   || 0),
+    shipped:  a.shipped  + Number(r.total_shipped  || 0),
+    onHand:   a.onHand   + Number(r.on_hand        || 0),
+    lps:      a.lps      + Number(r.lp_count       || 0),
+  }), { received: 0, picked: 0, shipped: 0, onHand: 0, lps: 0 });
 
-  // Top-level totals
-  const total = {
-    received: 0, picked: 0, shipped: 0, onHand: 0, lps: 0, items: rows.length,
-  };
-  rows.forEach(r => {
-    total.received += Number(r.total_received || 0);
-    total.picked   += Number(r.total_picked   || 0);
-    total.shipped  += Number(r.total_shipped  || 0);
-    total.onHand   += Number(r.on_hand        || 0);
-    total.lps      += Number(r.lp_count       || 0);
-  });
-  document.getElementById('ihSumItems').textContent    = String(total.items);
-  document.getElementById('ihSumReceived').textContent = String(total.received);
-  document.getElementById('ihSumPicked').textContent   = String(total.picked);
-  document.getElementById('ihSumShipped').textContent  = String(total.shipped);
-  document.getElementById('ihSumOnHand').textContent   = String(total.onHand);
-  document.getElementById('ihSumLps').textContent      = String(total.lps);
+  const strip = document.getElementById('ihSummary');
+  strip.className = 'ui-tiles';
+  strip.innerHTML = rows.length
+    ? uiTile({ label: 'Shipped out', value: t.shipped.toLocaleString(),
+               tone: t.shipped > 0 ? 'warn' : null,
+               sub: t.shipped > 0 ? 'already left the building' : 'nothing shipped' }) +
+      uiTile({ label: 'Still on hand', value: t.onHand.toLocaleString(),
+               sub: 'can still be quarantined' }) +
+      uiTile({ label: 'Received', value: t.received.toLocaleString() }) +
+      uiTile({ label: 'Picked', value: t.picked.toLocaleString() }) +
+      uiTile({ label: 'Items', value: rows.length }) +
+      uiTile({ label: 'License plates', value: t.lps.toLocaleString() })
+    : '';
 
-  tbody.innerHTML = rows.map(r => {
-    const lastAct = r.last_activity_at
-      ? new Date(r.last_activity_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
-      : '—';
-    const expiringSoon = r.expiry_date && new Date(r.expiry_date) < new Date(Date.now() + 30 * 864e5);
-    const lotCell = r.lot_number
-      ? `<span style="color:${expiringSoon ? 'var(--red)' : 'var(--blue)'};font-weight:600;">${esc(r.lot_number)}</span>`
-      : '<span style="color:var(--muted);">—</span>';
-    const expiry = r.expiry_date
-      ? new Date(r.expiry_date).toLocaleDateString('en-US', {month:'short', year:'2-digit'})
-      : '—';
-    const lpBreakdown = `<span title="${esc(r.lp_original_count)} original / ${esc(r.lp_child_count)} child · ${esc(r.lp_active_count)} active / ${esc(r.lp_empty_count)} empty / ${esc(r.lp_shipped_count)} shipped">${esc(r.lp_count)}</span>`;
-
-    return `
-      <tr class="js-item-row"
-          data-sku-id="${esc(r.sku_id)}"
-          data-sku-code="${esc(r.sku_code)}"
-          data-sku-name="${esc(r.sku_name || '')}"
-          data-lot-id="${esc(r.lot_id || '')}"
-          data-lot-number="${esc(r.lot_number || '')}"
-          data-client-name="${esc(r.client_name || '')}"
-          style="cursor:pointer;">
-        <td><div style="font-weight:600;color:var(--blue);">${esc(r.sku_code)}</div><div style="font-size:11px;color:var(--text2);">${esc(r.sku_name || '')}</div></td>
-        <td>${esc(r.client_code || '—')}</td>
-        <td>${lotCell}</td>
-        <td style="font-size:12px;color:var(--text2);">${esc(expiry)}</td>
-        <td class="right" style="color:var(--text2);">${esc(r.total_received)}</td>
-        <td class="right" style="color:var(--amber);">${esc(r.total_picked)}</td>
-        <td class="right" style="color:var(--green);">${esc(r.total_shipped)}</td>
-        <td class="right" style="font-weight:600;">${esc(r.on_hand)}</td>
-        <td class="right" style="color:var(--text2);">${esc(r.allocated_qty)}</td>
-        <td class="right">${lpBreakdown}</td>
-        <td style="font-size:12px;color:var(--text2);">${esc(lastAct)}</td>
-        <td><span style="color:var(--blue);font-size:11px;font-weight:600;">Trace ▸</span></td>
-      </tr>`;
-  }).join('');
-
-  tbody.querySelectorAll('.js-item-row').forEach(row => {
-    row.addEventListener('click', () => openTraceFromItem({
-      skuId: row.dataset.skuId,
-      skuCode: row.dataset.skuCode,
-      skuName: row.dataset.skuName,
-      lotId: row.dataset.lotId || null,
-      lotNumber: row.dataset.lotNumber || null,
-      clientName: row.dataset.clientName,
-    }));
+  uiTable('itemHistoryWrap', {
+    columns: IH_COLS, rows, rowKey: '_k',
+    sortable: true,
+    onRowClick: r => openTraceFromItem({
+      skuId: r.sku_id, skuCode: r.sku_code, skuName: r.sku_name,
+      lotId: r.lot_id || null, lotNumber: r.lot_number || null,
+      clientName: r.client_name,
+    }),
+    empty: 'No activity matches that search.',
   });
 }
 

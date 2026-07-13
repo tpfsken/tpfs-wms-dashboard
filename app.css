@@ -236,6 +236,11 @@ body.portal-mode .portal-banner{
   text-transform:uppercase;color:var(--muted);padding:8px 12px 4px;
   border-top:1px solid var(--border);margin-top:4px;}
 
+/* ---- Reports (D6b) ---- */
+.rep-search{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:16px 20px;}
+.report-card-soon{opacity:.5;cursor:default;}
+.report-card-soon:hover{border-color:var(--border);transform:none;}
+
 /* ---- User certifications (D6a) ---- */
 .cert-card{border:1px solid var(--border);border-radius:var(--radius);
   padding:12px 14px;margin-bottom:8px;background:var(--panel);}
