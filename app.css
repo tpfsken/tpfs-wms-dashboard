@@ -931,11 +931,20 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
    The overlay used to be z-index:1000 — BELOW the picker shell. Native dialogs
    masked it (the browser floats those above everything), so nothing broke until
    the picker was migrated. */
+/* The overlay itself scrolls. Without this, a dialog taller than the viewport has
+   its bottom — including the action buttons — clipped off-screen and UNREACHABLE,
+   because a position:fixed element can't be scrolled. Never showed on desktop
+   (always room); on a phone it made Confirm impossible to reach. */
 .ui-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10050;
-  display:flex;align-items:flex-start;justify-content:center;padding:12vh var(--sp-4) var(--sp-4);}
+  display:flex;align-items:flex-start;justify-content:center;padding:12vh var(--sp-4) var(--sp-4);
+  overflow-y:auto;-webkit-overflow-scrolling:touch;}
+/* Cap the height and let the BODY scroll, so the title and the action buttons stay
+   pinned and visible no matter how long the content is. */
 .ui-dialog,.ui-modal{background:var(--panel);border:1px solid var(--border-h);
   border-radius:12px;box-shadow:0 24px 64px rgba(0,0,0,.5);width:100%;max-width:440px;
-  padding:var(--sp-5) var(--sp-5) var(--sp-4);animation:uiPop .14s ease-out;}
+  padding:var(--sp-5) var(--sp-5) var(--sp-4);animation:uiPop .14s ease-out;
+  display:flex;flex-direction:column;max-height:calc(100vh - 16vh);max-height:calc(100dvh - 16vh);}
+.ui-dialog .ui-dialog-body{overflow-y:auto;}
 .ui-modal{max-width:520px;padding:0;}
 @keyframes uiPop{from{transform:translateY(-6px);opacity:0}to{transform:none;opacity:1}}
 .ui-dialog-title{font-size:var(--fs-emph);font-weight:700;}
@@ -949,6 +958,32 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .ui-modal-body{padding:var(--sp-4) var(--sp-5);max-height:65vh;overflow:auto;}
 .ui-modal .ui-dialog-actions{padding:var(--sp-3) var(--sp-5) var(--sp-4);margin-top:0;
   border-top:1px solid var(--border);}
+
+/* ---------------------------------------------------------------------------
+   TOUCH / SMALL SCREEN — the picker and floor mode run on a tablet held in one
+   hand, often with a scanner in the other. Desktop dialog metrics (13px body,
+   compact side-by-side buttons) are unreadable and hard to hit there.
+   Applies on narrow screens OR any coarse pointer, so a big warehouse tablet
+   in landscape still gets touch sizing.
+   --------------------------------------------------------------------------- */
+@media (max-width:768px), (pointer:coarse){
+  /* Sit the dialog nearer the top — 12vh of dead space is a lot of a phone. */
+  .ui-overlay{padding:5vh var(--sp-3) var(--sp-3);align-items:flex-start;}
+  .ui-dialog,.ui-modal{max-width:100%;max-height:calc(100vh - 8vh);
+    max-height:calc(100dvh - 8vh);border-radius:14px;}
+  .ui-dialog-title{font-size:19px;}
+  .ui-dialog-body{font-size:15px;line-height:1.5;}
+  .ui-modal-body{max-height:none;}   /* the dialog caps height now, not the body */
+  /* Stack the actions full-width. Side-by-side buttons on a phone put Confirm
+     and Cancel a thumb-width apart — on a pick confirmation that is a real
+     mis-tap risk. Primary sits on top (column-reverse) so it's under the thumb. */
+  .ui-dialog-actions{flex-direction:column-reverse;gap:10px;margin-top:var(--sp-4);}
+  .ui-dialog-actions .ui-btn{width:100%;min-height:48px;font-size:16px;
+    padding:13px 16px;justify-content:center;}
+  /* 16px on inputs — anything smaller makes iOS auto-zoom the page on focus,
+     which is what leaves the picker panning around a shifted screen. */
+  .ui-input,.ui-select,.ui-field input,.ui-field select,.ui-field textarea{font-size:16px;min-height:44px;}
+}
 
 /* ---- form kit ---- */
 .ui-field{margin-bottom:var(--sp-3);}
