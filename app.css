@@ -920,7 +920,18 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .ui-btn-danger:hover{background:#d63b3b;}
 
 /* ---- overlay / dialog / modal ---- */
-.ui-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;
+/* LAYERING — read this before changing any z-index.
+   The design-system overlay MUST sit above every app shell, or a dialog opened
+   from one is invisible and the screen just looks frozen:
+       .ui-overlay   10050   dialogs + modals
+       #uiToastHost  10100   toasts (always above a dialog)
+       legacy modals 10000–10010 (the few that remain)
+       #pickerShell   9999   full-screen picker takeover
+       #floorShell    9990
+   The overlay used to be z-index:1000 — BELOW the picker shell. Native dialogs
+   masked it (the browser floats those above everything), so nothing broke until
+   the picker was migrated. */
+.ui-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10050;
   display:flex;align-items:flex-start;justify-content:center;padding:12vh var(--sp-4) var(--sp-4);}
 .ui-dialog,.ui-modal{background:var(--panel);border:1px solid var(--border-h);
   border-radius:12px;box-shadow:0 24px 64px rgba(0,0,0,.5);width:100%;max-width:440px;
@@ -1019,7 +1030,9 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .ui-field-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3);}
 
 /* ---- toasts ---- */
-#uiToastHost{position:fixed;top:16px;right:16px;z-index:1100;display:flex;
+/* Above .ui-overlay (10050) — a toast reporting the result of a dialog action
+   must not be hidden by the dialog it came from. */
+#uiToastHost{position:fixed;top:16px;right:16px;z-index:10100;display:flex;
   flex-direction:column;gap:8px;align-items:flex-end;}
 .ui-toast{background:var(--panel);border:1px solid var(--border-h);border-radius:10px;
   padding:10px 16px;font-size:13px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.4);

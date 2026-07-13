@@ -1243,6 +1243,10 @@
           <textarea id="pickerOvReason" rows="3" placeholder="e.g. The label says PROPANE but the SKU master is misspelled PROPAINE — same product." style="width:100%;padding:14px;font-size:16px;background:#1a1a1a;color:#fff;border:2px solid #444;border-radius:10px;resize:vertical;min-height:80px;"></textarea>
           <div style="font-size:11px;opacity:.6;margin-top:4px;">Minimum 10 characters. This is logged and audited.</div>
         </div>
+        <!-- Validation errors land here. A toast would be wrong: this overlay
+             sits inside the picker shell and the picker is looking at the form,
+             not the corner of the screen. -->
+        <div id="pickerOvErr" class="picker-ov-err" style="display:none;"></div>
         <button id="pickerOvNextBtn" style="width:100%;padding:18px;background:#d6a700;color:#000;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;">Continue → PIN</button>
       </div>
 

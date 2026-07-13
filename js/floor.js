@@ -148,7 +148,7 @@ async function loadFloorPickList(){
     const lockedByMe    = o.picking_user_id && o.picking_user_id === myId && lockFresh;
 
     const lockBanner = lockedByOther
-      ? `<div style="margin-top:8px;padding:6px 10px;background:#3a2c00;color:#ffd591;border-radius:6px;font-size:12px;font-weight:600;">🔒 Picking by ${esc(o.picking_user_name || 'another user')}</div>`
+      ? `<div style="margin-top:8px;padding:6px 10px;background:#3a2c00;color:#ffd591;border-radius:6px;font-size:12px;font-weight:600;">Locked · picking by ${esc(o.picking_user_name || 'another user')}</div>`
       : lockedByMe
         ? `<div style="margin-top:8px;padding:6px 10px;background:#1f4d2e;color:#a3ffb3;border-radius:6px;font-size:12px;font-weight:600;">▶ You're picking this — tap to resume</div>`
         : '';
@@ -160,7 +160,7 @@ async function loadFloorPickList(){
           <div style="font-size:15px;font-weight:700;color:var(--blue);">${esc(o.order_number || '')}</div>
           <span class="chip ${o.status === 'PICKING' ? 'chip-active' : 'chip-warning'}" style="font-size:10px;">${esc(o.status)}</span>
           <div style="flex:1"></div>
-          <div style="font-size:18px;color:var(--text2);">${lockedByOther ? '🔒' : '›'}</div>
+          <div style="font-size:18px;color:var(--text2);">${lockedByOther ? '•' : '›'}</div>
         </div>
         <div style="font-size:13px;color:var(--text2);margin-bottom:4px;">${esc(o.customer_name || o.client_name || '')}</div>
         <div style="font-size:12px;color:var(--text2);display:flex;gap:10px;flex-wrap:wrap;">
@@ -205,7 +205,7 @@ async function loadFloorInbound(){
   if(!rows.length){
     body.innerHTML = `
       <div style="padding:48px 18px;text-align:center;">
-        <div style="font-size:48px;margin-bottom:12px;">📭</div>
+        <div style="font-size:48px;margin-bottom:12px;">—</div>
         <div style="font-size:16px;font-weight:600;">No open receipts</div>
         <div style="font-size:13px;color:var(--text2);margin-top:6px;">Create a new receipt on the desktop view to start receiving.</div>
       </div>`;
@@ -225,7 +225,7 @@ async function loadFloorInbound(){
       </div>`;
   }).join('') + `
     <div style="margin-top:14px;padding:14px;background:var(--bg);border-radius:10px;font-size:13px;color:var(--text2);text-align:center;">
-      📝 Full receive flow (tap a receipt → scan LP / qty / location) is coming next. For now use the desktop Receiving page to add lines.
+      Full receive flow (tap a receipt → scan LP / qty / location) is coming next. For now use the desktop Receiving page to add lines.
     </div>`;
 }
 
@@ -238,7 +238,7 @@ async function loadFloorInbound(){
 function loadFloorMove(){
   document.getElementById('floorMoveBody').innerHTML = `
     <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center;">
-      <div style="font-size:48px;margin-bottom:14px;">🚧</div>
+      <div style="font-size:48px;margin-bottom:14px;">—</div>
       <div style="font-size:16px;font-weight:600;margin-bottom:8px;">Move Inventory — coming next</div>
       <div style="font-size:13px;color:var(--text2);line-height:1.5;">
         Scan an LP, scan a destination location, tap Move. Updates location on the LP and the inventory row in one shot. Will land in the next push.

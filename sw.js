@@ -12,7 +12,7 @@
 // old cache is purged on activate.
 // =============================================================================
 
-const CACHE_NAME = 'tpfs-wms-shell-v51';
+const CACHE_NAME = 'tpfs-wms-shell-v52';
 // Every <script> in index.html must be listed here. ui.js in particular:
 // without it the cached shell loads and then every screen dies offline,
 // because the whole design system is missing.

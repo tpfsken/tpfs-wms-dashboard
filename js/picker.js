@@ -54,7 +54,7 @@ function pickerHaptic(kind){
 // =============================================================================
 
 async function openMobilePicker(orderId){
-  if(!orderId){ alert('No order selected'); return; }
+  if(!orderId) return uiToast('No order selected', 'error');
 
   // Pessimistic lock — claim the order before opening the picker so two
   // pickers can't grab the same order. Server returns 409 if someone
@@ -65,13 +65,17 @@ async function openMobilePicker(orderId){
     });
     if(r.status === 409){
       const d = await r.json().catch(() => ({}));
-      alert(`🔒 ${d.error || 'Order is being picked by another user'}`);
+      // Two pickers on one order double-picks it. Say who has it, and stop.
+      pickerHaptic('error');
+      await uiAlert({
+        title: 'Someone else is picking this order',
+        body: `${esc(d.error || 'Another picker holds this order.')}<br><br>Ask them, or wait — the claim releases automatically after 30 minutes.`,
+      });
       return;
     }
     if(!r.ok){
       const d = await r.json().catch(() => ({}));
-      alert(d.error || 'Could not claim order');
-      return;
+      return uiToast(d.error || 'Could not claim the order', 'error');
     }
   } catch(_) { /* network error — let the order load attempt fail loudly */ }
 
@@ -81,7 +85,7 @@ async function openMobilePicker(orderId){
     apiGet(`/orders/${orderId}`),
     apiGet('/warehouses/me/override-status'),
   ]);
-  if(!orderRes){ alert('Could not load order'); return; }
+  if(!orderRes) return uiToast('Could not load that order', 'error');
   _pickerOrder = orderRes;
   _pickerOverrideCfg = cfgRes || { override_required: false, pin_configured: false };
 
@@ -245,12 +249,12 @@ function renderCurrentPick(){
 
   body.innerHTML = `
     <div style="background:#2a2a2a;border-radius:14px;padding:18px;margin-bottom:14px;border:2px solid #2a4a8c;">
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.7;font-weight:600;">📍 Location</div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.7;font-weight:600;">Location</div>
       <div style="font-size:42px;font-weight:800;letter-spacing:0.04em;font-family:ui-monospace,Menlo,monospace;color:#7eb6ff;margin-top:4px;">${esc(a.location_code || 'TBD')}</div>
     </div>
 
     <div style="background:#2a2a2a;border-radius:14px;padding:18px;margin-bottom:14px;">
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.7;font-weight:600;">📦 SKU</div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.7;font-weight:600;">SKU</div>
       <div style="font-size:24px;font-weight:700;font-family:ui-monospace,Menlo,monospace;color:#7eb6ff;margin-top:4px;">${esc(a.sku_code || '—')}</div>
       <div style="font-size:16px;opacity:.85;margin-top:6px;line-height:1.3;">${esc(a.sku_name || '')}</div>
     </div>
@@ -288,7 +292,7 @@ function renderCurrentPick(){
   document.getElementById('pickerConfirmBtn').textContent = '✓ CONFIRM PICK';
   document.getElementById('pickerVerifyBtn').disabled = false;
   document.getElementById('pickerVerifyBtn').style.opacity = '';
-  document.getElementById('pickerVerifyBtn').textContent = '📷 Verify with Photo (AI)';
+  document.getElementById('pickerVerifyBtn').textContent = 'Verify with Photo (AI)';
   document.getElementById('pickerStatus').textContent = '';
 }
 
@@ -340,7 +344,7 @@ function renderAllDone(){
   if (state === 'no_lines') {
     body = `
       <div style="text-align:center;padding:32px 16px;">
-        <div style="font-size:64px;line-height:1;margin-bottom:14px;">📭</div>
+        <div style="font-size:64px;line-height:1;margin-bottom:14px;">—</div>
         <div style="font-size:22px;font-weight:700;margin-bottom:8px;">No Order Lines</div>
         ${orderLine}
         <div style="font-size:13px;opacity:.75;margin-bottom:18px;line-height:1.5;">
@@ -463,7 +467,8 @@ async function completePickingFromPicker(){
     });
     const d = await r.json();
     if(!r.ok){
-      alert(d.error || 'Could not advance to PACKING');
+      pickerHaptic('error');
+      uiToast(d.error || 'Could not advance to PACKING', 'error');
       return;
     }
     pickerHaptic('success');
@@ -472,7 +477,10 @@ async function completePickingFromPicker(){
     // the only "Exit" button left them on a stale page.
     renderPostPickComplete();
   } catch(e){
-    alert('Network error');
+    // The pick itself is already saved server-side; only the status bump
+    // failed. Say so, or the picker re-picks an order that's actually done.
+    pickerHaptic('error');
+    uiToast('Network error — your picks are saved, but the order did not move to PACKING. Try again.', 'error');
   }
 }
 
@@ -493,7 +501,7 @@ function renderPostPickComplete(){
         What's next?
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;">
-        <button onclick="pickNextOrder()" style="background:#2c7be5;color:#fff;border:none;padding:18px 24px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">📦 Pick another order</button>
+        <button onclick="pickNextOrder()" style="background:#2c7be5;color:#fff;border:none;padding:18px 24px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">Pick another order</button>
         <button onclick="exitMobilePicker()" style="background:#444;color:#fff;border:none;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">← Back to home</button>
       </div>
       <div style="margin-top:24px;font-size:11px;color:#888;">
@@ -519,7 +527,7 @@ async function pickNextOrder(){
 async function reloadMobilePicker(){
   if(!_pickerOrder?.id) return;
   const fresh = await apiGet(`/orders/${_pickerOrder.id}`);
-  if(!fresh){ alert('Could not refresh order'); return; }
+  if(!fresh) return uiToast('Could not refresh the order', 'error');
   _pickerOrder = fresh;
   _pickerPending = (fresh.allocations || [])
     .filter(a => a.status !== 'PICKED' && a.status !== 'CANCELLED')
@@ -554,7 +562,7 @@ async function verifyCurrentPickPhoto(file){
   banner.style.background = '#1f3a5e';
   banner.style.color = '#cfe3ff';
   banner.style.borderTop = '2px solid #2c7be5';
-  banner.innerHTML = `<div>🤖 Claude is reading the photo… (typically 3-5 sec)</div>`;
+  banner.innerHTML = `<div>Reading the photo… (typically 3-5 sec)</div>`;
 
   try {
     const fd = new FormData();
@@ -567,10 +575,10 @@ async function verifyCurrentPickPhoto(file){
       banner.style.background = '#5a2c2c';
       banner.style.color = '#ffb3b3';
       banner.style.borderTop = '2px solid #d22';
-      banner.innerHTML = `<div>❌ Verification failed: ${esc(d.error || 'unknown error')}</div>`;
+      banner.innerHTML = `<div>Verification failed: ${esc(d.error || 'unknown error')}</div>`;
       vbtn.disabled = false;
       vbtn.style.opacity = '';
-      vbtn.textContent = '📷 Retry Photo';
+      vbtn.textContent = 'Retry Photo';
       return;
     }
 
@@ -583,14 +591,14 @@ async function verifyCurrentPickPhoto(file){
     renderVerifyBanner(d.extracted || {});
     vbtn.disabled = false;
     vbtn.style.opacity = '';
-    vbtn.textContent = '📷 Retake Photo';
+    vbtn.textContent = 'Retake Photo';
   } catch(e){
     banner.style.background = '#5a2c2c';
     banner.style.color = '#ffb3b3';
-    banner.innerHTML = `<div>❌ Network error reading photo</div>`;
+    banner.innerHTML = `<div>Network error reading photo</div>`;
     vbtn.disabled = false;
     vbtn.style.opacity = '';
-    vbtn.textContent = '📷 Retry Photo';
+    vbtn.textContent = 'Retry Photo';
   }
 }
 
@@ -617,7 +625,7 @@ function renderVerifyBanner(e){
     confirmBtn.textContent = '⚠ Override & Confirm';
   } else { // unreadable
     bg = '#3a3a3a'; fg = '#ddd'; border = '#888';
-    headline = `📷 Photo unreadable${conf}`;
+    headline = `Photo unreadable${conf}`;
     confirmBtn.style.background = '#28a745';
     confirmBtn.textContent = '✓ CONFIRM PICK';
   }
@@ -663,7 +671,18 @@ async function confirmCurrentPick(){
     return;
   }
   if(qty > Number(a.quantity)){
-    if(!confirm(`You're confirming ${qty} but only ${a.quantity} was allocated. Continue?`)) return;
+    // Over-pick. Real inventory leaves the building, so it needs a deliberate
+    // yes — but it's legitimate (case rounding, damaged unit swapped out), so
+    // it's a confirm, not a block.
+    pickerHaptic('warn');
+    const ok = await uiConfirm({
+      title: 'Picking more than allocated',
+      body: `Allocated: <strong>${esc(a.quantity)}</strong><br>You entered: <strong>${esc(qty)}</strong>`
+          + `<br><br>Only do this if you physically pulled ${esc(qty)}. The extra will come off on-hand stock.`,
+      confirmText: `Confirm ${esc(qty)}`,
+      tone: 'warn',
+    });
+    if(!ok) return;
   }
 
   // Three paths into the override modal:
@@ -767,7 +786,7 @@ function showPickerOverrideModal(qty, defaultCat){
     heading.textContent = '⚠ Override AI Verification';
     intro.textContent = 'Claude flagged this as the wrong product. To override, choose a reason and describe what you saw.';
   } else if(_pickerLastMatch == null){
-    heading.textContent = '🔐 Supervisor Approval Required';
+    heading.textContent = 'Supervisor Approval Required';
     intro.textContent = 'No AI photo verification was done for this pick. Supervisor approval is required to confirm without a verified photo.';
   } else {
     heading.textContent = '⚠ Approval Required';
@@ -813,16 +832,26 @@ function closePickerOverrideModal(){
   document.getElementById('pickerOverrideOverlay').style.display = 'none';
 }
 
+// Inline validation for the override form. The override overlay lives INSIDE
+// #pickerShell, so errors belong next to the field the picker is looking at.
+function pickerOvError(msg){
+  const el = document.getElementById('pickerOvErr');
+  if(!el) return;
+  if(!msg){ el.style.display = 'none'; el.textContent = ''; return; }
+  el.textContent = msg;
+  el.style.display = '';
+  pickerHaptic('error');
+}
+
 function overrideStep1Next(){
   const cat    = document.getElementById('pickerOvReasonCat').value;
   const reason = document.getElementById('pickerOvReason').value.trim();
+  pickerOvError('');
   if(!cat){
-    alert('Pick a reason category first.');
-    return;
+    return pickerOvError('Pick a reason category first.');
   }
   if(reason.length < 10){
-    alert('Describe what you actually pulled (at least 10 characters).');
-    return;
+    return pickerOvError('Describe what you actually pulled — at least 10 characters.');
   }
   document.getElementById('pickerOvStep1').style.display = 'none';
   document.getElementById('pickerOvStep2').style.display = 'block';
@@ -939,7 +968,7 @@ async function openOverridePinModal(){
       : '—';
     status.innerHTML = `✓ <strong>PIN configured</strong> · last rotated ${esc(ts)}`;
     status.style.color = 'var(--green)';
-    curWrap.style.display = 'block';
+    curWrap.style.display = 'block'; /* eslint-disable-line */
   } else {
     status.innerHTML = `⚠ <strong>No PIN set yet</strong> · pickers will be unable to override mismatches until you configure one`;
     status.style.color = 'var(--amber)';
@@ -953,10 +982,10 @@ async function saveOverridePin(){
 
   const cur     = document.getElementById('opPinCurrent').value.trim();
   const next    = document.getElementById('opPinNew').value.trim();
-  const confirm = document.getElementById('opPinConfirm').value.trim();
+  const confirmPin = document.getElementById('opPinConfirm').value.trim();
 
   if(!/^\d{4,8}$/.test(next)){ err.textContent = 'New PIN must be 4–8 digits'; return; }
-  if(next !== confirm)        { err.textContent = "Confirm doesn't match new PIN"; return; }
+  if(next !== confirmPin)     { err.textContent = "Confirm doesn't match new PIN"; return; }
 
   const body = { pin: next };
   if(cur) body.current_pin = cur;
@@ -977,7 +1006,7 @@ async function saveOverridePin(){
       return;
     }
     closeModal('overridePinModal');
-    alert('Supervisor PIN saved. Share it with supervisors only.');
+    uiToast('Supervisor PIN saved — share it with supervisors only', 'success');
   } catch(e){
     err.textContent = 'Network error';
   } finally {
