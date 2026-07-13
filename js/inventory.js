@@ -1,79 +1,118 @@
+'use strict';
 // =============================================================================
-// INVENTORY + CASE BREAK
+// INVENTORY + CASE BREAK — TERMINAL LEDGER (batch D4a).
+// The list is server-sorted and server-paged: it used to ask for limit=200 with
+// no offset and no total, so a warehouse with 10,000 LPs showed 200 rows and
+// said nothing about the other 9,800.
 // =============================================================================
+
+// `key` on a sortable column is the API's sortBy value — it must exist in the
+// INVENTORY_SORTS whitelist in the API's queries/inventory.js.
+const INV_COLS = [
+  { key: 'sku_code', label: 'SKU', render: r => {
+      const sev = severityChip(r, { size: 'sm' });
+      return `${uiId(r.sku_code || '')}${sev ? ' ' + sev : ''}`;
+    } },
+  { key: 'sku_name', label: 'Description' },
+  { key: 'client_name', label: 'Client' },
+  { key: '_type', label: 'Type', sortable: false, render: r =>
+      `<span class="ui-chip ui-chip-neutral">${esc(r.sku_type || r.uom || '')}</span>` },
+  { key: 'lot_number', label: 'Lot', render: r => r.lot_number
+      ? uiId(r.lot_number) : '<span class="ui-muted">—</span>' },
+  // Expiry is why FEFO exists — show it, and shout when it's close.
+  { key: 'expiry_date', label: 'Expiry', render: r => {
+      if(!r.expiry_date) return '<span class="ui-muted">—</span>';
+      const days = Number(r.days_until_expiry);
+      const txt = new Date(r.expiry_date).toLocaleDateString();
+      if(Number.isFinite(days) && days < 0)  return `<span class="ui-chip ui-chip-danger">expired</span>`;
+      if(Number.isFinite(days) && days <= 30) return `<span class="ui-chip ui-chip-warn">${esc(txt)}</span>`;
+      return uiId(txt);
+    } },
+  { key: 'location_code', label: 'Location', mono: true },
+  { key: 'lp_number', label: 'LP', render: r => r.lp_number
+      ? `<span class="lp-badge ${r.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(r.lp_number)}</span>`
+      : '<span class="ui-muted">—</span>' },
+  { key: 'quantity', label: 'Qty', num: true },
+  { key: 'status', label: 'Status', render: r => uiChip(r.status) },
+  { key: '_act', label: '', sortable: false, render: r => {
+      const isCaseAvail = (r.sku_type === 'CASE' || r.uom === 'CASE')
+        && r.status === 'available' && Number(r.quantity) > 0 && r.lp_id;
+      // Case-break is an ops action — portal users never see it.
+      if(!isCaseAvail || (typeof isPortalMode === 'function' && isPortalMode())) return '';
+      return `<button class="ui-btn js-break-btn" data-payload='${esc(JSON.stringify({
+        lp_id: r.lp_id, id: r.id, lp_number: r.lp_number,
+        sku_code: r.sku_code, sku_name: r.sku_name || '',
+        sku_type: r.sku_type || r.uom, quantity: Number(r.quantity),
+        lot_number: r.lot_number || null, location_code: r.location_code || '',
+      }))}'>Break</button>`;
+    } },
+];
+
+let INV_LIMIT  = 50;
+let INV_OFFSET = 0;
+let INV_SORT   = 'expiry_date';   // FEFO: soonest-expiring first
+let INV_DIR    = 'asc';
+let INV_FILTER_SIG = '';
+
+function invSetSort(key, dir){
+  INV_SORT = key; INV_DIR = dir; INV_OFFSET = 0;
+  loadInventory();
+}
+function invSetPage(limit, offset){
+  INV_LIMIT = limit; INV_OFFSET = offset;
+  loadInventory();
+  document.getElementById('invListWrap')?.scrollIntoView({ block: 'start' });
+}
 
 async function loadInventory(){
   const s  = document.getElementById('invSearch')?.value || '';
   const st = (_cbState['invStatusFilterWrap']?.selected?.value) || '';
   const cl = (_cbState['invClientFilterWrap']?.selected?.value) || '';
-  let u = '/inventory?limit=200';
-  if(st) u += `&status=${encodeURIComponent(st)}`;
-  if(s)  u += `&skuCode=${encodeURIComponent('%' + s + '%')}`;
-  if(cl) u += `&clientId=${encodeURIComponent(cl)}`;
-  const d = await apiGet(u);
-  if(!d) return;
 
-  const b = document.getElementById('invBody');
-  const rows = d.rows || d;
-  if(!rows?.length){
-    b.innerHTML = '<tr><td colspan="10" class="empty-state">No inventory</td></tr>';
-    return;
+  // A filter change puts you back on page 1 — otherwise you land on page 7 of
+  // a 2-page result and see an empty table.
+  const sig = `${s}|${st}|${cl}`;
+  if(sig !== INV_FILTER_SIG){ INV_FILTER_SIG = sig; INV_OFFSET = 0; }
+
+  const qs = new URLSearchParams({
+    limit: INV_LIMIT, offset: INV_OFFSET, sortBy: INV_SORT, sortDir: INV_DIR,
+  });
+  if(st) qs.set('status', st);
+  if(s)  qs.set('skuCode', '%' + s + '%');
+  if(cl) qs.set('clientId', cl);
+
+  uiTableLoading('invListWrap', INV_COLS);
+  const d = await apiGet(`/inventory?${qs.toString()}`);
+  if(d === null) return uiTableError('invListWrap', INV_COLS, 'Could not load inventory', loadInventory);
+
+  const rows  = d.rows || d || [];
+  const total = Number(d.total ?? rows.length);
+
+  if(!rows.length && INV_OFFSET > 0 && total > 0){   // stranded past the last page
+    INV_OFFSET = 0;
+    return loadInventory();
   }
 
-  b.innerHTML = rows.map(r => {
-    const isCaseAvail = (r.sku_type === 'CASE' || r.uom === 'CASE')
-                     && r.status === 'available'
-                     && Number(r.quantity) > 0
-                     && r.lp_id;
-    const statusChip = r.status === 'available' ? 'chip-success'
-                     : r.status === 'allocated' ? 'chip-active'
-                     : r.status === 'damaged'   ? 'chip-danger'
-                     : 'chip-warning';
-    const lpBadge = r.lp_number
-      ? `<span class="lp-badge ${r.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(r.lp_number)}</span>`
-      : '—';
-    // Case-break is an ops action — clients in portal mode never see this button.
-    const breakBtn = (isCaseAvail && !(typeof isPortalMode === 'function' && isPortalMode()))
-      ? `<button class="btn btn-ghost js-break-btn" style="padding:4px 10px;font-size:12px;"
-                 data-payload='${esc(JSON.stringify({
-                   lp_id: r.lp_id, id: r.id, lp_number: r.lp_number,
-                   sku_code: r.sku_code, sku_name: r.sku_name || '',
-                   sku_type: r.sku_type || r.uom, quantity: Number(r.quantity),
-                   lot_number: r.lot_number || null, location_code: r.location_code || ''
-                 }))}'>Break</button>`
-      : '';
-    const sevChip = severityChip(r, { size:'sm' });
-    return `
-      <tr class="js-inv-row" data-id="${esc(r.id)}" style="cursor:pointer;">
-        <td style="font-weight:600;color:var(--blue);">${esc(r.sku_code || '')}${sevChip ? ' ' + sevChip : ''}</td>
-        <td>${esc(r.sku_name || '')}</td>
-        <td style="color:var(--text2);">${esc(r.client_name || '')}</td>
-        <td><span class="chip chip-new">${esc(r.sku_type || r.uom || '')}</span></td>
-        <td style="color:var(--blue);">${esc(r.lot_number || '—')}</td>
-        <td>${esc(r.location_code || '—')}</td>
-        <td>${lpBadge}</td>
-        <td class="right" style="font-weight:600;">${esc(Number(r.quantity || 0).toLocaleString())}</td>
-        <td><span class="chip ${statusChip}">${esc((r.status || '').toUpperCase())}</span></td>
-        <td>${breakBtn}</td>
-      </tr>`;
-  }).join('');
+  uiTable('invListWrap', {
+    columns: INV_COLS, rows, rowKey: 'id',
+    sortable: true, sortKey: INV_SORT, sortDir: INV_DIR,
+    onSort: invSetSort,          // server-side — sorting one page would lie
+    onRowClick: r => openInventoryDetail(r.id),
+    empty: (s || st || cl) ? 'No inventory matches that filter.' : 'No inventory on hand.',
+  });
 
-  // Wire break buttons (stop propagation so clicking Break doesn't also
-  // trigger the row's drill-down).
-  b.querySelectorAll('.js-break-btn').forEach(btn => {
+  uiPager('invPager', {
+    total, limit: INV_LIMIT, offset: INV_OFFSET,
+    noun: 'inventory rows', onChange: invSetPage,
+  });
+
+  // Break buttons sit inside clickable rows — don't let them open the detail.
+  document.getElementById('invListWrap').querySelectorAll('.js-break-btn').forEach(btn =>
     btn.addEventListener('click', e => {
       e.stopPropagation();
       try { openCaseBreakFor(JSON.parse(btn.dataset.payload)); }
-      catch(err){ console.error('break payload parse error', err); }
-    });
-  });
-
-  // Row click -> Inventory Detail modal
-  b.querySelectorAll('.js-inv-row').forEach(row => {
-    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
-    row.addEventListener('mouseout',  () => row.style.background = '');
-    row.addEventListener('click', () => openInventoryDetail(row.dataset.id));
-  });
+      catch(err){ uiToast('Could not read that row', 'error'); }
+    }));
 }
 
 // =============================================================================

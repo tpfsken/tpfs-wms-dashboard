@@ -135,8 +135,11 @@
   </div>
 
   <div class="page" id="page-inventory">
-    <div class="page-header"><button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location · add new items from the client's Item Master tab</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><input type="text" class="form-input" id="invSearch" placeholder="Search SKU or lot..." style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="btn btn-ghost" onclick="loadInventory()">Refresh</button><button class="btn btn-primary ops-only" onclick="showCaseBreakModal()">⊞ Case Break</button></div>
-    <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;"><div style="flex:1;overflow:auto;"><table class="data-table"><thead><tr><th>SKU</th><th>Description</th><th>Client</th><th>Type</th><th>Lot</th><th>Location</th><th>LP</th><th class="right">Qty</th><th>Status</th><th style="width:70px;"></th></tr></thead><tbody id="invBody"></tbody></table></div></div>
+    <div class="page-header"><button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location · add new items from the client's Item Master tab</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><input type="text" class="ui-input" id="invSearch" placeholder="Search SKU, lot, LP, or location…" style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="ui-btn" onclick="loadInventory()">Refresh</button><button class="ui-btn ui-btn-primary ops-only" onclick="showCaseBreakModal()">Case break</button></div>
+    <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+      <div style="flex:1;overflow:auto;" id="invListWrap"></div>
+      <div id="invPager"></div>
+    </div>
   </div>
 
   <div class="page" id="page-orders">
