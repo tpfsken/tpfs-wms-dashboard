@@ -36,40 +36,205 @@ const REPORTS_CATALOG = [
 // LEVEL 1 — ITEM HISTORY
 // =============================================================================
 
+/* =============================================================================
+ * GENERIC REPORT RUNNER
+ *
+ * The dashboard knows nothing about any individual report. It asks the API what
+ * reports exist, renders their parameters, runs them, and exports them. A new
+ * report is a definition in the API's reportRegistry — it appears here with no
+ * dashboard change at all.
+ *
+ * Client scoping is NOT done here. The server forces a portal user's client_id.
+ * Doing it in the UI would mean trusting the browser with the one rule that
+ * must not be got wrong.
+ * ========================================================================== */
+let _reportCatalog = [];
+let _reportDef     = null;   // definition currently open
+let _reportParams  = {};     // its parameter values
+let _reportLimit   = 200;
+let _reportOffset  = 0;
+
 // Default landing — a card grid of every available report.
-function loadReports(){
+async function loadReports(){
   document.getElementById('reportsIndexView').style.display = 'block';
   document.getElementById('reportsContent').style.display = 'none';
+
+  const d = await apiGet('/reports/catalog');
+  _reportCatalog = d?.rows || [];
   renderReportsIndex();
 }
 
+const REPORT_ICONS = {
+  'client-activity': '📒', 'exceptions': '⚠', 'receiving': '📥',
+  'shipments': '📤', 'inventory-as-of': '📅', 'item-history': '🔎',
+};
+
 function renderReportsIndex(){
   const grid = document.getElementById('reportsIndexGrid');
-  grid.className = 'portal-grid';   // same card-hub grid as the portal home
-  grid.innerHTML = REPORTS_CATALOG.map(r => {
-    const live = r.status === 'live';
-    return `
-      <button class="portal-card js-report-card${live ? '' : ' report-card-soon'}"
-              data-id="${esc(r.id)}" ${live ? '' : 'disabled'}>
-        <span class="portal-card-icon">${esc(r.icon || '📄')}</span>
-        <span class="portal-card-title">${esc(r.title)}</span>
-        <span class="portal-card-desc">${esc(r.desc || '')}</span>
-        <span style="margin-top:8px;">${live
-          ? '<span class="ui-chip ui-chip-ok">LIVE</span>'
-          : '<span class="ui-chip ui-chip-neutral">COMING SOON</span>'}</span>
-      </button>`;
-  }).join('');
+  grid.className = 'portal-grid';   // same card-hub as the portal home
+
+  // Server-defined reports + the hand-built ones that predate the registry.
+  const cards = _reportCatalog.map(r => ({
+    id: r.id, title: r.title, desc: r.description,
+    open: () => openReport(r.id),
+  })).concat(REPORTS_CATALOG.filter(r => r.status === 'live').map(r => ({
+    id: r.id, title: r.title, desc: r.desc, open: r.open,
+  })));
+
+  if(!cards.length){ grid.innerHTML = uiEmpty('No reports available.'); return; }
+
+  grid.innerHTML = cards.map(r => `
+    <button class="portal-card js-report-card" data-id="${esc(r.id)}">
+      <span class="portal-card-icon">${esc(REPORT_ICONS[r.id] || '📄')}</span>
+      <span class="portal-card-title">${esc(r.title)}</span>
+      <span class="portal-card-desc">${esc(r.desc || '')}</span>
+    </button>`).join('');
 
   grid.querySelectorAll('.js-report-card').forEach(card => {
-    const r = REPORTS_CATALOG.find(x => x.id === card.dataset.id);
-    if(!r || r.status !== 'live') return;
-    card.addEventListener('click', () => r.open());
+    const r = cards.find(x => x.id === card.dataset.id);
+    if(r) card.addEventListener('click', () => r.open());
   });
+}
+
+/* ---- Generic runner: parameters -> results -> export --------------------- */
+
+async function openReport(id){
+  _reportDef = _reportCatalog.find(r => r.id === id);
+  if(!_reportDef) return uiToast('Unknown report', 'error');
+  _reportParams = {};
+  _reportOffset = 0;
+
+  document.getElementById('reportsIndexView').style.display = 'none';
+  document.getElementById('reportsContent').style.display = 'block';
+  document.getElementById('itemHistoryView').style.display = 'none';
+  document.getElementById('traceView').style.display = 'none';
+  document.getElementById('genericReportView').style.display = 'block';
+
+  document.getElementById('reportsCurrentTitle').textContent = _reportDef.title;
+  document.getElementById('reportsCurrentSub').textContent   = _reportDef.description || '';
+
+  // Sensible default window: this month to date. Most report questions are
+  // "what happened recently", and an empty date box helps nobody.
+  const today = new Date();
+  const first = new Date(today.getFullYear(), today.getMonth(), 1);
+  const iso = (d) => d.toISOString().slice(0, 10);
+
+  const clients = (typeof isPortalMode === 'function' && isPortalMode())
+    ? [] : (await apiGet('/clients')) || [];
+
+  document.getElementById('genericReportParams').innerHTML =
+    _reportDef.params.map(p => {
+      if(p.type === 'client'){
+        // Portal users don't get a client picker — the server forces their scope.
+        if(!clients.length) return '';
+        return `<div class="ui-field" style="min-width:220px;margin-bottom:0;">
+          <label class="ui-label">${esc(p.label)}</label>
+          <select class="ui-input js-rp" data-key="${esc(p.key)}">
+            <option value="">All clients</option>
+            ${clients.map(c => `<option value="${esc(c.id)}">${esc(c.code)} — ${esc(c.name)}</option>`).join('')}
+          </select>
+        </div>`;
+      }
+      if(p.type === 'select'){
+        return `<div class="ui-field" style="min-width:180px;margin-bottom:0;">
+          <label class="ui-label">${esc(p.label)}</label>
+          <select class="ui-input js-rp" data-key="${esc(p.key)}">
+            ${(p.options || []).map(o => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('')}
+          </select>
+        </div>`;
+      }
+      const val = p.type === 'date'
+        ? (p.key === 'dateTo' || p.key === 'asOf' ? iso(today) : iso(first))
+        : '';
+      return `<div class="ui-field" style="min-width:170px;margin-bottom:0;">
+        <label class="ui-label">${esc(p.label)}${p.required ? ' *' : ''}</label>
+        <input class="ui-input js-rp" data-key="${esc(p.key)}" type="${p.type === 'date' ? 'date' : 'text'}"
+               value="${esc(val)}">
+      </div>`;
+    }).join('') +
+    `<button class="ui-btn ui-btn-primary" onclick="runGenericReport()">Run</button>
+     <div style="flex:1"></div>
+     <button class="ui-btn" onclick="exportGenericReport()">Export CSV</button>`;
+
+  runGenericReport();
+}
+
+function collectReportParams(){
+  const p = {};
+  document.querySelectorAll('#genericReportParams .js-rp').forEach(el => {
+    if(el.value) p[el.dataset.key] = el.value;
+  });
+  return p;
+}
+
+function reportQuery(extra = {}){
+  const qs = new URLSearchParams({ ..._reportParams, ...extra });
+  return qs.toString();
+}
+
+async function runGenericReport(){
+  if(!_reportDef) return;
+  _reportParams = collectReportParams();
+
+  const missing = _reportDef.params.filter(p => p.required && !_reportParams[p.key]);
+  if(missing.length) return uiToast(`${missing.map(m => m.label).join(' and ')} required`, 'error');
+
+  const cols = _reportDef.columns.map(c => ({
+    key: c.key,
+    label: c.label,
+    num:   c.type === 'num',
+    money: c.type === 'money',
+    mono:  c.type === 'mono',
+    render: c.type === 'datetime'
+      ? (r) => r[c.key] ? uiId(fmtTimeShort(r[c.key])) : '<span class="ui-muted">—</span>'
+      : c.type === 'date'
+        ? (r) => r[c.key] ? uiId(new Date(r[c.key]).toLocaleDateString()) : '<span class="ui-muted">—</span>'
+        : undefined,
+  }));
+
+  uiTableLoading('genericReportWrap', cols);
+  const d = await apiGet(`/reports/run/${_reportDef.id}?${reportQuery({
+    limit: _reportLimit, offset: _reportOffset,
+  })}`);
+  if(d === null) return uiTableError('genericReportWrap', cols, 'Report failed', runGenericReport);
+
+  uiTable('genericReportWrap', {
+    columns: cols, rows: d.rows || [], rowKey: 'id',
+    empty: 'Nothing happened in that window — no rows match.',
+  });
+
+  uiPager('genericReportPager', {
+    total: Number(d.total || 0), limit: _reportLimit, offset: _reportOffset,
+    noun: 'rows',
+    onChange: (limit, offset) => { _reportLimit = limit; _reportOffset = offset; runGenericReport(); },
+  });
+}
+
+// The CSV comes from the SAME definition as the screen — it cannot disagree
+// with what the user was just looking at.
+async function exportGenericReport(){
+  if(!_reportDef) return;
+  _reportParams = collectReportParams();
+  uiToast('Building the export…');
+  const r = await fetch(`${API}/reports/export/${_reportDef.id}.csv?${reportQuery()}`, {
+    headers: { Authorization: `Bearer ${T}` },
+  });
+  if(!r.ok) return uiToast('Export failed', 'error');
+  const blob = await r.blob();
+  const url  = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${_reportDef.id}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  uiToast('CSV downloaded');
 }
 
 function backToReportsIndex(){
   document.getElementById('reportsContent').style.display = 'none';
+  document.getElementById('genericReportView').style.display = 'none';
   document.getElementById('reportsIndexView').style.display = 'block';
+  _reportDef = null;
 }
 
 // =============================================================================
@@ -79,6 +244,7 @@ function backToReportsIndex(){
 async function openItemHistoryReport(){
   document.getElementById('reportsIndexView').style.display = 'none';
   document.getElementById('reportsContent').style.display = 'block';
+  document.getElementById('genericReportView').style.display = 'none';
   document.getElementById('reportsCurrentTitle').textContent = 'Item History';
   document.getElementById('reportsCurrentSub').textContent   = 'Item history → LP traceability';
 

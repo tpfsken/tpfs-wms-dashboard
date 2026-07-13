@@ -866,7 +866,21 @@
 
     <div id="reportsContent" style="display:none;">
     <div class="page-header">
-      <div style="display:flex;align-items:center;gap:12px;"><button class="btn btn-ghost" onclick="backToReportsIndex()">← All Reports</button><div><div class="page-title" id="reportsCurrentTitle">Item History</div><div class="page-subtitle" id="reportsCurrentSub">Item history → LP traceability</div></div></div>
+      <button class="ui-btn" onclick="backToReportsIndex()">← All reports</button>
+      <div><div class="page-title" id="reportsCurrentTitle">Report</div><div class="page-subtitle" id="reportsCurrentSub"></div></div>
+    </div>
+
+    <!-- ============ GENERIC RUNNER — renders ANY report the API defines.
+         Params, columns, paging and CSV all come from the definition, so a new
+         report needs no dashboard change. ============ -->
+    <div id="genericReportView" style="display:none;">
+      <div class="card">
+        <div class="rep-search" id="genericReportParams"></div>
+      </div>
+      <div class="card">
+        <div style="overflow:auto;" id="genericReportWrap"></div>
+        <div id="genericReportPager"></div>
+      </div>
     </div>
 
     <!-- ============ LEVEL 1: ITEM HISTORY ============ -->
