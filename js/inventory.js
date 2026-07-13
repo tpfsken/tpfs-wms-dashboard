@@ -1014,7 +1014,7 @@ async function submitItemForm(m){
       _itemPendingSds = null;
     }
 
-    // Any other documents the user staged via 📎 Attach File before
+    // Any other documents the user staged via Attach File before
     // Save — upload them now too.
     if(_itemPendingDocs.length && primaryId){
       for(const f of _itemPendingDocs){
@@ -1578,7 +1578,7 @@ async function refreshOpenSkuForm(skuId){
 // =============================================================================
 
 // Renders the create-mode staging list — files the user has dropped in
-// via 📎 Attach File before the SKU exists. They sit client-side until
+// via Attach File before the SKU exists. They sit client-side until
 // Save creates the SKU, then they're uploaded as attachments.
 function renderItemPendingDocs(){
   const body = document.getElementById('itemDocsBody');
@@ -1673,7 +1673,7 @@ async function loadItemAttachmentsList(skuId){
     }));
 }
 
-// Show / hide the "🔄 Re-read attached SDS" button based on whether the
+// Show / hide the "Re-read attached SDS" button based on whether the
 // SKU has an SDS attached. When clicked, re-runs Claude on the attached
 // PDF (server-side fetch from S3 + extract) and fills the hazmat fields.
 function updateSdsReuseButton(skuId, sdsAttachment){

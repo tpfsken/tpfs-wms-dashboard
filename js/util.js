@@ -78,15 +78,19 @@ const WF = ['NEW','ALLOCATED','PICKING','PACKING','STAGED','SHIPPED'];
 
 // =============================================================================
 // SEVERITY — at-a-glance product-handling tier. 4 levels:
-//   🔴 critical  — high-stakes hazmat (PG I, explosives, toxic gas, radioactive,
-//                  toxic-by-inhalation, organic peroxide). Mandatory PPE,
-//                  cert-required, special procedure.
-//   🟠 high      — any other hazmat (PG II/III, classes 2.1/2.2/3/4.x/5.1/8/9),
-//                  marine pollutants. Standard hazmat handling.
-//   🟡 moderate  — non-hazmat with care: special handling text on file,
-//                  ground-only, temperature-sensitive.
-//   🟢 standard  — normal product. No chip rendered by default unless
-//                  showStandard=true is passed to severityChip().
+//   critical  — high-stakes hazmat (PG I, explosives, toxic gas, radioactive,
+//               toxic-by-inhalation, organic peroxide). Mandatory PPE,
+//               cert-required, special procedure.
+//   high      — any other hazmat (PG II/III, classes 2.1/2.2/3/4.x/5.1/8/9),
+//               marine pollutants. Standard hazmat handling.
+//   moderate  — non-hazmat with care: special handling text on file,
+//               ground-only, temperature-sensitive.
+//   standard  — normal product. No chip rendered by default unless
+//               showStandard=true is passed to severityChip().
+//
+// The chips carry COLOUR AND A WORD, never an emoji — these are read on a
+// warehouse tablet and printed onto BOLs, where colour emoji don't render and
+// a hazard class is not a decoration.
 //
 // Computed on read from existing SKU attributes — no migration. If we
 // ever need to filter by tier server-side ("all CRITICAL items"), we

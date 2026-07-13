@@ -301,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // =============================================================================
-// PWA INSTALL — was "📱 Install App" button in the topbar; removed for
+// PWA INSTALL — was an "Install App" button in the topbar; removed for
 // less clutter. Browsers expose their own install UX (Chrome/Edge address-
 // bar icon, Safari Share menu → Add to Home Screen). manifest.json + service
 // worker stay registered so install still works via those native controls.

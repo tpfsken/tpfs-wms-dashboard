@@ -18,12 +18,72 @@ js/inbound.js       — Receiving + New PO modal.
 js/intake.js        — AI intake pipeline (upload, review, approve).
 js/billing.js       — Billing page: per-client meter, events drill-down,
                       rate card editor.
-js/reports.js       — Reports page: Lot Recall (9.16) + future reports.
+js/reports.js       — Reports page. Reports are DEFINITIONS in the API's
+                      reportRegistry.js; this file is a generic runner driven
+                      by /reports/catalog. Adding a report = adding a definition.
+js/password.js      — Password recovery: forgot / reset / change / admin reset /
+                      forced-change gate. Loads before app.js.
 js/app.js           — API base, auth (T, U, apiGet, doLogin), navigation,
                       boot(), DOMContentLoaded wiring. Loads LAST.
 ```
 
 Scripts are plain `<script>` tags loaded sequentially — no modules, no bundler. Functions and globals are shared across files. If you add a new module, add the `<script>` tag to `index.html` *before* `js/app.js`.
+
+## The four ways this app has actually broken — read before editing
+
+Every one of these shipped or nearly shipped. They are not hypotheticals.
+
+**1. A duplicate global takes down LOGIN.** There is no module system, so every
+top-level `const`/`let`/`function` in `js/*.js` is a global. A duplicate
+declaration is a SyntaxError → the script dies → `app.js`'s `loaders` map throws
+on the missing function → `DOMContentLoaded` never runs → the Sign In button is
+never wired. The symptom is "nobody can log in", and the cause looks unrelated.
+`js/inventory.js` declaring `INV_COLS`, already owned by `js/invoices.js`, did
+exactly this. **Sweep for duplicate top-level names before every commit.**
+
+**2. NEVER write to this repo from a sandbox/VM shell.** Doing so has now
+truncated three files mid-token: `sw.js`, `js/picker.js`, and `index.html` (which
+carried 32KB of NUL bytes in every deploy for weeks, and made `grep` treat the
+file as binary — so repo-wide greps silently skipped it). Use the editor's file
+tools, or Claude Code on the host. A sandbox mount's view of this repo is also
+**stale and untrustworthy for reads** — it has served a 647-line `app.css` with
+no design system in it. Verify on the host.
+
+**3. Anything `position:fixed` must be able to SCROLL.** A fixed overlay with no
+`overflow-y:auto` and no height cap clips its own action buttons off-screen on a
+short viewport, unreachable — you cannot scroll a fixed element. The picker's
+Confirm button was literally unreachable on a phone. Same class of bug: a dialog
+whose `z-index` is below a full-screen shell renders *invisible* (`.ui-overlay`
+was 1000; `#pickerShell` is 9999). Native `alert()` masked it, because browsers
+float those above everything — so it only broke at the moment the code was
+modernised. **Layer order is documented at the top of the design-system block in
+`app.css`. Read it before touching any z-index.**
+
+**4. Flex children shrink.** `.page` is a scrolling flex column, so any block on
+an overflowing page gets squashed BELOW its natural height and `.card{overflow:hidden}`
+clips the content off. Hence `.page > *{flex-shrink:0}`. If content mysteriously
+vanishes, suspect this before suspecting the data.
+
+## Emoji: no
+
+This is an enterprise WMS. **No pictographs anywhere in the UI** — no parcel
+(U+1F4E6), pin (U+1F4CD), camera (U+1F4F7), clipboard (U+1F4CB) and so on. They
+render as toys, they don't print on a BOL, and iOS renders some *typographic* marks
+as colour emoji anyway.
+
+Typographic marks only: `✓ ⚠ ✕ ☐ ● ○ ± ↓ ↑ ›`. Status is carried by **colour and a
+word**, never by an icon alone.
+
+Note the codepoints above are spelled out rather than shown: this rule must not
+trip the very sweep it mandates. The sweep should return **zero** hits — a rule with
+a permanent known false positive is a rule people learn to skip. Sweep with:
+
+```
+grep -P '[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE0F}]' -rn .
+```
+
+Grep **every file type**, not just `.js` — the emoji that survived the last sweep
+were in `index.html`, which everyone had stopped looking at.
 
 ## XSS / HTML interpolation — NON-NEGOTIABLE
 

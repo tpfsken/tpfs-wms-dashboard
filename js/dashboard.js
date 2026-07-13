@@ -93,9 +93,16 @@ function renderSLA(s){
     uiTile({ label: 'Avg turnaround',
              value: s.avgTurnaroundHours == null ? '—' : s.avgTurnaroundHours + 'h',
              sub: 'received to shipped, last 30 days' }) +
+    // An average built from one or two orders is noise dressed up as a metric —
+    // and this tile is shown to clients. Below 5 samples, say so instead of
+    // printing a number someone might quote back at you.
     uiTile({ label: 'Avg pick time',
-             value: s.avgPickMinutes == null ? '—' : s.avgPickMinutes + 'm',
-             sub: `${s.picksCount || 0} picks, last 30 days` });
+             value: (s.avgPickMinutes == null || Number(s.picksCount) < 5)
+                      ? '—'
+                      : s.avgPickMinutes + 'm',
+             sub: Number(s.picksCount) < 5
+                    ? `not enough data (${s.picksCount || 0} orders, last 30 days)`
+                    : `${s.picksCount} orders picked, last 30 days` });
 }
 
 function renderKPIs(k){

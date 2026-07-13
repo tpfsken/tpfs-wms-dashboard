@@ -22,13 +22,12 @@ const REPORTS_CATALOG = [
     open:  () => openItemHistoryReport(),
     status:'live',
   },
-  // Future stubs — uncomment / wire up as we build them
-  // {id:'inventory-as-of', title:'Inventory On-Hand by Date', phase:'9.7',  icon:'📅', status:'soon'},
-  // {id:'item-activity',   title:'Item Activity Detail',     phase:'9.15', icon:'📊', status:'soon'},
-  // {id:'b2b-shipment',    title:'B2B Shipment Detail',      phase:'9.18', icon:'📦', status:'soon'},
-  // {id:'case-breaks',     title:'Case Break Activity',      phase:'9.19', icon:'⊞',  status:'soon'},
-  // {id:'daily-snapshot',  title:'Daily Snapshot',           phase:'9.20', icon:'🌙', status:'soon'},
-  // {id:'txn-export',      title:'Transaction Log Export',   phase:'9.21', icon:'⬇',  status:'soon'},
+  // NOTE: there used to be a block of commented-out "future report" stubs here.
+  // It was actively misleading — inventory-as-of and case-breaks were listed as
+  // unbuilt, but both have been live in the API's report registry since D6.
+  // Reports are DEFINITIONS now (src/queries/reportRegistry.js): add one there
+  // and it appears in /reports/catalog automatically. There is nothing to
+  // uncomment here.
 ];
 
 // =============================================================================
