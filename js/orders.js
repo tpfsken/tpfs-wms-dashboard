@@ -470,74 +470,98 @@ function renderPickList(d, isPickable){
 // SHIP ORDER (Phase 1E.basic)
 // =============================================================================
 
-let shipEpShipmentId = null;   // EasyPost shipment id from the last rate quote
-let shipSelectedRateId = null; // rate the user picked
+let shipEpShipmentId   = null;  // EasyPost shipment id from the last rate quote
+let shipSelectedRateId = null;  // rate the user picked
+let SHIP_M             = null;  // open ship uiModal
+let SHIP_BUY_BTN       = null;  // "Buy label & ship" action button
 
 function resetShipRates(){
   shipEpShipmentId = null;
   shipSelectedRateId = null;
-  document.getElementById('shipRatesBox').style.display = 'none';
-  document.getElementById('shipRatesList').innerHTML = '';
-  document.getElementById('shipRatesHint').textContent = '';
-  document.getElementById('shipBuyLabelBtn').disabled = true;
+  const box = document.getElementById('shipRatesBox');
+  if(box){
+    box.style.display = 'none';
+    document.getElementById('shipRatesList').innerHTML = '';
+    document.getElementById('shipRatesHint').textContent = '';
+  }
+  if(SHIP_BUY_BTN) SHIP_BUY_BTN.disabled = true;
 }
 
 function showShipOrderModal(){
   if(!COI || !COD) return;
-  const m = document.getElementById('shipOrderModal');
-  m.style.display = 'flex'; m.style.zIndex = '10000';
-  resetShipRates();
+  shipEpShipmentId = null;
+  shipSelectedRateId = null;
 
-  // Quoted rates are only valid for the weight/dims they were quoted for —
-  // invalidate them if the parcel changes.
-  ['shipWeight','shipLength','shipWidth','shipHeight'].forEach(id => {
-    document.getElementById(id).oninput = () => { if(shipEpShipmentId) resetShipRates(); };
+  SHIP_M = uiModal({
+    title: `Ship ${COD.order_number || 'order'}`,
+    width: 640,
+    body: `
+      <div class="ui-dialog-body" style="margin-bottom:14px;">
+        Confirms physical shipment for <strong>${esc(COD.client_name || '')}</strong>: creates the
+        shipment record, decrements inventory, rolls up shipped_qty, and fires the outbound-handling
+        billing charge. Get live rates to buy a label, or ship without one (LTL / will-call / manual
+        tracking).
+      </div>
+      <div class="ui-field-row">
+        <div class="ui-field" data-field="shipCarrierWrap">
+          <label class="ui-label">Carrier *</label>
+          <div class="cb-wrap" id="shipCarrierWrap"></div>
+          <div class="ui-field-err" style="display:none;"></div>
+        </div>
+        ${uiField({ id: 'shipServiceLevel', label: 'Service level', placeholder: 'GROUND, EXPRESS, LTL…' })}
+      </div>
+      ${uiField({ id: 'shipTracking', label: 'Tracking number', placeholder: '1Z…, 7XXX…' })}
+      <div class="ship-dims">
+        ${uiField({ id: 'shipWeight', label: 'Weight (lbs)', type: 'number' })}
+        ${uiField({ id: 'shipLength', label: 'Length (in)', type: 'number' })}
+        ${uiField({ id: 'shipWidth',  label: 'Width (in)',  type: 'number' })}
+        ${uiField({ id: 'shipHeight', label: 'Height (in)', type: 'number' })}
+      </div>
+      <div class="ship-rates-bar">
+        <button class="ui-btn" id="shipGetRatesBtn" onclick="getShipRates()">Get live rates</button>
+        <span class="ui-hint" id="shipRatesHint"></span>
+      </div>
+      <div id="shipRatesBox" class="ship-rates" style="display:none;"><div id="shipRatesList"></div></div>
+      <div class="ui-field-row">
+        ${uiField({ id: 'shipCost', label: 'Ship cost ($)', type: 'number' })}
+        ${uiField({ id: 'shipNotes', label: 'Notes', placeholder: 'Optional internal notes' })}
+      </div>`,
+    actions: [
+      { label: 'Cancel' },
+      { label: 'Buy label & ship', primary: true, onClick: buyShipLabel },
+      { label: 'Ship without label', onClick: submitShipOrder },
+    ],
+    onClose: () => { SHIP_M = null; SHIP_BUY_BTN = null; },
   });
 
-  // Reset fields
-  document.getElementById('shipServiceLevel').value = '';
-  document.getElementById('shipTracking').value = '';
-  document.getElementById('shipWeight').value = '';
-  document.getElementById('shipLength').value = '';
-  document.getElementById('shipWidth').value = '';
-  document.getElementById('shipHeight').value = '';
-  document.getElementById('shipCost').value = '';
-  document.getElementById('shipNotes').value = '';
-  document.getElementById('shipOrderError').textContent = '';
-  document.getElementById('shipOrderSuccess').textContent = '';
-  document.getElementById('shipOrderSubmitBtn').disabled = false;
+  // The "buy" action only makes sense once a rate is picked.
+  SHIP_BUY_BTN = [...SHIP_M.el.querySelectorAll('.ui-dialog-actions button')]
+    .find(b => b.textContent.includes('Buy label'));
+  if(SHIP_BUY_BTN) SHIP_BUY_BTN.disabled = true;
 
-  // Carrier combo — defaults from existing carrier_code on the order if any.
+  // A quote is only valid for the parcel it was quoted for — changing the
+  // weight or dims silently invalidates it, so throw the rates away.
+  ['shipWeight','shipLength','shipWidth','shipHeight'].forEach(id =>
+    document.getElementById(id).addEventListener('input', () => {
+      if(shipEpShipmentId) resetShipRates();
+    }));
+
+  if(COD.ship_method) document.getElementById('shipServiceLevel').value = COD.ship_method;
+
   initCombo('shipCarrierWrap', [
-    {value:'UPS',   label:'UPS'},
-    {value:'FEDEX', label:'FedEx'},
-    {value:'USPS',  label:'USPS'},
-    {value:'DHL',   label:'DHL'},
-    {value:'LTL',   label:'LTL Carrier'},
-    {value:'OTHER', label:'Other'},
-  ], {
-    placeholder: 'Select carrier...',
-    value:       COD.carrier_code || '',
-    allowCustom: true,
-  });
-
-  // Pre-fill fields from order if known
-  if(COD.ship_method){
-    document.getElementById('shipServiceLevel').value = COD.ship_method;
-  }
-  document.getElementById('shipOrderSub').textContent =
-    `Ship order ${COD.order_number || ''} (${COD.client_name || ''}) — confirms physical shipment, decrements inventory, fires billing charge.`;
+    { value:'UPS', label:'UPS' }, { value:'FEDEX', label:'FedEx' },
+    { value:'USPS', label:'USPS' }, { value:'DHL', label:'DHL' },
+    { value:'LTL', label:'LTL Carrier' }, { value:'OTHER', label:'Other' },
+  ], { placeholder: 'Select carrier…', value: COD.carrier_code || '', allowCustom: true });
 }
 
 async function getShipRates(){
   if(!COI) return;
-  const err = document.getElementById('shipOrderError');
   const btn = document.getElementById('shipGetRatesBtn');
-  err.textContent = '';
   resetShipRates();
 
   const weightLbs = parseFloat(document.getElementById('shipWeight').value);
-  if(!weightLbs || weightLbs <= 0){ err.textContent = 'Enter a parcel weight to get rates'; return; }
+  if(!weightLbs || weightLbs <= 0) return uiToast('Enter a parcel weight to get rates', 'error');
 
   btn.disabled = true;
   document.getElementById('shipRatesHint').textContent = 'Fetching rates…';
@@ -553,116 +577,90 @@ async function getShipRates(){
       }),
     });
     const d = await r.json();
-    if(!r.ok){ err.textContent = d.error || 'Rate lookup failed'; return; }
+    if(!r.ok){
+      document.getElementById('shipRatesHint').textContent = '';
+      return uiToast(d.error || 'Rate lookup failed', 'error');
+    }
 
     shipEpShipmentId = d.epShipmentId;
     document.getElementById('shipRatesHint').textContent =
       `${d.rates.length} rate${d.rates.length === 1 ? '' : 's'} — cheapest first`;
     document.getElementById('shipRatesList').innerHTML = d.rates.map(rt => `
-      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;">
+      <label class="ship-rate">
         <input type="radio" name="shipRateChoice" value="${esc(rt.rateId)}">
-        <span style="font-weight:700;min-width:70px;">$${esc(Number(rt.rate).toFixed(2))}</span>
-        <span style="flex:1;">${esc(rt.carrierDisplay || rt.carrier)} · ${esc(rt.service)}</span>
-        <span style="font-size:12px;color:var(--text2);">${rt.deliveryDays != null ? esc(rt.deliveryDays) + 'd' : ''}</span>
+        ${uiMoney(rt.rate)}
+        <span class="ship-rate-svc">${esc(rt.carrierDisplay || rt.carrier)} · ${esc(rt.service)}</span>
+        <span class="ui-hint">${rt.deliveryDays != null ? esc(rt.deliveryDays) + ' day(s)' : ''}</span>
       </label>`).join('');
     document.getElementById('shipRatesBox').style.display = 'block';
     document.querySelectorAll('input[name="shipRateChoice"]').forEach(inp =>
       inp.addEventListener('change', () => {
         shipSelectedRateId = inp.value;
-        document.getElementById('shipBuyLabelBtn').disabled = false;
-      })
-    );
+        if(SHIP_BUY_BTN) SHIP_BUY_BTN.disabled = false;
+      }));
   } catch(e){
-    err.textContent = 'Network error';
+    document.getElementById('shipRatesHint').textContent = '';
+    uiToast('Network error — could not fetch rates', 'error');
   } finally {
     btn.disabled = false;
-    if(!shipEpShipmentId) document.getElementById('shipRatesHint').textContent = '';
   }
 }
 
+// uiModal action: returning false keeps the modal open.
 async function buyShipLabel(){
-  if(!COI || !shipEpShipmentId || !shipSelectedRateId) return;
-  const err = document.getElementById('shipOrderError');
-  const suc = document.getElementById('shipOrderSuccess');
-  err.textContent = ''; suc.textContent = '';
-  const btn = document.getElementById('shipBuyLabelBtn');
-
-  btn.disabled = true;
-  document.getElementById('shipOrderSubmitBtn').disabled = true;
-  try {
-    const r = await fetch(`${API}/orders/${COI}/shipping/buy`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
-      body: JSON.stringify({
-        epShipmentId: shipEpShipmentId,
-        rateId:       shipSelectedRateId,
-        weightLbs:    parseFloat(document.getElementById('shipWeight').value) || null,
-        lengthIn:     parseFloat(document.getElementById('shipLength').value) || null,
-        widthIn:      parseFloat(document.getElementById('shipWidth').value)  || null,
-        heightIn:     parseFloat(document.getElementById('shipHeight').value) || null,
-        notes:        document.getElementById('shipNotes').value || null,
-      }),
-    });
-    const d = await r.json();
-    if(!r.ok){
-      err.textContent = d.error || 'Label purchase failed';
-      btn.disabled = false;
-      document.getElementById('shipOrderSubmitBtn').disabled = false;
-      return;
-    }
-
-    suc.textContent = `Shipped — ${d.shipmentNumber} · tracking ${d.trackingNumber || '—'}`;
-    if(d.labelUrl) window.open(d.labelUrl, '_blank', 'noopener');
-    setTimeout(() => {
-      closeModal('shipOrderModal');
-      openOrderDetail(COI);
-    }, 1200);
-  } catch(e){
-    err.textContent = 'Network error';
-    btn.disabled = false;
-    document.getElementById('shipOrderSubmitBtn').disabled = false;
+  if(!COI) return false;
+  if(!shipEpShipmentId || !shipSelectedRateId){
+    uiToast('Get live rates and pick one first', 'error');
+    return false;
   }
+  const num = (id) => parseFloat(document.getElementById(id).value) || null;
+  const r = await fetch(`${API}/orders/${COI}/shipping/buy`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+    body: JSON.stringify({
+      epShipmentId: shipEpShipmentId,
+      rateId:       shipSelectedRateId,
+      weightLbs: num('shipWeight'), lengthIn: num('shipLength'),
+      widthIn:   num('shipWidth'),  heightIn: num('shipHeight'),
+      notes: document.getElementById('shipNotes').value || null,
+    }),
+  });
+  const d = await r.json();
+  if(!r.ok){ uiToast(d.error || 'Label purchase failed', 'error'); return false; }
+
+  uiToast(`Shipped — ${d.shipmentNumber} · tracking ${d.trackingNumber || '—'}`);
+  if(d.labelUrl) window.open(d.labelUrl, '_blank', 'noopener');
+  openOrderDetail(COI);
 }
 
 async function submitShipOrder(){
-  if(!COI) return;
-  const err = document.getElementById('shipOrderError');
-  const suc = document.getElementById('shipOrderSuccess');
-  err.textContent = ''; suc.textContent = '';
-  const btn = document.getElementById('shipOrderSubmitBtn');
-
+  if(!COI) return false;
   const carrierCode = cbVal('shipCarrierWrap');
-  if(!carrierCode){ err.textContent = 'Select a carrier'; return; }
-
-  btn.disabled = true;
-  try {
-    const r = await fetch(`${API}/orders/${COI}/ship`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
-      body: JSON.stringify({
-        carrierCode,
-        serviceLevel:   document.getElementById('shipServiceLevel').value || null,
-        trackingNumber: document.getElementById('shipTracking').value     || null,
-        weightLbs:      parseFloat(document.getElementById('shipWeight').value) || null,
-        lengthIn:       parseFloat(document.getElementById('shipLength').value) || null,
-        widthIn:        parseFloat(document.getElementById('shipWidth').value)  || null,
-        heightIn:       parseFloat(document.getElementById('shipHeight').value) || null,
-        shipCost:       parseFloat(document.getElementById('shipCost').value)   || null,
-        notes:          document.getElementById('shipNotes').value || null,
-      }),
-    });
-    const d = await r.json();
-    if(!r.ok){ err.textContent = d.error || 'Ship failed'; btn.disabled = false; return; }
-
-    suc.textContent = `Shipped — ${d.shipmentNumber}${d.billingCharge ? ` · billing ${fmtDollars(d.billingCharge.totalAmount)}` : ''}`;
-    setTimeout(() => {
-      closeModal('shipOrderModal');
-      openOrderDetail(COI);
-    }, 1200);
-  } catch(e){
-    err.textContent = 'Network error';
-    btn.disabled = false;
+  if(!carrierCode){
+    uiFieldError(document, 'shipCarrierWrap', 'Select a carrier');
+    return false;
   }
+  uiFieldError(document, 'shipCarrierWrap', '');
+
+  const num = (id) => parseFloat(document.getElementById(id).value) || null;
+  const r = await fetch(`${API}/orders/${COI}/ship`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+    body: JSON.stringify({
+      carrierCode,
+      serviceLevel:   document.getElementById('shipServiceLevel').value || null,
+      trackingNumber: document.getElementById('shipTracking').value || null,
+      weightLbs: num('shipWeight'), lengthIn: num('shipLength'),
+      widthIn:   num('shipWidth'),  heightIn: num('shipHeight'),
+      shipCost:  num('shipCost'),
+      notes: document.getElementById('shipNotes').value || null,
+    }),
+  });
+  const d = await r.json();
+  if(!r.ok){ uiToast(d.error || 'Ship failed', 'error'); return false; }
+
+  uiToast(`Shipped — ${d.shipmentNumber}${d.billingCharge ? ` · billed ${fmtDollars(d.billingCharge.totalAmount)}` : ''}`);
+  openOrderDetail(COI);
 }
 
 async function confirmPickAllocation(orderId, allocationId, quantity, btn){
@@ -1641,32 +1639,34 @@ async function submitEditOrder(){
 async function deleteCurrentOrder(){
   if(!COI || !COD) return;
   if(COD.status === 'SHIPPED'){
-    alert('Cannot delete a SHIPPED order — it has already left the warehouse.');
-    return;
+    return uiToast('A SHIPPED order can\'t be deleted — it has already left the warehouse', 'error');
   }
-  const reason = prompt(
-    `Delete order ${COD.order_number || ''}?\n\n` +
-    `This soft-deletes the order — the row stays in the DB for audit but disappears from every list. ` +
-    `Type a short reason (e.g. "duplicate of ORD-...", "customer cancelled", "test data"):`
-  );
-  if(reason === null) return;        // user clicked Cancel
-  if(!reason.trim()){
-    alert('Reason is required to delete an order.');
-    return;
-  }
-  // Final yes/no
-  if(!confirm(`Delete ${COD.order_number || ''} for reason: "${reason}" ?`)) return;
-
-  try {
-    const r = await fetch(`${API}/orders/${COI}?reason=${encodeURIComponent(reason)}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${T}` },
-    });
-    const d = await r.json();
-    if(!r.ok){ alert(d.error || 'Delete failed'); return; }
-    closeOrderDetail();
-    loadOrders();
-  } catch(e){
-    alert('Network error');
-  }
+  // Was: prompt() -> alert() -> confirm(). One modal, one decision, reason
+  // validated in place.
+  uiModal({
+    title: `Delete ${COD.order_number || 'order'}?`,
+    width: 520,
+    body:
+      `<div class="ui-dialog-body" style="margin-bottom:12px;">
+         This is a <strong>soft delete</strong> — the order stays in the database for audit but
+         disappears from every list. The reason is recorded on the order.
+       </div>` +
+      uiField({ id: 'delReason', label: 'Reason',
+                placeholder: 'e.g. duplicate of ORD-500123, customer cancelled, test data' }),
+    actions: [
+      { label: 'Keep order' },
+      { label: 'Delete order', danger: true, onClick: async (m) => {
+          const reason = m.el.querySelector('#delReason').value.trim();
+          uiFieldError(m.el, 'delReason', reason ? '' : 'A reason is required to delete an order');
+          if(!reason) return false;
+          const r = await fetch(`${API}/orders/${COI}?reason=${encodeURIComponent(reason)}`, {
+            method: 'DELETE', headers: { Authorization: `Bearer ${T}` },
+          });
+          const d = await r.json();
+          if(!r.ok){ uiFieldError(m.el, 'delReason', d.error || 'Delete failed'); return false; }
+          uiToast(`${COD.order_number || 'Order'} deleted`);
+          closeOrderDetail();
+        } },
+    ],
+  });
 }
