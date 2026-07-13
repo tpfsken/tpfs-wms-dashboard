@@ -40,12 +40,18 @@ async function loadCompliance(){
   } catch(_) {}
 }
 
+// Fourth bespoke tab system in the codebase (.cmp-tab) -> uiTabs.
+const CMP_TABS = [
+  { id: 'queue',    label: 'Review queue' },
+  { id: 'history',  label: 'History' },
+  { id: 'settings', label: 'Thresholds' },
+];
+
 function cmpSwitchTab(name){
   _cmpCurrentTab = name;
+  uiTabs('cmpTabs', CMP_TABS, { active: name, onChange: cmpSwitchTab });
   ['queue','history','settings'].forEach(t => {
-    const tab  = document.getElementById('cmpTab' + t.charAt(0).toUpperCase() + t.slice(1));
     const body = document.getElementById('cmp' + t.charAt(0).toUpperCase() + t.slice(1) + 'Tab');
-    if(tab)  tab.classList.toggle('cmp-tab-active', t === name);
     if(body) body.style.display = t === name ? '' : 'none';
   });
   if(name === 'queue')   loadComplianceQueue();
@@ -58,46 +64,48 @@ function cmpSwitchTab(name){
 
 async function loadComplianceQueue(){
   const body = document.getElementById('cmpQueueBody');
-  body.innerHTML = '<div class="empty-state">Loading…</div>';
+  body.innerHTML = uiSpinner('Loading the review queue…');
   const r = await apiGet('/sds-queue');
-  if(!r){ body.innerHTML = '<div class="empty-state" style="color:var(--red);">Could not load queue</div>'; return; }
+  if(!r){ body.innerHTML = uiError('Could not load the review queue'); return; }
   const rows = r.rows || [];
   if(!rows.length){
     body.innerHTML = `
-      <div class="empty-state" style="text-align:center;padding:40px 20px;">
-        <div style="font-size:48px;margin-bottom:12px;">✓</div>
-        <div style="font-size:16px;font-weight:600;">Queue is clear</div>
-        <div style="font-size:13px;color:var(--text2);margin-top:6px;">No SDS extractions are waiting for human review.</div>
+      <div class="cmp-clear">
+        <div class="cmp-clear-mark">✓</div>
+        <div class="cmp-clear-title">Queue is clear</div>
+        <div class="ui-hint">No SDS extraction is waiting on a human.</div>
       </div>`;
     return;
   }
   body.innerHTML = rows.map(r => cmpQueueCard(r)).join('');
-  body.querySelectorAll('.cmp-queue-card').forEach(el => {
-    el.addEventListener('click', () => cmpOpenReviewer(el.dataset.id));
-  });
+  body.querySelectorAll('.cmp-queue-card').forEach(el =>
+    el.addEventListener('click', () => cmpOpenReviewer(el.dataset.id)));
 }
 
 function cmpQueueCard(r){
   const conf = r.overall_confidence == null ? '—' : Math.round(Number(r.overall_confidence) * 100) + '%';
   const diff = r.diff_summary || {};
   const diffParts = [];
-  if(diff.large) diffParts.push(`<span style="color:#ffb380;">${esc(diff.large)} large change${diff.large === 1 ? '' : 's'}</span>`);
-  if(diff.minor) diffParts.push(`<span style="color:var(--text2);">${esc(diff.minor)} minor</span>`);
-  if(diff.new)   diffParts.push(`<span style="color:var(--blue);">${esc(diff.new)} new</span>`);
-  const diffLine = diffParts.length ? '· ' + diffParts.join(' · ') : '';
+  // A "large change" means this SDS revision moved a hazmat value away from
+  // what was previously approved — that's the reason to look, so it leads.
+  if(diff.large) diffParts.push(`<span class="ui-chip ui-chip-danger">${esc(diff.large)} large change${diff.large === 1 ? '' : 's'}</span>`);
+  if(diff.minor) diffParts.push(`<span class="ui-muted">${esc(diff.minor)} minor</span>`);
+  if(diff.new)   diffParts.push(`<span class="ui-chip ui-chip-info">${esc(diff.new)} new</span>`);
   const ago = r.started_at ? cmpTimeAgo(r.started_at) : '—';
   return `
     <div class="cmp-queue-card" data-id="${esc(r.id)}">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
-        <div style="font-weight:700;color:var(--blue);">${esc(r.sku_code || '')}</div>
-        <div style="font-size:12px;color:var(--text2);">${esc(r.sku_name || '')}</div>
-        <div style="flex:1"></div>
-        <span class="cmp-band-chip cmp-band-${esc(r.triage_band)}">${esc((r.triage_band || '').replace('_',' '))}</span>
+      <div class="cmp-card-head">
+        ${uiId(r.sku_code || '')}
+        <span class="ui-muted">${esc(r.sku_name || '')}</span>
+        <span style="flex:1"></span>
+        ${uiChip(r.triage_band, (r.triage_band || '').replace('_', ' '))}
       </div>
-      <div style="font-size:12px;color:var(--text2);">
-        ${esc(r.client_name || '')} · v${esc(r.version_number)} · ${esc(r.original_filename || 'sds.pdf')} · weakest required ${esc(conf)} ${diffLine}
+      <div class="cmp-card-meta">
+        ${esc(r.client_name || '')} · v${esc(r.version_number)} · ${uiId(r.original_filename || 'sds.pdf')}
+        · weakest required field ${esc(conf)}
+        ${diffParts.length ? '· ' + diffParts.join(' ') : ''}
       </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px;">extracted ${esc(ago)}</div>
+      <div class="ui-hint">extracted ${esc(ago)}</div>
     </div>`;
 }
 
@@ -107,32 +115,33 @@ function cmpQueueCard(r){
 
 async function loadComplianceHistory(){
   const body = document.getElementById('cmpHistoryBody');
-  body.innerHTML = '<div class="empty-state">Loading…</div>';
-  // No dedicated history endpoint yet — sds-queue gets review/rejected.
-  // For history we'd fetch a broader endpoint; for v1 we surface the queue
-  // plus a note. Future: add GET /sds-extractions?limit=...
+  body.innerHTML = uiSpinner('Loading…');
+  // NOTE: there is no history endpoint. This tab re-renders the REVIEW QUEUE
+  // and calls it history, so auto-applied and already-completed extractions —
+  // the ones a forensic view exists to show — are not here. Say that plainly
+  // rather than letting an auditor believe this is the full record.
   const r = await apiGet('/sds-queue');
-  if(!r){ body.innerHTML = '<div class="empty-state" style="color:var(--red);">Could not load history</div>'; return; }
+  if(!r){ body.innerHTML = uiError('Could not load history'); return; }
   const rows = r.rows || [];
-  // Apply client-side search filter
+
   const q = (document.getElementById('cmpHistorySearch')?.value || '').toLowerCase().trim();
   const filtered = q
     ? rows.filter(x =>
         (x.sku_code || '').toLowerCase().includes(q) ||
         (x.original_filename || '').toLowerCase().includes(q))
     : rows;
-  if(!filtered.length){
-    body.innerHTML = `
-      <div class="empty-state" style="text-align:center;padding:30px 20px;">
-        <div style="font-size:13px;color:var(--text2);">${q ? 'No extractions match' : 'No extraction history yet'}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px;">v1 history surfaces the same items as Queue. A broader history endpoint is a follow-up.</div>
-      </div>`;
-    return;
-  }
-  body.innerHTML = filtered.map(r => cmpQueueCard(r)).join('');
-  body.querySelectorAll('.cmp-queue-card').forEach(el => {
-    el.addEventListener('click', () => cmpOpenReviewer(el.dataset.id));
-  });
+
+  const caveat = `<div class="ui-banner ui-banner-warn">
+      This is <strong>not</strong> a full history — there is no history endpoint yet, so this shows
+      the same items as the review queue. Auto-applied and completed extractions are not listed.
+    </div>`;
+
+  body.innerHTML = caveat + (filtered.length
+    ? filtered.map(r => cmpQueueCard(r)).join('')
+    : uiEmpty(q ? 'Nothing matches that search.' : 'Nothing in the queue.'));
+
+  body.querySelectorAll('.cmp-queue-card').forEach(el =>
+    el.addEventListener('click', () => cmpOpenReviewer(el.dataset.id)));
 }
 
 // Wire history search debounce on first call
@@ -208,32 +217,46 @@ async function cmpOpenReviewer(extractionId){
 // =============================================================================
 async function cmpWithdrawSds(){
   if(!_cmpCurrentExtraction) return;
-  const reason = prompt(
-    'Withdraw this SDS upload?\n\n' +
-    'This is for "wrong file uploaded" cleanup BEFORE approval. The PDF + extraction stay in the audit log but disappear from the queue, and the prior version (if any) is restored as the SKU\'s current SDS.\n\n' +
-    'Reason for withdrawal (required, ≥5 chars):'
-  );
-  if(reason == null) return;
-  if(reason.trim().length < 5){ alert('Reason must be at least 5 characters.'); return; }
-
   const docId = _cmpCurrentExtraction.sds_document_id;
-  if(!docId){ alert('No document id on this extraction'); return; }
+  if(!docId) return uiToast('This extraction has no document to withdraw', 'error');
 
-  try {
-    const r = await fetch(`${API}/sds-documents/${docId}/withdraw`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${T}` },
-      body: JSON.stringify({ reason: reason.trim() }),
-    });
-    const d = await r.json();
-    if(!r.ok){ alert(d.error || 'Withdraw failed'); return; }
-    alert(d.restored_version_id
-      ? '✓ SDS withdrawn. Prior version restored as current.'
-      : '✓ SDS withdrawn. No prior version to restore — this SKU has no current SDS.');
-    cmpCloseReviewer();
-  } catch(err){
-    alert('Network error — try again');
-  }
+  uiModal({
+    title: 'Withdraw this SDS upload?',
+    width: 560,
+    body:
+      `<div class="ui-banner ui-banner-warn">
+         For <strong>“wrong file uploaded”</strong> cleanup, before approval. The PDF and its
+         extraction stay in the audit log but leave the queue, and the SKU's <strong>previous SDS
+         version is restored</strong> as current (if there is one).
+       </div>` +
+      uiField({ id: 'cmpWdReason', label: 'Reason',
+                placeholder: 'e.g. wrong product — this is the SDS for the 5L, not the 1L',
+                hint: 'Recorded in the compliance audit log. Minimum 5 characters.' }),
+    actions: [
+      { label: 'Cancel' },
+      { label: 'Withdraw SDS', danger: true, onClick: async (m) => {
+          const reason = m.el.querySelector('#cmpWdReason').value.trim();
+          uiFieldError(m.el, 'cmpWdReason', reason.length >= 5 ? '' : 'At least 5 characters');
+          if(reason.length < 5) return false;
+
+          const r = await fetch(`${API}/sds-documents/${docId}/withdraw`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${T}` },
+            body: JSON.stringify({ reason }),
+          });
+          const d = await r.json();
+          if(!r.ok){ uiFieldError(m.el, 'cmpWdReason', d.error || 'Withdraw failed'); return false; }
+
+          // Whether a prior version came back is the thing the reviewer needs to
+          // know — it decides whether this SKU currently HAS an SDS at all.
+          uiToast(d.restored_version_id
+            ? 'SDS withdrawn — the previous version is current again'
+            : 'SDS withdrawn — this SKU now has NO current SDS',
+            d.restored_version_id ? 'success' : 'error');
+          cmpCloseReviewer();
+        } },
+    ],
+  });
 }
 
 function cmpCloseReviewer(){
@@ -359,32 +382,55 @@ async function cmpReviewField(fieldId, action){
   });
   if(!r.ok){
     const d = await r.json().catch(() => ({}));
-    alert(d.error || 'Review action failed');
-    return;
+    return uiToast(d.error || 'Review action failed', 'error');
   }
-  // Refresh the extraction view in place
+  uiToast(action === 'accepted' ? 'Field accepted' : action === 'rejected' ? 'Field rejected' : 'Field deferred');
   if(_cmpCurrentExtraction?.id) cmpOpenReviewer(_cmpCurrentExtraction.id);
 }
 
+/* Editing a field here overrides what Claude read out of the SDS and writes it
+ * to the SKU master — a UN number or hazard class typed here ends up on
+ * shipping paperwork. It was a browser prompt(). It's a real form now, showing
+ * the field, what Claude found, and the source quote to check against. */
 async function cmpEditField(fieldId){
   const f = (_cmpCurrentExtraction?.fields || []).find(x => x.id === fieldId);
-  const cur = f?.value ?? '';
-  const next = prompt(`Edit value for "${f?.field_key || 'field'}":`, cur);
-  if(next == null) return;       // cancelled
-  if(String(next).trim() === String(cur).trim()){
-    if(!confirm('Value is unchanged. Submit as edit anyway?')) return;
-  }
-  const r = await fetch(`${API}/sds-extraction-fields/${fieldId}/review`, {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${T}` },
-    body: JSON.stringify({ action: 'edited', value: next }),
+  if(!f) return;
+  const cur = f.value ?? '';
+
+  uiModal({
+    title: `Correct ${f.field_key}`,
+    width: 560,
+    body:
+      `<div class="ui-hint" style="margin-bottom:10px;">
+         §${esc(f.section || '?')} · Claude was ${esc(Math.round(Number(f.confidence || 0) * 100))}% sure
+       </div>` +
+      (f.source_quote
+        ? `<div class="ui-banner ui-banner-info" style="white-space:pre-wrap;">“${esc(f.source_quote)}”</div>` : '') +
+      uiField({ id: 'cmpEditVal', label: 'Value', value: cur,
+                hint: 'This overrides the extraction and is written to the SKU master.' }),
+    actions: [
+      { label: 'Cancel' },
+      { label: 'Save correction', primary: true, onClick: async (m) => {
+          const next = m.el.querySelector('#cmpEditVal').value;
+          if(String(next).trim() === String(cur).trim()){
+            uiFieldError(m.el, 'cmpEditVal', 'Unchanged — accept the field instead of editing it');
+            return false;
+          }
+          const r = await fetch(`${API}/sds-extraction-fields/${fieldId}/review`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${T}` },
+            body: JSON.stringify({ action: 'edited', value: next }),
+          });
+          if(!r.ok){
+            const d = await r.json().catch(() => ({}));
+            uiFieldError(m.el, 'cmpEditVal', d.error || 'Edit rejected');
+            return false;
+          }
+          uiToast(`${f.field_key} corrected`);
+          if(_cmpCurrentExtraction?.id) cmpOpenReviewer(_cmpCurrentExtraction.id);
+        } },
+    ],
   });
-  if(!r.ok){
-    const d = await r.json().catch(() => ({}));
-    alert(d.error || 'Edit rejected');
-    return;
-  }
-  if(_cmpCurrentExtraction?.id) cmpOpenReviewer(_cmpCurrentExtraction.id);
 }
 
 async function cmpAcceptAllGreen(data){
@@ -392,18 +438,40 @@ async function cmpAcceptAllGreen(data){
   const greens = (data.fields || []).filter(f =>
     f.triage_decision === 'auto' && !f.applied && !f.reviewer_action && hasValue(f)
   );
-  if(!greens.length){ alert('Nothing eligible to bulk-accept.'); return; }
-  if(!confirm(`Accept ${greens.length} field${greens.length === 1 ? '' : 's'} that scored ≥95% confidence?`)) return;
+  if(!greens.length) return uiToast('Nothing is eligible for bulk-accept', 'error');
 
-  // Sequential to keep the audit log readable. Could parallelize later.
+  const ok = await uiConfirm({
+    title: `Accept ${greens.length} high-confidence field(s)?`,
+    body: `These scored ≥95% and are written straight to the SKU master:<br><br>` +
+          greens.slice(0, 10).map(f => `<strong>${esc(f.field_key)}</strong> — ${esc(f.value)}`).join('<br>') +
+          (greens.length > 10 ? `<br><em>…and ${greens.length - 10} more</em>` : ''),
+    confirmLabel: `Accept ${greens.length}`,
+  });
+  if(!ok) return;
+
+  // Sequential, to keep the audit log readable.
+  // Failures used to be swallowed by an empty catch — on hazmat fields that
+  // means a reviewer believes they approved data that never landed. Count them.
+  let done = 0;
+  const failed = [];
   for(const f of greens){
     try {
-      await fetch(`${API}/sds-extraction-fields/${f.id}/review`, {
+      const r = await fetch(`${API}/sds-extraction-fields/${f.id}/review`, {
         method:'POST',
         headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${T}` },
         body: JSON.stringify({ action: 'accepted' }),
       });
-    } catch(_) { /* keep going on partial failure */ }
+      if(r.ok) done++;
+      else failed.push(f.field_key);
+    } catch(_) {
+      failed.push(f.field_key);
+    }
+  }
+
+  if(failed.length){
+    uiToast(`${done} accepted, ${failed.length} FAILED: ${failed.join(', ')} — review them individually`, 'error', 10000);
+  } else {
+    uiToast(`${done} field(s) accepted and written to the SKU master`);
   }
   if(_cmpCurrentExtraction?.id) cmpOpenReviewer(_cmpCurrentExtraction.id);
 }

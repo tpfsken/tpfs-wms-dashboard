@@ -1034,11 +1034,8 @@
       <button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button>
       <div><div class="page-title">🛡 Compliance</div><div class="page-subtitle">SDS Intelligence reviewer queue · per-field confidence + audit log</div></div>
     </div>
-    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px;">
-      <button id="cmpTabQueue"   class="cmp-tab cmp-tab-active" onclick="cmpSwitchTab('queue')">Queue</button>
-      <button id="cmpTabHistory" class="cmp-tab"                 onclick="cmpSwitchTab('history')">History</button>
-      <button id="cmpTabSettings" class="cmp-tab"                onclick="cmpSwitchTab('settings')">Settings</button>
-    </div>
+    <!-- Tab strip — uiTabs (the one tab system); populated by cmpSwitchTab() -->
+    <div id="cmpTabs"></div>
 
     <div id="cmpQueueTab">
       <div style="font-size:13px;color:var(--text2);margin-bottom:14px;">Extractions awaiting human review. Each item lists the weakest required field's confidence and the diff vs. previously-applied values. Click to open the side-by-side reviewer.</div>
