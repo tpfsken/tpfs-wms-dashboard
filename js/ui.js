@@ -453,10 +453,15 @@ function uiPager(container, { total = 0, limit = 50, offset = 0, onChange, noun 
  *   uiTile({ label:'Charges', value: 22 })
  * Render a row of them inside a `.ui-tiles` container div.
  * ------------------------------------------------------------------------- */
-function uiTile({ label, value, money = false, tone = null, sub = '' }) {
+/* Ledger display type (28px) is for MONEY AND COUNTS. An identifier — an LP, a
+ * location, a lot, a status word — is Terminal type: monospace, 15px, allowed
+ * to wrap. Putting "LP-2025-00001-C1" in a display tile wraps it over four
+ * lines and clips it. Pass compact:true for those. */
+function uiTile({ label, value, money = false, tone = null, sub = '', compact = false }) {
   const val = money ? uiMoney(value, { display: true })
+    : compact ? `<span class="ui-tile-id">${esc(value ?? '—')}</span>`
     : `<span class="ui-num ui-tile-num">${esc(value ?? '—')}</span>`;
-  return `<div class="ui-tile${tone ? ' ui-tile-' + esc(tone) : ''}">
+  return `<div class="ui-tile${compact ? ' ui-tile-compact' : ''}${tone ? ' ui-tile-' + esc(tone) : ''}">
     <div class="ui-tile-label">${esc(label)}</div>
     <div class="ui-tile-value">${val}</div>
     ${sub ? `<div class="ui-tile-sub">${esc(sub)}</div>` : ''}

@@ -780,6 +780,11 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
   text-transform:uppercase;color:var(--muted);margin-bottom:var(--sp-2);}
 .ui-tile-num{font-size:var(--fs-display);font-weight:700;letter-spacing:-.02em;}
 .ui-tile-sub{font-size:12px;color:var(--text2);margin-top:var(--sp-1);}
+/* Identifier tile: LPs, locations, lots, statuses. Terminal type — they must
+   not be rendered at money size, where they wrap and clip. */
+.ui-tile-compact{min-width:130px;}
+.ui-tile-id{display:block;font-family:var(--mono);font-size:14px;font-weight:600;
+  line-height:1.35;letter-spacing:-.01em;overflow-wrap:anywhere;}
 .ui-tile-danger{border-color:var(--st-danger);}
 .ui-tile-warn{border-color:var(--st-warn);}
 .ui-tile-ok{border-color:var(--st-ok);}

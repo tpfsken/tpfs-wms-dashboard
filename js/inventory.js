@@ -1663,14 +1663,16 @@ async function openInventoryDetail(invId){
 
   // Ledger hero — the five facts you open this modal to see.
   const expSoon = inv.expiry_date && new Date(inv.expiry_date) < new Date(Date.now() + 30 * 864e5);
+  // Quantity is the only number here — it gets Ledger display type. Everything
+  // else is an identifier and gets compact Terminal type.
   const header =
     `<div class="ui-tiles">` +
     uiTile({ label: 'Quantity', value: Number(inv.quantity || 0).toLocaleString(), sub: inv.sku_uom || 'EA' }) +
-    uiTile({ label: 'Status', value: (inv.status || '').toUpperCase(),
+    uiTile({ label: 'Status', value: (inv.status || '').toUpperCase(), compact: true,
              tone: inv.status === 'damaged' ? 'danger' : inv.status === 'available' ? 'ok' : null }) +
-    uiTile({ label: 'Location', value: inv.location_code || '—', sub: inv.zone_name || '' }) +
-    uiTile({ label: 'License plate', value: inv.lp_number || '—', sub: inv.lp_type || '' }) +
-    uiTile({ label: 'Lot', value: inv.lot_number || '—',
+    uiTile({ label: 'Location', value: inv.location_code || '—', compact: true, sub: inv.zone_name || '' }) +
+    uiTile({ label: 'License plate', value: inv.lp_number || '—', compact: true, sub: inv.lp_type || '' }) +
+    uiTile({ label: 'Lot', value: inv.lot_number || '—', compact: true,
              tone: expSoon ? 'warn' : null,
              sub: inv.expiry_date ? 'Exp ' + new Date(inv.expiry_date).toLocaleDateString() : '' }) +
     `</div>`;
