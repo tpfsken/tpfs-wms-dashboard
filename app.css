@@ -236,10 +236,22 @@ body.portal-mode .portal-banner{
   text-transform:uppercase;color:var(--muted);padding:8px 12px 4px;
   border-top:1px solid var(--border);margin-top:4px;}
 
-/* ---- Reports (D6b) ---- */
+/* ---- Reports (D6b / R-B) ----
+   The catalog is a working index: grouped rows, dense, no decoration. You come
+   here to run a report, not to look at it. */
 .rep-search{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:16px 20px;}
-.report-card-soon{opacity:.5;cursor:default;}
-.report-card-soon:hover{border-color:var(--border);transform:none;}
+.rep-group{margin-bottom:16px;}
+.rep-row{display:grid;grid-template-columns:280px 1fr auto;align-items:center;gap:16px;
+  width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--border);
+  padding:12px 20px;cursor:pointer;font-family:var(--font);color:var(--text);}
+.rep-row:hover{background:var(--hover);}
+.rep-row-title{font-size:var(--fs-ui);font-weight:600;}
+.rep-row-desc{font-size:var(--fs-body);color:var(--text2);line-height:1.5;}
+.rep-row-go{font-size:var(--fs-body);font-weight:600;color:var(--blue);white-space:nowrap;}
+@media (max-width: 900px){
+  .rep-row{grid-template-columns:1fr;gap:4px;}
+  .rep-row-go{display:none;}
+}
 
 /* ---- User certifications (D6a) ---- */
 .cert-card{border:1px solid var(--border);border-radius:var(--radius);

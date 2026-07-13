@@ -16,10 +16,9 @@ let _reportsClient = '';       // selected client id, '' = all clients
 const REPORTS_CATALOG = [
   {
     id:    'item-history',
-    title: 'Item History → LP Trace',
-    desc:  'Search by SKU or lot. Drill into any row to follow the LP family — receiving, picks, shipments, full timeline.',
+    title: 'Item history and LP trace',
+    desc:  'Search by SKU or lot, then follow the licence-plate family — receiving, picks, shipments, full timeline. Used for recall.',
     phase: '9.16 / 9.17',
-    icon:  '🔎',
     open:  () => openItemHistoryReport(),
     status:'live',
   },
@@ -64,34 +63,43 @@ async function loadReports(){
   renderReportsIndex();
 }
 
-const REPORT_ICONS = {
-  'client-activity': '📒', 'exceptions': '⚠', 'receiving': '📥',
-  'shipments': '📤', 'inventory-as-of': '📅', 'item-history': '🔎',
-};
+/* The report catalog is a working index, not a landing page. Grouped rows,
+ * dense, scannable, no decoration — you come here to run a report, not to
+ * admire it. */
+const REPORT_GROUP_ORDER = ['Activity', 'Inbound', 'Outbound', 'Inventory', 'Compliance', 'Billing', 'Traceability'];
 
 function renderReportsIndex(){
-  const grid = document.getElementById('reportsIndexGrid');
-  grid.className = 'portal-grid';   // same card-hub as the portal home
+  const host = document.getElementById('reportsIndexGrid');
+  host.className = '';   // drop the card-grid; this is a list
 
   // Server-defined reports + the hand-built ones that predate the registry.
-  const cards = _reportCatalog.map(r => ({
-    id: r.id, title: r.title, desc: r.description,
+  const all = _reportCatalog.map(r => ({
+    id: r.id, title: r.title, desc: r.description, group: r.group || 'Other',
     open: () => openReport(r.id),
   })).concat(REPORTS_CATALOG.filter(r => r.status === 'live').map(r => ({
-    id: r.id, title: r.title, desc: r.desc, open: r.open,
+    id: r.id, title: r.title, desc: r.desc, group: 'Traceability', open: r.open,
   })));
 
-  if(!cards.length){ grid.innerHTML = uiEmpty('No reports available.'); return; }
+  if(!all.length){ host.innerHTML = uiEmpty('No reports available.'); return; }
 
-  grid.innerHTML = cards.map(r => `
-    <button class="portal-card js-report-card" data-id="${esc(r.id)}">
-      <span class="portal-card-icon">${esc(REPORT_ICONS[r.id] || '📄')}</span>
-      <span class="portal-card-title">${esc(r.title)}</span>
-      <span class="portal-card-desc">${esc(r.desc || '')}</span>
-    </button>`).join('');
+  const groups = {};
+  all.forEach(r => { (groups[r.group] = groups[r.group] || []).push(r); });
+  const order = REPORT_GROUP_ORDER.filter(g => groups[g])
+    .concat(Object.keys(groups).filter(g => !REPORT_GROUP_ORDER.includes(g)));
 
-  grid.querySelectorAll('.js-report-card').forEach(card => {
-    const r = cards.find(x => x.id === card.dataset.id);
+  host.innerHTML = order.map(g => `
+    <div class="card rep-group">
+      <div class="card-head"><div class="card-title">${esc(g)}</div></div>
+      ${groups[g].map(r => `
+        <button class="rep-row js-report-card" data-id="${esc(r.id)}">
+          <span class="rep-row-title">${esc(r.title)}</span>
+          <span class="rep-row-desc">${esc(r.desc || '')}</span>
+          <span class="rep-row-go">Run →</span>
+        </button>`).join('')}
+    </div>`).join('');
+
+  host.querySelectorAll('.js-report-card').forEach(card => {
+    const r = all.find(x => x.id === card.dataset.id);
     if(r) card.addEventListener('click', () => r.open());
   });
 }
