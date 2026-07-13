@@ -224,6 +224,21 @@ body.portal-mode .portal-banner{
   .ord-grid { grid-template-columns: 1fr; }
 }
 
+/* ---- Item-master form (D4d-2) ---- */
+.item-sec-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;}
+.item-checks{display:flex;gap:18px;flex-wrap:wrap;}
+.ui-check{display:flex;align-items:center;gap:6px;font-size:var(--fs-body);cursor:pointer;}
+.ui-check input{width:16px;height:16px;accent-color:var(--blue);}
+.ui-check-warn{color:var(--st-warn);font-weight:600;}
+.item-hazmat{border:1px solid var(--st-warn);border-radius:var(--radius);
+  padding:14px;margin-top:14px;background:var(--bg);}
+.item-sds-status{font-size:12px;margin:8px 0;}
+.item-sds-intel{font-size:12px;margin:8px 0;border-radius:var(--radius-sm);
+  padding:10px;border:1px solid var(--border);}
+.item-sds-card{background:var(--panel);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;margin:8px 0;}
+.item-audit{font-size:12px;margin-top:10px;max-height:280px;overflow-y:auto;}
+
 /* ---- Inventory detail (D4c) ---- */
 .inv-sec{margin-bottom:var(--sp-3);}
 .inv-sec-body{padding:14px 18px;}

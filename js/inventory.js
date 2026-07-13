@@ -411,56 +411,162 @@ const PACKING_GROUPS = [
   {value:'III', label:'III (low danger)'},
 ];
 
+/* The item form's markup lives here now (D4d-2), not in index.html. That is
+ * not cosmetic: the old fixed modal had to be SCRUBBED on every open, and the
+ * scrub kept missing things — a sticky SDS-Intel panel made every item look
+ * like it had a pending review, a staged SDS file could ride along to a
+ * different item, and a stale Base SKU Code bled from an edit into the next
+ * New Item. A modal built fresh each open cannot leak state between items, so
+ * all of that reset code is simply gone. */
+function itemFormBody(){
+  return `
+    <div class="ui-label">Basics</div>
+    <div class="ui-field" data-field="itemClientWrap">
+      <label class="ui-label">Client *</label>
+      <div class="cb-wrap" id="itemClientWrap"></div>
+      <div class="ui-field-err" style="display:none;"></div>
+    </div>
+    <div class="ui-field-row">
+      ${uiField({ id: 'itemCode', label: 'Base SKU code *',
+                  placeholder: 'ACM-1234', hint: 'Auto-fills the level codes below' })}
+      ${uiField({ id: 'itemUpc', label: 'UPC / barcode', placeholder: '012345678905' })}
+    </div>
+    ${uiField({ id: 'itemName', label: 'Name *', placeholder: 'e.g. Vitamin C 500mg, 60-count bottle' })}
+    ${uiField({ id: 'itemDescription', label: 'Description', placeholder: 'Long-form description (optional)' })}
+    <div class="ui-field">
+      <label class="ui-label">UOM</label>
+      <div class="cb-wrap" id="itemUomWrap"></div>
+    </div>
+
+    <div class="eo-section">
+      <div class="item-sec-head">
+        <div class="ui-label">Handling units</div>
+        <span class="ui-hint">One level per unit you stock — each with its own dimensions, weight, NMFC and freight class</span>
+        <span style="flex:1"></span>
+        <button type="button" class="ui-btn" id="itemHuAddBtn">+ Add level</button>
+      </div>
+      <div id="itemHuList"></div>
+      <div id="itemHuEditNote" class="ui-hint" style="display:none;margin-top:6px;"></div>
+    </div>
+
+    <div class="eo-section">
+      <div class="ui-label">Pricing</div>
+      <div class="ui-field-row">
+        ${uiField({ id: 'itemUnitCost', label: 'Unit cost ($)', type: 'number' })}
+        ${uiField({ id: 'itemUnitPrice', label: 'Unit price ($)', type: 'number' })}
+      </div>
+    </div>
+
+    <div class="eo-section">
+      <div class="ui-label">Tracking</div>
+      <div class="item-checks">
+        <label class="ui-check"><input type="checkbox" id="itemLotTracked"> Lot tracked</label>
+        <label class="ui-check"><input type="checkbox" id="itemExpiryTracked"> Expiry tracked</label>
+        <label class="ui-check ui-check-warn"><input type="checkbox" id="itemHazmat"> ⚠ Hazmat</label>
+      </div>
+      <div id="itemHazmatHint" class="ui-banner ui-banner-warn" style="display:none;margin-top:8px;">
+        This client has hazmat enabled — turn this on if the item is hazardous.
+      </div>
+    </div>
+
+    <div class="eo-section">
+      <div class="ui-label">Special handling instructions</div>
+      <input class="ui-input" id="itemSpecialHandling"
+             placeholder="Printed on the pick slip and shown on the handheld — e.g. 'Wear gloves', 'Keep upright'">
+    </div>
+
+    <div class="eo-section">
+      <div class="item-sec-head">
+        <div class="ui-label">Safety data sheet</div>
+        <span style="flex:1"></span>
+        <button type="button" class="ui-btn" id="itemSdsReuseBtn" style="display:none;">Re-read attached SDS</button>
+        <button type="button" class="ui-btn" onclick="document.getElementById('itemSdsExtractInput').click()">Upload SDS to auto-fill</button>
+        <button type="button" class="ui-btn" id="itemSdsIntelBtn" style="display:none;"
+                title="Per-field SDS Intelligence: versions the SDS, per-field confidence, audit log, queues review items">Full SDS intelligence</button>
+        <input type="file" id="itemSdsExtractInput" accept="application/pdf,.pdf" style="display:none;">
+        <input type="file" id="itemSdsIntelInput" accept="application/pdf,.pdf" style="display:none;">
+      </div>
+      <div class="ui-hint">Any product's SDS (PDF). Auto-fill pre-fills the hazmat block if it's hazardous; otherwise it's simply kept on file.</div>
+      <div id="itemSdsExtractStatus" class="item-sds-status"></div>
+      <div id="itemSdsIntelResult" class="item-sds-intel" style="display:none;"></div>
+      <div id="itemSdsCurrentCard" class="item-sds-card" style="display:none;"></div>
+    </div>
+
+    <div id="itemHazmatBlock" class="item-hazmat" style="display:none;">
+      <div class="ui-label" style="color:var(--st-warn);">⚠ Hazmat details</div>
+      <div class="ui-field-row">
+        ${uiField({ id: 'itemUnNumber', label: 'UN number *', placeholder: 'e.g. UN1090' })}
+        ${uiField({ id: 'itemHazardClass', label: 'Hazard class *', placeholder: 'e.g. 3, 9, 1.4G' })}
+      </div>
+      ${uiField({ id: 'itemProperShippingName', label: 'Proper shipping name', placeholder: 'e.g. Acetone' })}
+      <div class="ui-field-row">
+        <div class="ui-field">
+          <label class="ui-label">Packing group</label>
+          <div class="cb-wrap" id="itemPackingGroupWrap"></div>
+        </div>
+        <div class="ui-field">
+          <label class="ui-label">Restrictions</label>
+          <div class="item-checks">
+            <label class="ui-check"><input type="checkbox" id="itemGroundOnly"> Ground-only</label>
+            <label class="ui-check"><input type="checkbox" id="itemLimitedQty"> Limited quantity</label>
+          </div>
+        </div>
+      </div>
+      ${uiField({ id: 'itemHazmatNotes', label: 'Hazmat notes' })}
+    </div>
+
+    <div id="itemDocsSection" class="eo-section">
+      <div class="item-sec-head">
+        <div class="ui-label">Documents</div>
+        <span class="ui-hint">SDS, product photos, spec sheets</span>
+        <span style="flex:1"></span>
+        <button type="button" class="ui-btn" id="itemDocAddBtn">Attach file</button>
+        <input type="file" id="itemDocAddInput" multiple style="display:none;"
+               accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,image/*">
+      </div>
+      <div id="itemDocsBody"></div>
+    </div>
+
+    <div id="itemAuditBlock" class="eo-section" style="display:none;">
+      <div class="item-sec-head" style="cursor:pointer;" onclick="toggleSkuAuditPanel()">
+        <div class="ui-label">Compliance audit</div>
+        <span class="ui-hint" id="itemAuditCount"></span>
+        <span style="flex:1"></span>
+        <span class="ui-hint" id="itemAuditToggle">▾ Show</span>
+      </div>
+      <div id="itemAuditBody" class="item-audit" style="display:none;"></div>
+    </div>`;
+}
+
+let ITEM_M = null;   // open item-form uiModal
+
 async function openItemFormModal(skuId){
   _editingItemId = skuId || null;
-  document.getElementById('itemFormTitle').textContent     = skuId ? 'Edit Item' : 'New Item';
-  document.getElementById('itemFormSubmitBtn').textContent = skuId ? 'Save Changes' : 'Create Item';
-  document.getElementById('itemFormError').textContent     = '';
 
-  // Reset the SDS panels so state from a prior item doesn't bleed into
-  // this open. The Intel result panel in particular was sticky — once
-  // shown for item A it stayed visible when the modal re-opened for
-  // item B, making it look like every item had a pending SDS review.
-  const intelResult = document.getElementById('itemSdsIntelResult');
-  if(intelResult){
-    intelResult.style.display = 'none';
-    intelResult.innerHTML = '';
-  }
-  const sdsStatus = document.getElementById('itemSdsExtractStatus');
-  if(sdsStatus){
-    sdsStatus.textContent = '';
-    sdsStatus.style.color = '';
-  }
-  // _itemPendingSds carries a staged file from create-mode SDS auto-fill;
-  // reset it so a stale file doesn't ride along to a different item.
-  _itemPendingSds = null;
+  // Fresh DOM each open — no scrubbing, so no state can leak between items.
+  ITEM_M = uiModal({
+    title: skuId ? 'Edit item' : 'New item',
+    width: 820,
+    body: itemFormBody(),
+    actions: [
+      { label: 'Cancel' },
+      { label: skuId ? 'Save changes' : 'Create item', primary: true, onClick: submitItemForm },
+    ],
+    onClose: () => {
+      ITEM_M = null;
+      // Staged files die with the modal — they belonged to this item only.
+      _itemPendingSds = null;
+      _itemPendingDocs = [];
+    },
+  });
 
-  // Compliance audit panel — only meaningful in edit mode (need a sku_id).
-  // The panel itself is collapsed by default; expanding loads the rows.
-  const auditBlock = document.getElementById('itemAuditBlock');
-  if(auditBlock){
-    // Always reset the toggle state so it opens collapsed for each item
-    const auditBody = document.getElementById('itemAuditBody');
-    const auditToggle = document.getElementById('itemAuditToggle');
-    if(auditBody)  auditBody.style.display = 'none';
-    if(auditToggle) auditToggle.textContent = '▾ Show';
+  _itemPendingSds  = null;
+  _itemPendingDocs = [];
 
-    if(skuId){
-      // Lazy load — call now so the count is shown in the header even
-      // when the user hasn't expanded yet
-      if(typeof loadSkuComplianceAudit === 'function') loadSkuComplianceAudit(skuId);
-    } else {
-      auditBlock.style.display = 'none';
-    }
-  }
-
-  // Load the current versioned SDS doc info into the Safety Data Sheet
-  // section's "Current SDS" card. Hidden when there's nothing on file.
-  if(skuId && typeof loadSkuCurrentSds === 'function'){
-    loadSkuCurrentSds(skuId);
-  } else {
-    const card = document.getElementById('itemSdsCurrentCard');
-    if(card) card.style.display = 'none';
+  // Compliance audit + current SDS — edit mode only (both need a sku_id).
+  if(skuId){
+    if(typeof loadSkuComplianceAudit === 'function') loadSkuComplianceAudit(skuId);
+    if(typeof loadSkuCurrentSds === 'function') loadSkuCurrentSds(skuId);
   }
 
   // Make sure clientsCache is populated for the dropdown
@@ -597,17 +703,16 @@ async function openItemFormModal(skuId){
     });
   }
 
-  // Reset working set every open
   _itemHandlingUnits = [];
-  // Hide the "Re-read attached SDS" button until loadItemAttachmentsList
-  // sees one for this SKU.
-  const reuseBtn = document.getElementById('itemSdsReuseBtn');
-  if(reuseBtn) reuseBtn.style.display = 'none';
 
   if(skuId){
     // Edit mode — fetch and populate
     const sku = await apiGet(`/skus/${skuId}`);
-    if(!sku){ document.getElementById('itemFormError').textContent = 'Could not load item'; return; }
+    if(!sku){
+      uiToast('Could not load that item', 'error');
+      ITEM_M?.close();
+      return;
+    }
     cbSet('itemClientWrap', String(sku.client_id),
       (clientsCache.find(c => c.id === sku.client_id)?.code || '') + ' — ' +
       (clientsCache.find(c => c.id === sku.client_id)?.name || ''));
@@ -668,25 +773,10 @@ async function openItemFormModal(skuId){
     document.getElementById('itemHuEditNote').style.display = 'none';
     loadItemAttachmentsList(skuId);
   } else {
-    // Create mode — reset everything (including itemCode, the Base SKU
-    // Code field — without this, a stale value from a prior edit would
-    // bleed into the new-item form).
-    [
-      'itemCode','itemUpc','itemName','itemDescription','itemUnitCost','itemUnitPrice',
-      'itemUnNumber','itemHazardClass','itemProperShippingName','itemHazmatNotes',
-      'itemSpecialHandling',
-    ].forEach(id => { document.getElementById(id).value = ''; });
-    ['itemLotTracked','itemExpiryTracked','itemHazmat','itemGroundOnly','itemLimitedQty']
-      .forEach(id => { document.getElementById(id).checked = false; });
-    document.getElementById('itemHazmatBlock').style.display = 'none';
-    document.getElementById('itemSdsExtractStatus').textContent = '';
-    cbReset('itemClientWrap'); cbSet('itemUomWrap','EA');
-    cbReset('itemPackingGroupWrap');
-
-    // Create mode starts with one default level (EACH); ops can add more.
-    // _autoSync=true keeps the unit's sku_code in sync with the base
-    // code field as the user types (cleared once the user manually edits
-    // the unit's sku_code input).
+    // Create mode. The form is already empty — it was built a moment ago —
+    // so there is nothing to reset. Just seed the default level.
+    // _autoSync=true keeps the unit's sku_code in step with the Base SKU Code
+    // field as the user types (until they edit the unit's code by hand).
     _itemHandlingUnits.push({
       sku_type:'EACH', sku_code:'', pack_qty:1,
       _autoSync: true,
@@ -694,18 +784,10 @@ async function openItemFormModal(skuId){
       nmfc_code:'', freight_class:'',
     });
     huAddBtn.style.display = '';
-    document.getElementById('itemHuEditNote').style.display = 'none';
   }
   await renderHandlingUnits();
   _wireBaseCodeAutofill();
-
-  // Reset staging before rendering so a previous modal open doesn't leak
-  // files into a fresh New Item form.
-  _itemPendingSds = null;
-  _itemPendingDocs = [];
   if(!skuId) renderItemPendingDocs();
-  document.getElementById('itemHazmatHint').style.display = 'none';
-  document.getElementById('itemFormModal').style.display  = 'flex';
 }
 
 // When a client is picked, surface a hint if that client has hazmat
@@ -740,10 +822,8 @@ function onItemClientChange(){
   }
 }
 
-async function submitItemForm(){
-  const err = document.getElementById('itemFormError');
-  err.textContent = '';
-
+// uiModal action — returning false keeps the modal open.
+async function submitItemForm(m){
   const numOrNull = (id) => {
     const v = document.getElementById(id).value.trim();
     return v === '' ? null : Number(v);
@@ -753,20 +833,25 @@ async function submitItemForm(){
   const baseCode = document.getElementById('itemCode').value.trim().toUpperCase();
   const name     = document.getElementById('itemName').value.trim();
 
-  if(!clientId)  { err.textContent = 'Client is required'; return; }
-  if(!baseCode)  { err.textContent = 'Base SKU code is required'; return; }
-  if(!name)      { err.textContent = 'Name is required'; return; }
-  if(!_itemHandlingUnits.length){ err.textContent = 'Add at least one handling unit'; return; }
+  // Errors land on the field that caused them, not in one red line at the
+  // bottom of an 820px form the user has to hunt through.
+  uiFieldError(m.el, 'itemClientWrap', clientId ? '' : 'Pick a client');
+  uiFieldError(m.el, 'itemCode', baseCode ? '' : 'Base SKU code is required');
+  uiFieldError(m.el, 'itemName', name ? '' : 'Name is required');
+  if(!clientId || !baseCode || !name) return false;
 
-  // Validate each handling unit — sku_code required, sku_type required.
+  if(!_itemHandlingUnits.length){
+    uiToast('Add at least one handling unit', 'error');
+    return false;
+  }
   for(const hu of _itemHandlingUnits){
     if(!hu.sku_code || !hu.sku_code.trim()){
-      err.textContent = `Each handling unit needs a SKU code (level: ${hu.sku_type})`;
-      return;
+      uiToast(`The ${hu.sku_type} level needs a SKU code`, 'error');
+      return false;
     }
     if(!hu.sku_type){
-      err.textContent = 'Each handling unit needs a level type';
-      return;
+      uiToast('Every handling unit needs a level type', 'error');
+      return false;
     }
   }
 
@@ -793,12 +878,13 @@ async function submitItemForm(){
     common.isGroundOnly       = document.getElementById('itemGroundOnly').checked;
     common.isLimitedQty       = document.getElementById('itemLimitedQty').checked;
     common.hazmatNotes        = document.getElementById('itemHazmatNotes').value.trim() || null;
-    if(!common.unNumber)   { err.textContent = 'UN Number is required for hazmat items'; return; }
-    if(!common.hazardClass){ err.textContent = 'Hazard Class is required for hazmat items'; return; }
+    // A hazmat item without a UN number or hazard class is a shipping
+    // violation waiting to happen — these are not optional.
+    uiFieldError(m.el, 'itemUnNumber', common.unNumber ? '' : 'Required for a hazmat item');
+    uiFieldError(m.el, 'itemHazardClass', common.hazardClass ? '' : 'Required for a hazmat item');
+    if(!common.unNumber || !common.hazardClass) return false;
   }
 
-  const submitBtn = document.getElementById('itemFormSubmitBtn');
-  submitBtn.disabled = true;
   try {
     let r, d;
     if(_editingItemId){
@@ -837,8 +923,8 @@ async function submitItemForm(){
         });
         const dd = await rr.json();
         if(!rr.ok){
-          err.textContent = dd.error || `Save failed updating ${hu.sku_code}`;
-          return;
+          uiToast(dd.error || `Could not update ${hu.sku_code}`, 'error');
+          return false;
         }
         lastResp = dd;
       }
@@ -864,8 +950,8 @@ async function submitItemForm(){
         });
         const dd = await rr.json();
         if(!rr.ok){
-          err.textContent = dd.error || `Could not add ${hu.sku_type} ${hu.sku_code}`;
-          return;
+          uiToast(dd.error || `Could not add the ${hu.sku_type} level (${hu.sku_code})`, 'error');
+          return false;
         }
         lastResp = dd;
       }
@@ -894,7 +980,7 @@ async function submitItemForm(){
       });
       d = await r.json();
     }
-    if(!r.ok){ err.textContent = d.error || 'Save failed'; return; }
+    if(!r.ok){ uiToast(d.error || 'Save failed', 'error'); return false; }
     // For multi-level create, .items[0] is the biggest level (PALLET if
     // present). Use the LAST one (smallest) as the "primary" id for
     // attachment uploads — that's typically the EACH SKU.
@@ -937,20 +1023,19 @@ async function submitItemForm(){
       _itemPendingDocs = [];
     }
 
-    closeModal('itemFormModal');
-    // Refresh whichever list view is currently visible. The user could
-    // be on Inventory OR on a client's Item Master tab — without
-    // refreshing both we end up showing stale rows on the page they're
-    // actually looking at.
+    uiToast(_editingItemId ? 'Item saved' : `Item ${baseCode} created`);
+
+    // Refresh whichever list is actually on screen — the user could be on
+    // Inventory OR on a client's Item Master tab. Refresh only one and the
+    // other shows stale rows.
     if(typeof loadInventory === 'function') loadInventory();
     if(typeof fetchClientItems === 'function' && document.getElementById('cliItemsBody')){
       const search = document.getElementById('cliItemsSearch');
       fetchClientItems(search?.value.trim() || '');
     }
   } catch(e){
-    err.textContent = 'Network error';
-  } finally {
-    submitBtn.disabled = false;
+    uiToast('Network error — the item was not saved', 'error');
+    return false;
   }
 }
 
@@ -1402,7 +1487,7 @@ function renderSdsExtractResult(ext, doc){
   result.style.borderColor = bandStyle.border;
 
   const reviewLink = (band === 'review_high' || band === 'review_low' || band === 'rejected')
-    ? `<div style="margin-top:8px;"><button class="btn btn-ghost" onclick="closeModal('itemFormModal');navigateTo('compliance')" style="padding:4px 12px;font-size:12px;color:${bandStyle.fg};border:1px solid ${bandStyle.border};">→ Open in Compliance Queue</button></div>`
+    ? `<div style="margin-top:8px;"><button class="ui-btn js-sds-review">Open in the compliance queue →</button></div>`
     : '';
   const docLine = `Version ${esc(doc.version_number)} · ${esc(doc.original_filename || 'sds.pdf')}`;
 
@@ -1425,6 +1510,11 @@ function renderSdsExtractResult(ext, doc){
     <div style="font-size:11px;margin-top:6px;line-height:1.5;">${reasonText}</div>
     ${reviewLink}
   `;
+
+  result.querySelector('.js-sds-review')?.addEventListener('click', () => {
+    ITEM_M?.close();
+    navigateTo('compliance');
+  });
 
   // If auto-applied, refresh both the inventory list AND the open edit
   // form so the user immediately sees the values flow into hazmat
