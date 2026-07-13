@@ -599,36 +599,24 @@
       <div class="page-header">
         <div><div class="page-title">Clients</div><div class="page-subtitle">3PL client management — click a row to edit KPI / SLA targets</div></div>
         <div style="flex:1"></div>
-        <button class="btn btn-primary" onclick="openClientFormModal()">+ New Client</button>
-        <button class="btn btn-ghost" onclick="loadClients()">Refresh</button>
+        <button class="ui-btn" onclick="loadClients()">Refresh</button>
+        <button class="ui-btn ui-btn-primary" onclick="openClientFormModal()">New client</button>
       </div>
       <div class="card">
-        <div style="overflow:auto;">
-          <table class="data-table">
-            <thead><tr><th>Code</th><th>Name</th><th>Contact</th><th>Type</th><th>Onboarded</th><th>Status</th></tr></thead>
-            <tbody id="clientBody"></tbody>
-          </table>
-        </div>
+        <div style="overflow:auto;" id="cliListWrap"></div>
       </div>
     </div>
 
     <!-- DETAIL VIEW (hidden until a row is clicked) -->
     <div id="cliDetailView" style="display:none;">
       <div class="page-header">
-        <button class="btn btn-ghost" onclick="closeClientDetail()" style="padding:6px 12px;">← Clients</button>
+        <button class="ui-btn" onclick="closeClientDetail()">← Clients</button>
         <div><div class="page-title" id="cliDetailTitle">—</div><div class="page-subtitle" id="cliDetailSub">—</div></div>
         <div style="flex:1"></div>
-        <button class="btn btn-ghost" onclick="reloadClientDetail()">Refresh</button>
+        <button class="ui-btn" onclick="reloadClientDetail()">Refresh</button>
       </div>
-      <!-- Tab strip -->
-      <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;">
-        <button class="cli-tab" data-tab="profile" style="padding:10px 18px;border:none;background:none;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--blue);">Profile</button>
-        <button class="cli-tab" data-tab="items" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">Item Master</button>
-        <button class="cli-tab" data-tab="kpi" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">KPI / SLA Targets</button>
-        <button class="cli-tab" data-tab="rules" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">SLA Rules</button>
-        <button class="cli-tab" data-tab="ratecard" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">Rate Card</button>
-        <button class="cli-tab" data-tab="performance" style="padding:10px 18px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;">Current Performance</button>
-      </div>
+      <!-- Tab strip — uiTabs (the one tab system); populated by wireClientTabs() -->
+      <div id="cliTabs"></div>
       <!-- Tab panels -->
       <div class="cli-panel" data-tab="profile" style="display:block;">
         <div class="card">
@@ -1249,89 +1237,10 @@
      Client → Rate Card (S3b). billing_rates itself is retired by engine
      batch S4. -->
 
-<!-- NEW / EDIT CLIENT MODAL -->
-<div id="clientFormModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
-  <div class="modal" style="max-width:680px;">
-    <div class="modal-head">
-      <div class="modal-title" id="clientFormTitle">New Client</div>
-      <div style="flex:1"></div>
-      <button class="btn btn-ghost" onclick="closeModal('clientFormModal')" style="padding:6px 12px;">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-row form-row-2">
-        <div class="form-group"><label class="form-label">Client Code *</label><input class="form-input" id="cfCode" placeholder="ACME" style="text-transform:uppercase;"></div>
-        <div class="form-group"><label class="form-label">Client Name *</label><input class="form-input" id="cfName" placeholder="Acme Supplements"></div>
-      </div>
-
-      <!-- Type toggle: B2B / B2C / Both. Drives downstream rate cards
-           and order routing logic. -->
-      <div class="form-group">
-        <label class="form-label">Business Type *</label>
-        <div id="cfTypeToggle" style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;width:fit-content;">
-          <button type="button" class="js-cf-type" data-type="B2B"  style="padding:8px 18px;background:none;border:none;color:var(--text);cursor:pointer;font-weight:600;font-size:13px;">B2B</button>
-          <button type="button" class="js-cf-type" data-type="B2C"  style="padding:8px 18px;background:none;border:none;color:var(--text);cursor:pointer;font-weight:600;font-size:13px;border-left:1px solid var(--border);">B2C</button>
-          <button type="button" class="js-cf-type" data-type="BOTH" style="padding:8px 18px;background:none;border:none;color:var(--text);cursor:pointer;font-weight:600;font-size:13px;border-left:1px solid var(--border);">B2B + B2C</button>
-        </div>
-        <input type="hidden" id="cfType" value="B2B">
-      </div>
-
-      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:16px;">
-        <div style="font-size:14px;font-weight:600;margin-bottom:12px;">Primary Contact</div>
-        <div class="form-row form-row-2">
-          <div class="form-group"><label class="form-label">Contact Name</label><input class="form-input" id="cfContactName"></div>
-          <div class="form-group"><label class="form-label">Contact Email</label><input class="form-input" id="cfContactEmail" type="email"></div>
-        </div>
-        <div class="form-group"><label class="form-label">Contact Phone</label><input class="form-input" id="cfContactPhone" placeholder="+1 555 123 4567"></div>
-      </div>
-
-      <!-- Hazmat toggle. When ON, items added under this client must
-           include UN # / packing group / hazard class. The optional
-           hazmat config block below stores client-level defaults
-           (preferred carrier, ground-only, emergency contact). -->
-      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:16px;">
-        <div style="display:flex;align-items:center;gap:14px;">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:14px;">
-            <input type="checkbox" id="cfHazmat" style="width:18px;height:18px;">
-            <span>⚠ Hazmat Capable</span>
-          </label>
-          <span style="font-size:12px;color:var(--text2);">Client ships some hazmat products. Each item is still flagged hazmat individually — this just enables the hazmat fields + emergency contact on the client record.</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:14px;margin-top:12px;">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:14px;">
-            <input type="checkbox" id="cfLotTracking" style="width:18px;height:18px;">
-          </label>
-          <label style="display:flex;align-items:center;gap:10px;margin-top:10px;">
-            <span style="min-width:140px;">Invoice detail</span>
-            <select id="cfInvoiceMode" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);">
-              <option value="DETAILED">Detailed — one line per charge (per LP)</option>
-              <option value="SUMMARY">Summary — grouped, expandable</option>
-            </select>
-            <span>📦 Lot Tracking Required</span>
-          </label>
-          <span style="font-size:12px;color:var(--text2);">All items under this client will be lot-tracked (mandatory) — turning this on backfills existing items.</span>
-        </div>
-        <div id="cfHazmatBlock" style="display:none;margin-top:14px;padding:14px;background:var(--bg);border-radius:8px;border:1px solid var(--amber);">
-          <div style="font-size:12px;color:var(--amber);font-weight:600;margin-bottom:6px;">⚠ HAZMAT — CLIENT-LEVEL CONTACT</div>
-          <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Hazard class, packing group, and UN # vary by item — they're set per SKU. Only the emergency contact + notes belong to the client.</div>
-          <div class="form-group">
-            <label class="form-label">Emergency Contact (24-hour phone) *</label>
-            <input class="form-input" id="cfHazEmergency" placeholder="e.g. CHEMTREC 1-800-424-9300, or in-house 24-hr line">
-          </div>
-          <div class="form-group" style="margin-bottom:0;">
-            <label class="form-label">Hazmat Notes</label>
-            <textarea class="form-input" id="cfHazNotes" rows="3" placeholder="Anything the floor needs to know — contract, broker, special handling..."></textarea>
-          </div>
-        </div>
-      </div>
-
-      <div id="cfError" style="color:var(--red);font-size:13px;margin-top:8px;"></div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="closeModal('clientFormModal')">Cancel</button>
-      <button class="btn btn-primary" id="cfSubmitBtn" onclick="submitClientForm()">Create Client</button>
-    </div>
-  </div>
-</div>
+<!-- Client form modal retired in D5a — it is a uiModal now (openClientFormModal()
+     in js/clients.js). The old markup had the lot-tracking checkbox separated
+     from its label: the words "Lot Tracking Required" sat INSIDE the
+     invoice-detail label, so the checkbox had no clickable label at all. -->
 
 <!-- ============================================================
      MOBILE PICKER — full-screen takeover view designed for tablet

@@ -19,38 +19,42 @@ async function loadCC(){
 // LIST VIEW
 // =============================================================================
 
+const CLI_COLS = [
+  { key: 'code', label: 'Code', mono: true },
+  { key: 'name', label: 'Client' },
+  { key: 'contact_email', label: 'Contact' },
+  { key: 'client_type', label: 'Type', render: c =>
+      `<span class="ui-chip ui-chip-neutral">${esc(c.client_type || '—')}</span>` },
+  // Both of these change how every SKU under the client behaves — worth seeing
+  // from the list rather than opening each client to find out.
+  { key: '_flags', label: 'Flags', sortable: false, render: c =>
+      (c.hazmat_enabled ? '<span class="ui-chip ui-chip-danger">HAZMAT</span> ' : '') +
+      (c.lot_tracking_enabled ? '<span class="ui-chip ui-chip-info">LOT</span>' : '') ||
+      '<span class="ui-muted">—</span>' },
+  { key: '_onboarded', label: 'Onboarded', sortValue: c => c.onboarded_at, render: c => c.onboarded_at
+      ? uiId(new Date(c.onboarded_at).toLocaleDateString()) : '<span class="ui-muted">—</span>' },
+  { key: '_status', label: 'Status', sortValue: c => (c.is_active ? 1 : 0), render: c => c.is_active
+      ? '<span class="ui-chip ui-chip-ok">ACTIVE</span>'
+      : '<span class="ui-chip ui-chip-neutral">INACTIVE</span>' },
+];
+
 async function loadClients(){
   // Always reset to list view on (re)load
   document.getElementById('cliDetailView').style.display = 'none';
   document.getElementById('cliListView').style.display   = 'block';
 
+  uiTableLoading('cliListWrap', CLI_COLS);
   const d = await apiGet('/clients');
-  if(!d) return;
+  if(d === null) return uiTableError('cliListWrap', CLI_COLS, 'Could not load clients', loadClients);
   clientsCache = d;
 
-  const body = document.getElementById('clientBody');
-  if(!d.length){
-    body.innerHTML = '<tr><td colspan="6" class="empty-state">No clients</td></tr>';
-    return;
-  }
-
-  body.innerHTML = d.map(c => {
-    const stChip = c.is_active ? 'chip-success' : 'chip-danger';
-    return `
-      <tr class="js-cli-row" data-id="${esc(c.id)}" style="cursor:pointer;">
-        <td style="font-weight:600;color:var(--blue);">${esc(c.code || '')}</td>
-        <td style="font-weight:600;">${esc(c.name || '')}</td>
-        <td style="color:var(--text2);">${esc(c.contact_email || '')}</td>
-        <td><span class="chip chip-new">${esc(c.client_type || '')}</span></td>
-        <td>${esc(c.onboarded_at ? new Date(c.onboarded_at).toLocaleDateString() : '—')}</td>
-        <td><span class="chip ${stChip}">${c.is_active ? 'Active' : 'Inactive'}</span></td>
-      </tr>`;
-  }).join('');
-
-  body.querySelectorAll('.js-cli-row').forEach(row => {
-    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
-    row.addEventListener('mouseout',  () => row.style.background = '');
-    row.addEventListener('click', () => openClientDetail(row.dataset.id));
+  // A 3PL has tens of clients, not thousands — this list is small enough to
+  // sort locally (no onSort) without lying about what's on screen.
+  uiTable('cliListWrap', {
+    columns: CLI_COLS, rows: d, rowKey: 'id',
+    sortable: true,
+    onRowClick: c => openClientDetail(c.id),
+    empty: 'No clients yet.',
   });
 }
 
@@ -87,15 +91,21 @@ function reloadClientDetail(){
   if(_currentClient) openClientDetail(_currentClient.id);
 }
 
-function wireClientTabs(){
-  const tabs = document.querySelectorAll('.cli-tab');
-  if(tabs[0] && tabs[0]._wired) return;
-  tabs.forEach(t => {
-    t._wired = true;
-    t.addEventListener('click', () => switchClientTab(t.dataset.tab));
-  });
+// The tab strip was a third bespoke tab system (.cli-tab, styled by poking
+// element.style on every click). It's uiTabs now — the one tab system.
+const CLI_TABS = [
+  { id: 'profile',     label: 'Profile' },
+  { id: 'items',       label: 'Item master' },
+  { id: 'ratecard',    label: 'Rate card' },
+  { id: 'kpi',         label: 'KPI / SLA targets' },
+  { id: 'rules',       label: 'SLA rules' },
+  { id: 'performance', label: 'Performance' },
+];
 
-  // Also wire the KPI tab buttons (Save / Reset to defaults). Idempotent.
+function wireClientTabs(){
+  uiTabs('cliTabs', CLI_TABS, { active: 'profile', onChange: switchClientTab });
+
+  // KPI tab buttons (Save / Reset to defaults). Idempotent.
   const saveBtn = document.getElementById('cliKpiSaveBtn');
   const seedBtn = document.getElementById('cliKpiSeedBtn');
   if(saveBtn && !saveBtn._wired){ saveBtn._wired = true; saveBtn.addEventListener('click', saveClientKpiConfig); }
@@ -103,11 +113,10 @@ function wireClientTabs(){
 }
 
 function switchClientTab(tab){
-  document.querySelectorAll('.cli-tab').forEach(t => {
-    const active = t.dataset.tab === tab;
-    t.style.color           = active ? 'var(--text)' : 'var(--text2)';
-    t.style.borderBottomColor = active ? 'var(--blue)' : 'transparent';
-  });
+  // Keep the strip in step when something OTHER than a tab click drives the
+  // switch (e.g. the accrual screen deep-links into a client's rate card).
+  document.querySelectorAll('#cliTabs .ui-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.cli-panel').forEach(p => {
     p.style.display = p.dataset.tab === tab ? 'block' : 'none';
   });
@@ -125,53 +134,46 @@ function switchClientTab(tab){
 function renderClientProfileTab(){
   const c = _currentClient;
   if(!c) return;
-  const body = document.getElementById('cliProfileBody');
-  const typeLabel = c.client_type === 'BOTH' ? 'B2B + B2C'
-                  : c.client_type === 'B2C'  ? 'B2C'
-                  : c.client_type === 'B2B'  ? 'B2B'
-                  : (c.client_type || '—');
-  const row = (l, v) => `
-    <div style="display:grid;grid-template-columns:160px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
-      <div style="color:var(--text2);font-weight:600;">${esc(l)}</div>
-      <div>${esc(v ?? '—')}</div>
-    </div>`;
-  body.innerHTML =
-    row('Code',           c.code) +
-    row('Name',           c.name) +
-    row('Type',           typeLabel) +
-    row('Contact Name',   c.contact_name) +
-    row('Contact Email',  c.contact_email) +
-    row('Phone',          c.contact_phone) +
-    row('Hazmat',         c.hazmat_enabled ? 'Enabled' : 'No') +
-    row('Lot Tracking',   c.lot_tracking_enabled ? 'Mandatory (all SKUs)' : 'Per-item') +
-    row('Invoice detail', c.invoice_detail_mode === 'SUMMARY' ? 'Summary (grouped)' : 'Detailed (per LP)') +
-    row('Onboarded',      c.onboarded_at ? new Date(c.onboarded_at).toLocaleDateString() : null) +
-    row('Status',         c.is_active ? 'Active' : 'Inactive');
+  const typeLabel = c.client_type === 'BOTH' ? 'B2B + B2C' : (c.client_type || '—');
 
-  // Hazmat panel — show when toggled on. Per-item info (UN #, hazard
-  // class, packing group) lives on the SKU; only the emergency
-  // contact + notes are stored at the client level.
+  document.getElementById('cliProfileBody').innerHTML = uiMeta([
+    { k: 'Code', v: uiId(c.code) },
+    { k: 'Name', v: esc(c.name || '—') },
+    { k: 'Type', v: esc(typeLabel) },
+    { k: 'Contact', v: esc(c.contact_name || '—') },
+    { k: 'Email', v: esc(c.contact_email || '—') },
+    { k: 'Phone', v: esc(c.contact_phone || '—') },
+    { k: 'Hazmat', v: c.hazmat_enabled
+        ? '<span class="ui-chip ui-chip-danger">ENABLED</span>'
+        : '<span class="ui-muted">No</span>' },
+    { k: 'Lot tracking', v: c.lot_tracking_enabled
+        ? '<span class="ui-chip ui-chip-info">MANDATORY — all SKUs</span>'
+        : '<span class="ui-muted">Per-item</span>' },
+    { k: 'Invoice detail', v: esc(c.invoice_detail_mode === 'SUMMARY'
+        ? 'Summary (grouped)' : 'Detailed (per LP)') },
+    { k: 'Onboarded', v: c.onboarded_at
+        ? uiId(new Date(c.onboarded_at).toLocaleDateString()) : '<span class="ui-muted">—</span>' },
+    { k: 'Status', v: c.is_active
+        ? '<span class="ui-chip ui-chip-ok">ACTIVE</span>'
+        : '<span class="ui-chip ui-chip-neutral">INACTIVE</span>' },
+  ]);
+
+  // Hazmat panel — only the emergency contact + notes live at client level;
+  // per-item hazmat (UN #, class, packing group) is on the SKU.
   const hazPanel = document.getElementById('cliHazmatPanel');
   if(c.hazmat_enabled){
     hazPanel.style.display = 'block';
     const hc = c.hazmat_config || {};
-    const fields = [
-      ['Emergency Contact', hc.emergency_contact],
-      ['Notes',             hc.notes],
-    ];
-    document.getElementById('cliHazmatBody').innerHTML = fields.map(([l, v]) => `
-      <div style="display:grid;grid-template-columns:200px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
-        <div style="color:var(--text2);font-weight:600;">${esc(l)}</div>
-        <div>${esc(v ?? '—')}</div>
-      </div>`).join('') + `
-      <div style="margin-top:14px;padding:10px 14px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text2);">
-        Per-item hazmat fields (UN #, hazard class, packing group, ground-only flag) are set on each SKU. Items added under this client require those fields.
-      </div>`;
+    document.getElementById('cliHazmatBody').innerHTML =
+      uiMeta([
+        { k: 'Emergency contact', v: esc(hc.emergency_contact || '—') },
+        { k: 'Notes', v: esc(hc.notes || '—') },
+      ]) +
+      `<div class="ui-hint" style="margin-top:12px;">Per-item hazmat fields (UN #, hazard class, packing group, ground-only) are set on each SKU. Items under this client require them.</div>`;
   } else {
     hazPanel.style.display = 'none';
   }
 
-  // Wire Edit button on Profile tab — idempotent
   const editBtn = document.getElementById('cliEditBtn');
   if(editBtn && !editBtn._wired){
     editBtn._wired = true;
@@ -185,125 +187,135 @@ function renderClientProfileTab(){
 // Same modal handles both Create (when client is null) and Edit.
 
 let _editingClientId = null;   // null for new, string id for edit
+let CLIENT_M = null;           // open client-form uiModal
+
+const CLIENT_TYPES = [
+  { value: 'B2B',  label: 'B2B — distribution' },
+  { value: 'B2C',  label: 'B2C — DTC / eCommerce' },
+  { value: 'BOTH', label: 'Both' },
+];
 
 function openClientFormModal(client){
   _editingClientId = client?.id || null;
-
-  document.getElementById('clientFormTitle').textContent = client ? 'Edit Client' : 'New Client';
-  document.getElementById('cfSubmitBtn').textContent     = client ? 'Save Changes' : 'Create Client';
-  document.getElementById('cfError').textContent         = '';
-
-  // Pre-fill (or clear)
-  document.getElementById('cfCode').value         = client?.code         || '';
-  document.getElementById('cfName').value         = client?.name         || '';
-  document.getElementById('cfContactName').value  = client?.contact_name || '';
-  document.getElementById('cfContactEmail').value = client?.contact_email|| '';
-  document.getElementById('cfContactPhone').value = client?.contact_phone|| '';
-  document.getElementById('cfHazmat').checked     = !!client?.hazmat_enabled;
-  document.getElementById('cfLotTracking').checked = !!client?.lot_tracking_enabled;
-  document.getElementById('cfInvoiceMode').value = client?.invoice_detail_mode || 'DETAILED';
-
   const hc = client?.hazmat_config || {};
-  document.getElementById('cfHazEmergency').value = hc.emergency_contact || '';
-  document.getElementById('cfHazNotes').value     = hc.notes             || '';
 
-  // Set the type toggle
-  setClientFormType(client?.client_type || 'B2B');
+  CLIENT_M = uiModal({
+    title: client ? `Edit ${client.name || client.code}` : 'New client',
+    width: 680,
+    body: `
+      <div class="ui-field-row">
+        ${uiField({ id: 'cfCode', label: 'Client code *', value: client?.code || '',
+                    placeholder: 'ACME', hint: 'Short, unique. Shows on LPs and invoices.' })}
+        ${uiField({ id: 'cfName', label: 'Client name *', value: client?.name || '' })}
+      </div>
+      ${uiFieldSelect({ id: 'cfType', label: 'Client type', options: CLIENT_TYPES,
+                        value: client?.client_type || 'B2B' })}
+      <div class="no-row-3">
+        ${uiField({ id: 'cfContactName', label: 'Contact name', value: client?.contact_name || '' })}
+        ${uiField({ id: 'cfContactEmail', label: 'Contact email', type: 'email', value: client?.contact_email || '' })}
+        ${uiField({ id: 'cfContactPhone', label: 'Phone', value: client?.contact_phone || '' })}
+      </div>
+      ${uiFieldSelect({ id: 'cfInvoiceMode', label: 'Invoice detail',
+          options: [
+            { value: 'DETAILED', label: 'Detailed — one line per LP' },
+            { value: 'SUMMARY',  label: 'Summary — grouped by charge code' },
+          ], value: client?.invoice_detail_mode || 'DETAILED' })}
 
-  // Wire toggle buttons + hazmat-block visibility (idempotent)
-  const wrap = document.getElementById('cfTypeToggle');
-  if(!wrap._wired){
-    wrap._wired = true;
-    wrap.querySelectorAll('.js-cf-type').forEach(btn =>
-      btn.addEventListener('click', () => setClientFormType(btn.dataset.type))
-    );
-  }
+      <div class="eo-section">
+        <div class="ui-label">Account rules</div>
+        <div class="item-checks">
+          <label class="ui-check ui-check-warn">
+            <input type="checkbox" id="cfHazmat" ${client?.hazmat_enabled ? 'checked' : ''}> ⚠ Hazmat client
+          </label>
+          <label class="ui-check">
+            <input type="checkbox" id="cfLotTracking" ${client?.lot_tracking_enabled ? 'checked' : ''}> Lot tracking mandatory
+          </label>
+        </div>
+        <div id="cfHazmatBlock" class="item-hazmat" style="display:${client?.hazmat_enabled ? '' : 'none'};">
+          ${uiField({ id: 'cfHazEmergency', label: 'Emergency contact',
+                      value: hc.emergency_contact || '',
+                      hint: '24/7 number for a spill or incident. Prints on hazmat paperwork.' })}
+          ${uiField({ id: 'cfHazNotes', label: 'Hazmat notes', value: hc.notes || '' })}
+        </div>
+      </div>`,
+    actions: [
+      { label: 'Cancel' },
+      { label: client ? 'Save changes' : 'Create client', primary: true, onClick: submitClientForm },
+    ],
+    onClose: () => { CLIENT_M = null; },
+  });
+
   const haz = document.getElementById('cfHazmat');
-  if(!haz._wired){
-    haz._wired = true;
-    haz.addEventListener('change', () => {
-      document.getElementById('cfHazmatBlock').style.display = haz.checked ? 'block' : 'none';
-    });
-  }
-  document.getElementById('cfHazmatBlock').style.display = haz.checked ? 'block' : 'none';
-
-  document.getElementById('clientFormModal').style.display = 'flex';
+  haz.addEventListener('change', () => {
+    document.getElementById('cfHazmatBlock').style.display = haz.checked ? '' : 'none';
+  });
   document.getElementById('cfCode').focus?.();
 }
 
-function setClientFormType(type){
-  document.getElementById('cfType').value = type;
-  document.querySelectorAll('.js-cf-type').forEach(btn => {
-    const active = btn.dataset.type === type;
-    btn.style.background = active ? 'var(--blue)' : 'transparent';
-    btn.style.color      = active ? 'var(--white, #fff)' : 'var(--text)';
-  });
-}
+// uiModal action — returning false keeps the modal open.
+async function submitClientForm(m){
+  const v = (id) => document.getElementById(id).value.trim();
+  const code = v('cfCode').toUpperCase();
+  const name = v('cfName');
 
-async function submitClientForm(){
-  const err = document.getElementById('cfError');
-  err.textContent = '';
+  uiFieldError(m.el, 'cfCode', code ? '' : 'Client code is required');
+  uiFieldError(m.el, 'cfName', name ? '' : 'Client name is required');
+  if(!code || !name) return false;
 
-  const lotTrackingChecked = document.getElementById('cfLotTracking').checked;
-  // Confirm before flipping ON for an existing client — backfill might
-  // affect a lot of SKUs.
-  if(_currentClient && lotTrackingChecked && !_currentClient.lot_tracking_enabled){
-    if(!confirm('Turning on lot tracking will MANDATE it on every SKU under this client (existing items will be backfilled to is_lot_tracked=true). Continue?')){
-      return;
-    }
+  const lotTracking = document.getElementById('cfLotTracking').checked;
+
+  // Turning lot tracking ON rewrites every SKU under the client — say so, and
+  // say how many. The old confirm() just asserted "existing items will be
+  // backfilled" without telling ops what that meant in practice.
+  if(_currentClient && lotTracking && !_currentClient.lot_tracking_enabled){
+    const skus = await apiGet(`/clients/${_currentClient.id}/skus?limit=1`);
+    const n = Number(skus?.total ?? (Array.isArray(skus) ? skus.length : 0));
+    const ok = await uiConfirm({
+      title: 'Make lot tracking mandatory?',
+      body: `Every SKU under <strong>${esc(_currentClient.name || code)}</strong>` +
+            (n ? ` — <strong>${esc(n)}</strong> item(s)` : '') +
+            ` will be backfilled to lot-tracked, and new items can't opt out.<br><br>` +
+            `Receiving will then require a lot number on every inbound line for this client.`,
+      confirmLabel: 'Make it mandatory',
+    });
+    if(!ok) return false;
   }
 
   const body = {
-    code:           document.getElementById('cfCode').value.trim().toUpperCase(),
-    name:           document.getElementById('cfName').value.trim(),
+    code, name,
     client_type:    document.getElementById('cfType').value,
-    contact_name:   document.getElementById('cfContactName').value.trim() || null,
-    contact_email:  document.getElementById('cfContactEmail').value.trim() || null,
-    contact_phone:  document.getElementById('cfContactPhone').value.trim() || null,
+    contact_name:   v('cfContactName') || null,
+    contact_email:  v('cfContactEmail') || null,
+    contact_phone:  v('cfContactPhone') || null,
     hazmat_enabled: document.getElementById('cfHazmat').checked,
-    lot_tracking_enabled: lotTrackingChecked,
+    lot_tracking_enabled: lotTracking,
     invoice_detail_mode: document.getElementById('cfInvoiceMode').value,
+    // Per-item hazmat (UN #, class, packing group) lives on the SKU — only the
+    // emergency contact + notes belong on the client record.
+    hazmat_config: document.getElementById('cfHazmat').checked ? {
+      emergency_contact: v('cfHazEmergency') || null,
+      notes:             v('cfHazNotes') || null,
+    } : null,
   };
 
-  if(!body.code) { err.textContent = 'Client code is required'; return; }
-  if(!body.name) { err.textContent = 'Client name is required'; return; }
-
-  // Build hazmat_config only when hazmat is on. Per-item info (UN #,
-  // hazard class, packing group) is set on the SKU, not here — only
-  // the emergency contact + notes belong on the client record.
-  if(body.hazmat_enabled){
-    body.hazmat_config = {
-      emergency_contact: document.getElementById('cfHazEmergency').value.trim() || null,
-      notes:             document.getElementById('cfHazNotes').value.trim() || null,
-    };
-  } else {
-    body.hazmat_config = null;
-  }
-
-  const submitBtn = document.getElementById('cfSubmitBtn');
-  submitBtn.disabled = true;
   try {
-    const url = _editingClientId
-      ? `${API}/clients/${_editingClientId}`
-      : `${API}/clients`;
-    const method = _editingClientId ? 'PATCH' : 'POST';
-    const r = await fetch(url, {
-      method, headers: {'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
-      body: JSON.stringify(body),
-    });
+    const r = await fetch(
+      _editingClientId ? `${API}/clients/${_editingClientId}` : `${API}/clients`, {
+        method: _editingClientId ? 'PATCH' : 'POST',
+        headers: {'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+        body: JSON.stringify(body),
+      });
     const d = await r.json();
-    if(!r.ok){ err.textContent = d.error || 'Save failed'; return; }
+    if(!r.ok){ uiToast(d.error || 'Save failed', 'error'); return false; }
 
-    closeModal('clientFormModal');
-    // Refresh the list and jump straight to the new/edited client's
-    // detail page so ops can dial in the SLA targets right away.
+    uiToast(_editingClientId ? 'Client saved' : `${code} created`);
+    // Land on the client's detail page so ops can dial in SLA targets now.
     clientsCache = []; await loadCC();
     await loadClients();
     openClientDetail(d.id);
   } catch(e){
-    err.textContent = 'Network error';
-  } finally {
-    submitBtn.disabled = false;
+    uiToast('Network error — the client was not saved', 'error');
+    return false;
   }
 }
 
