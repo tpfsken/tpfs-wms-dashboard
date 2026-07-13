@@ -262,12 +262,85 @@ async function submitReceive(){
     if(!r.ok) return uiToast(d.error || 'Receive failed', 'error');
     const lps = (d.received || []).map(x => x.lpNumber).filter(Boolean);
     uiToast(`Received ${d.linesProcessed} line(s)${lps.length ? ` — ${lps.join(', ')}` : ''}`);
+
+    // The lots exist now, and the COA paperwork is in the receiver's hand at
+    // exactly this moment. Offer to attach it before they walk away — chasing a
+    // COA later, by email, is how lots end up shipping without one.
+    const withLots = (d.received || []).filter(x => x.lotId);
+    if(withLots.length) await offerCoaUpload(withLots);
+
     openPoDetail(CPI);
   } catch(e){
     uiToast('Network error — nothing was received', 'error');
   } finally {
     btn.disabled = false;
   }
+}
+
+/* =============================================================================
+ * COA CAPTURE — offered immediately after a receive, one row per new lot.
+ * A COA certifies a production lot, so it attaches to the LOT (not the SKU, and
+ * not the PO). Skipping is fine — the lot is simply flagged as having no COA.
+ * ========================================================================== */
+function offerCoaUpload(received){
+  return new Promise((resolve) => {
+    const rows = received.map((x, i) => `
+      <div class="ui-file">
+        <span class="ui-file-ext">COA</span>
+        <span class="ui-file-meta">
+          <span class="ui-file-name">${uiId(x.skuCode || x.skuId || '')} · lot ${esc(x.lotNumber || '—')}</span>
+          <span class="ui-hint" id="coaName${i}">No file chosen — PDF or a photo of the certificate</span>
+        </span>
+        <input type="file" id="coaFile${i}" accept="application/pdf,image/*" style="display:none;"
+               data-lot="${esc(x.lotId)}" data-idx="${esc(i)}">
+        <button class="ui-btn js-coa-pick" data-idx="${esc(i)}">Choose file</button>
+      </div>`).join('');
+
+    const m = uiModal({
+      title: 'Attach Certificate of Analysis',
+      width: 640,
+      body: `
+        <div class="ui-dialog-body" style="margin-bottom:12px;">
+          These lots were just created. If the COA came with the shipment, attach it now — it rides
+          with the lot from here on, and can be printed into the outbound docs pack.
+        </div>
+        ${rows}
+        <div class="ui-hint" style="margin-top:10px;">Skipping is fine. Lots with no COA are flagged, not blocked.</div>`,
+      actions: [
+        { label: 'Skip', onClick: () => { resolve(); } },
+        { label: 'Upload', primary: true, onClick: async (mm) => {
+            let done = 0;
+            for(const inp of mm.el.querySelectorAll('input[type=file]')){
+              const file = (inp.files || [])[0];
+              if(!file) continue;
+              const fd = new FormData();
+              fd.append('file', file);
+              fd.append('doc_type', 'COA');
+              const r = await fetch(`${API}/lots/${inp.dataset.lot}/documents`, {
+                method: 'POST', headers: { Authorization: `Bearer ${T}` }, body: fd,
+              });
+              if(r.ok) done++;
+              else {
+                const e = await r.json().catch(() => ({}));
+                uiToast(`${file.name}: ${e.error || 'upload failed'}`, 'error');
+              }
+            }
+            if(done) uiToast(`${done} COA${done === 1 ? '' : 's'} attached`);
+            resolve();
+          } },
+      ],
+      onClose: () => resolve(),
+    });
+
+    m.el.querySelectorAll('.js-coa-pick').forEach(btn =>
+      btn.addEventListener('click', () => document.getElementById('coaFile' + btn.dataset.idx).click()));
+    m.el.querySelectorAll('input[type=file]').forEach(inp =>
+      inp.addEventListener('change', () => {
+        const f = (inp.files || [])[0];
+        const label = document.getElementById('coaName' + inp.dataset.idx);
+        if(f && label) label.textContent = f.name;
+      }));
+  });
 }
 
 async function completePo(){

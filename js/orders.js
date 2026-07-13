@@ -1454,6 +1454,7 @@ async function deleteOrderAttachment(orderId, attId){
 
 async function printOrderDoc(kind){
   if(!COI) return uiToast('No order selected', 'error');
+  if(kind === 'docs') return openDocPackModal();
   // Re-fetch so we always print the latest state — nobody should print a
   // stale doc after an allocate / pick / ship.
   const order = await apiGet(`/orders/${COI}`);
@@ -1461,6 +1462,101 @@ async function printOrderDoc(kind){
   if(kind === 'pick')         renderPickSlip(order);
   else if(kind === 'packing') renderPackingSlip(order);
   else if(kind === 'bol')     renderBol(order);
+}
+
+/* =============================================================================
+ * DOCS PACK — SDS + COA merged into one PDF.
+ *
+ * An SDS describes the PRODUCT (per SKU). A COA certifies ONE production LOT,
+ * so which COA ships depends on which lot was ALLOCATED — the pack can't be
+ * built before allocation, and the modal says so rather than silently offering
+ * an empty tickbox.
+ * ========================================================================== */
+async function openDocPackModal(){
+  const d = await apiGet(`/orders/${COI}/doc-options`);
+  const rows = d?.rows || [];
+  if(!rows.length) return uiToast('This order has no lines', 'error');
+
+  const anyDocs = rows.some(r => r.sds_document_id || r.coa_document_id);
+
+  const body = `
+    <div class="ui-dialog-body" style="margin-bottom:12px;">
+      Tick the paperwork that ships with this order. It's merged into one PDF with a cover sheet
+      listing exactly what's inside — and, if anything is missing, what isn't.
+    </div>
+    ${anyDocs ? '' : `<div class="ui-banner ui-banner-warn">
+      No SDS or COA is on file for anything on this order. An SDS is uploaded on the item;
+      a COA is attached to the lot at receiving.</div>`}
+    <div id="dpWrap"></div>`;
+
+  const m = uiModal({
+    title: 'Print docs pack',
+    width: 720,
+    body,
+    actions: [
+      { label: 'Cancel' },
+      { label: 'Build PDF', primary: true, onClick: submitDocPack },
+    ],
+  });
+
+  uiTable('dpWrap', {
+    columns: [
+      { key: '_sku', label: 'Item', render: r =>
+          `${uiId(r.sku_code)} ${r.is_hazmat ? '<span class="ui-chip ui-chip-danger">HAZMAT</span>' : ''}` +
+          `<div class="ui-hint">${esc(r.sku_name || '')}</div>` },
+      { key: '_lot', label: 'Lot (allocated)', render: r => r.lot_number
+          ? uiId(r.lot_number)
+          : '<span class="ui-chip ui-chip-warn">not allocated</span>' },
+      { key: '_sds', label: 'SDS', render: r => r.sds_document_id
+          ? `<label class="ui-check"><input type="checkbox" class="js-dp-sds"
+               data-line="${esc(r.order_line_id)}" ${r.is_hazmat ? 'checked' : ''}> include</label>`
+          : '<span class="ui-muted">none on file</span>' },
+      { key: '_coa', label: 'COA', render: r => {
+          if(!r.lot_id) return '<span class="ui-muted">allocate first</span>';
+          if(!r.coa_document_id) return '<span class="ui-chip ui-chip-warn">no COA for this lot</span>';
+          return `<label class="ui-check"><input type="checkbox" class="js-dp-coa"
+                    data-line="${esc(r.order_line_id)}" data-lot="${esc(r.lot_id)}" checked> include</label>`;
+        } },
+    ],
+    rows, rowKey: '_k',
+    empty: 'No lines.',
+  });
+
+  // Hazmat SDS is pre-ticked — if it's regulated, the sheet goes with it.
+  return m;
+}
+
+async function submitDocPack(m){
+  const want = {};
+  const add = (lineId, lotId) => {
+    const k = `${lineId}|${lotId || ''}`;
+    want[k] = want[k] || { orderLineId: lineId, lotId: lotId || null, sds: false, coa: false };
+    return want[k];
+  };
+  m.el.querySelectorAll('.js-dp-sds:checked').forEach(cb => { add(cb.dataset.line, null).sds = true; });
+  m.el.querySelectorAll('.js-dp-coa:checked').forEach(cb => { add(cb.dataset.line, cb.dataset.lot).coa = true; });
+
+  const list = Object.values(want);
+  if(!list.length){ uiToast('Tick at least one document', 'error'); return false; }
+
+  const r = await fetch(`${API}/orders/${COI}/doc-pack`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` },
+    body: JSON.stringify({ want: list }),
+  });
+  if(!r.ok){
+    const d = await r.json().catch(() => ({}));
+    uiToast(d.error || 'Could not build the docs pack', 'error');
+    return false;
+  }
+
+  // Stream back a PDF and hand it to the browser's print/preview.
+  const blob = await r.blob();
+  const url  = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank', 'noopener');
+  if(!w) uiToast('Pop-up blocked — allow pop-ups to open the docs pack', 'error');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  uiToast('Docs pack built');
 }
 
 // =============================================================================
