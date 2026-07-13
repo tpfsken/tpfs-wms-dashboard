@@ -224,6 +224,17 @@ body.portal-mode .portal-banner{
   .ord-grid { grid-template-columns: 1fr; }
 }
 
+/* ---- Allocation panel (D3b) ---- */
+.alloc-line{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px 16px;margin-bottom:12px;}
+.alloc-line-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;
+  font-size:var(--fs-body);font-weight:600;}
+.alloc-line-tools{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.alloc-line-tools .ui-input{max-width:260px;}
+.alloc-chk{width:16px;height:16px;accent-color:var(--blue);}
+.alloc-qty{width:84px;padding:3px 6px;}
+.alloc-foot{display:flex;gap:8px;margin-top:16px;}
+
 /* ---- Portal home: card hub (D2c) ---- */
 .portal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;}
 .portal-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;

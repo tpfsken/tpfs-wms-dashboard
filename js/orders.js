@@ -342,53 +342,40 @@ async function openOrderDetail(id){
 // captures reason + PIN, POSTs to the supplied URL.
 // =============================================================================
 
+/* The PIN gate is a uiModal now — same two-factor discipline (reason + PIN),
+ * validated per-field. The old fixed #destructiveEditModal markup is gone.
+ * `description` is trusted HTML built by the caller (already esc()'d). */
 function showDestructiveEdit(opts){
-  document.getElementById('destructiveEditTitle').textContent = opts.title;
-  document.getElementById('destructiveEditDescription').innerHTML = opts.description;
-  document.getElementById('destructiveEditReason').value = '';
-  document.getElementById('destructiveEditPin').value = '';
-  document.getElementById('destructiveEditError').textContent = '';
+  uiModal({
+    title: opts.title,
+    width: 560,
+    body:
+      `<div class="ui-banner ui-banner-danger">${opts.description}</div>` +
+      uiField({ id: 'deReason', label: 'Reason', placeholder: 'Why is this being reversed?',
+                hint: 'Recorded against the allocation, with your name. Minimum 5 characters.' }) +
+      uiField({ id: 'dePin', label: 'Supervisor PIN', type: 'password', placeholder: '4–8 digits' }),
+    actions: [
+      { label: 'Cancel' },
+      { label: 'Confirm', danger: true, onClick: async (m) => {
+          const reason = m.el.querySelector('#deReason').value.trim();
+          const pin    = m.el.querySelector('#dePin').value.trim();
+          uiFieldError(m.el, 'deReason', reason.length >= 5 ? '' : 'At least 5 characters');
+          uiFieldError(m.el, 'dePin', /^\d{4,8}$/.test(pin) ? '' : 'PIN must be 4–8 digits');
+          if(reason.length < 5 || !/^\d{4,8}$/.test(pin)) return false;
 
-  const btn = document.getElementById('destructiveEditConfirmBtn');
-  btn.disabled = false;
-  btn.textContent = 'Confirm';
-  // Replace the click handler each time so we don't accumulate listeners
-  btn.onclick = () => submitDestructiveEdit(opts.url);
-
-  document.getElementById('destructiveEditModal').style.display = 'flex';
-  setTimeout(() => document.getElementById('destructiveEditReason').focus(), 100);
-}
-
-async function submitDestructiveEdit(url){
-  const reason = document.getElementById('destructiveEditReason').value.trim();
-  const pin    = document.getElementById('destructiveEditPin').value.trim();
-  const errEl  = document.getElementById('destructiveEditError');
-  errEl.textContent = '';
-
-  if(reason.length < 5){
-    errEl.textContent = 'Reason is required (at least 5 characters)'; return;
-  }
-  if(!pin || !/^\d{4,8}$/.test(pin)){
-    errEl.textContent = 'PIN must be 4–8 digits'; return;
-  }
-
-  const btn = document.getElementById('destructiveEditConfirmBtn');
-  btn.disabled = true; btn.textContent = 'Working…';
-  try {
-    const r = await fetch(url, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${T}` },
-      body: JSON.stringify({ pin, reason }),
-    });
-    const d = await r.json();
-    if(!r.ok){ errEl.textContent = d.error || 'Action rejected'; return; }
-    closeModal('destructiveEditModal');
-    if(COI) openOrderDetail(COI); // refresh to show new state
-  } catch(e){
-    errEl.textContent = 'Network error';
-  } finally {
-    btn.disabled = false; btn.textContent = 'Confirm';
-  }
+          const r = await fetch(opts.url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` },
+            body: JSON.stringify({ pin, reason }),
+          });
+          const d = await r.json();
+          if(!r.ok){ uiFieldError(m.el, 'dePin', d.error || 'Action rejected'); return false; }
+          uiToast(`${opts.title} complete`);
+          if(COI) openOrderDetail(COI);
+        } },
+    ],
+  });
+  setTimeout(() => document.getElementById('deReason')?.focus(), 50);
 }
 
 // =============================================================================
@@ -724,10 +711,8 @@ async function transitionOrder(id, ns){
 
 async function showAllocPanel(id){
   document.getElementById('allocPanel').style.display = 'block';
-  document.getElementById('allocError').textContent = '';
-  document.getElementById('allocSuccess').textContent = '';
   const ll = document.getElementById('allocLinesList');
-  ll.innerHTML = '<div class="empty-state">Loading...</div>';
+  ll.innerHTML = uiSpinner('Finding available inventory…');
   if(!COD?.lines) return;
 
   let html = '';
@@ -742,60 +727,66 @@ async function showAllocPanel(id){
     document.getElementById('allocModeBadge').textContent = pm;
 
     html += `
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-          <span style="font-weight:700;color:var(--blue);font-size:14px;">Line ${esc(ln.line_number)}: ${esc(ln.sku_code)}</span>
-          <span style="color:var(--text2);">${esc(ln.sku_name || '')}</span>
-          <span style="margin-left:auto;font-weight:600;color:var(--amber);">Need: ${esc(rem)} ${esc(ln.sku_uom || ln.uom || '')}</span>
+      <div class="alloc-line">
+        <div class="alloc-line-head">
+          ${uiId(ln.sku_code)}
+          <span class="ui-muted">Line ${esc(ln.line_number)} · ${esc(ln.sku_name || '')}</span>
+          <span style="flex:1"></span>
+          <span class="ui-chip ui-chip-warn">Need ${esc(rem)} ${esc(ln.sku_uom || ln.uom || '')}</span>
         </div>`;
 
     if(!av.inventory?.length){
-      html += '<div class="empty-state">No inventory available</div>';
+      // The line cannot be filled at all — say so loudly, not as a grey empty state.
+      html += `<div class="ui-banner ui-banner-danger">No available inventory for ${esc(ln.sku_code)} — this line can't be allocated.</div>`;
     } else {
       html += `
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-          <span style="font-size:12px;color:var(--muted);">Sorted ${esc(pm)}:</span>
-          <input type="text" class="form-input js-alloc-search" id="als_${i}" data-idx="${i}" placeholder="Search lot # or LP #..." style="max-width:260px;padding:8px 12px;font-size:13px;">
+        <div class="alloc-line-tools">
+          <span class="ui-hint">Sorted ${esc(pm)}</span>
+          <input type="text" class="ui-input js-alloc-search" id="als_${i}" data-idx="${i}"
+                 placeholder="Filter by lot # or LP #…">
         </div>
-        <table class="data-table">
-          <thead><tr><th style="width:36px">Sel</th><th>Lot</th><th>Expiry</th><th>LP</th><th>Type</th><th>Location</th><th>Zone</th><th class="right">Avail</th><th style="width:90px">Qty</th></tr></thead>
+        <table class="ui-table">
+          <thead><tr>
+            <th style="width:36px;">Sel</th><th>Lot</th><th>Expiry</th><th>LP</th><th>Type</th>
+            <th>Location</th><th>Zone</th><th class="right">Available</th><th style="width:96px;">Qty</th>
+          </tr></thead>
           <tbody id="atb_${i}">`;
 
+      // Pre-fill down the pick-mode-sorted list until the need is covered.
       let rf = rem;
       av.inventory.forEach((inv, j) => {
         const sq = Math.min(rf, inv.available_qty);
         const as = sq > 0 && rf > 0;
         if(as) rf -= sq;
-        const expiringSoon = inv.expiry_date && new Date(inv.expiry_date) < new Date(Date.now() + 30 * 864e5);
-        const lpBadge = inv.lp_number
-          ? `<span class="lp-badge ${inv.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(inv.lp_number)}</span>`
-          : '—';
+        const soon = inv.expiry_date && new Date(inv.expiry_date) < new Date(Date.now() + 30 * 864e5);
+        const expiry = inv.expiry_date ? new Date(inv.expiry_date).toLocaleDateString() : '';
         html += `
           <tr id="ar_${i}_${j}" data-lot="${esc((inv.lot_number || '').toLowerCase())}" data-lp="${esc((inv.lp_number || '').toLowerCase())}">
-            <td><input type="checkbox" class="js-alloc-chk" id="ac_${i}_${j}" data-i="${i}" data-j="${j}" ${as ? 'checked' : ''} style="width:18px;height:18px;"></td>
-            <td style="color:var(--blue);font-weight:500;">${esc(inv.lot_number || '—')}</td>
-            <td style="color:${expiringSoon ? 'var(--red)' : 'var(--text2)'};">${esc(inv.expiry_date ? new Date(inv.expiry_date).toLocaleDateString() : '—')}</td>
-            <td>${lpBadge}</td>
+            <td><input type="checkbox" class="alloc-chk js-alloc-chk" id="ac_${i}_${j}" data-i="${i}" data-j="${j}" ${as ? 'checked' : ''}></td>
+            <td>${inv.lot_number ? uiId(inv.lot_number) : '<span class="ui-muted">—</span>'}</td>
+            <td>${!expiry ? '<span class="ui-muted">—</span>'
+                  : soon ? `<span class="ui-chip ui-chip-danger">${esc(expiry)}</span>` : uiId(expiry)}</td>
+            <td>${inv.lp_number
+                  ? `<span class="lp-badge ${inv.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(inv.lp_number)}</span>`
+                  : '<span class="ui-muted">—</span>'}</td>
             <td>${esc(inv.lp_type || '')}</td>
-            <td>${esc(inv.location_code || '')}</td>
-            <td style="color:var(--muted);font-size:12px;">${esc(inv.zone_name || '')}</td>
-            <td class="right" style="font-weight:600;">${esc(inv.available_qty)}</td>
-            <td><input type="number" class="form-input" id="aq_${i}_${j}" value="${as ? sq : 0}" min="0" max="${esc(inv.available_qty)}" style="width:80px;padding:8px;" ${!as ? 'disabled' : ''}></td>
+            <td>${uiId(inv.location_code || '')}</td>
+            <td><span class="ui-muted">${esc(inv.zone_name || '')}</span></td>
+            <td class="right">${uiNum(inv.available_qty)}</td>
+            <td><input type="number" class="ui-input alloc-qty" id="aq_${i}_${j}" value="${as ? sq : 0}"
+                       min="0" max="${esc(inv.available_qty)}" ${!as ? 'disabled' : ''}></td>
           </tr>`;
       });
       html += '</tbody></table>';
     }
     html += `<input type="hidden" id="ali_${i}" value="${esc(ln.id)}"><input type="hidden" id="aln_${i}" value="${esc(rem)}"></div>`;
   }
-  ll.innerHTML = html || '<div class="empty-state">All allocated</div>';
+  ll.innerHTML = html || uiEmpty('Every line is fully allocated.');
 
-  // Wire allocation interactions
-  ll.querySelectorAll('.js-alloc-chk').forEach(chk => {
-    chk.addEventListener('change', () => tar(parseInt(chk.dataset.i), parseInt(chk.dataset.j)));
-  });
-  ll.querySelectorAll('.js-alloc-search').forEach(inp => {
-    inp.addEventListener('input', () => filterAR(parseInt(inp.dataset.idx)));
-  });
+  ll.querySelectorAll('.js-alloc-chk').forEach(chk =>
+    chk.addEventListener('change', () => tar(parseInt(chk.dataset.i), parseInt(chk.dataset.j))));
+  ll.querySelectorAll('.js-alloc-search').forEach(inp =>
+    inp.addEventListener('input', () => filterAR(parseInt(inp.dataset.idx))));
 }
 
 function tar(i, j){
@@ -817,18 +808,18 @@ function filterAR(i){
 
 async function submitAllocation(){
   if(!COI || !COD) return;
-  const err = document.getElementById('allocError');
-  const suc = document.getElementById('allocSuccess');
-  err.textContent = ''; suc.textContent = '';
   const allocs = [];
+  const mismatches = [];   // lines whose selected qty != what's needed
 
   for(let i = 0; ; i++){
     const el = document.getElementById(`ali_${i}`);
     if(!el) break;
     const olid = el.value;
     const need = parseInt(document.getElementById(`aln_${i}`)?.value) || 0;
-    const inv = AIC[olid] || [];
+    const inv  = AIC[olid] || [];
+    const line = (COD.lines || []).find(l => l.id === olid);
     let lt = 0;
+
     for(let j = 0; j < inv.length; j++){
       const chk = document.getElementById(`ac_${i}_${j}`);
       const qi  = document.getElementById(`aq_${i}_${j}`);
@@ -836,8 +827,8 @@ async function submitAllocation(){
       const q = parseInt(qi?.value) || 0;
       if(q <= 0) continue;
       if(q > inv[j].available_qty){
-        err.textContent = `Cannot allocate ${q} — only ${inv[j].available_qty} available`;
-        return;
+        return uiToast(
+          `${line?.sku_code || 'Line'}: can't allocate ${q} — only ${inv[j].available_qty} available`, 'error');
       }
       lt += q;
       allocs.push({
@@ -849,11 +840,31 @@ async function submitAllocation(){
         quantity:    q,
       });
     }
-    if(lt > need && !confirm(`Allocating ${lt} but only ${need} ordered. Over-allocate?`)) return;
-    if(lt < need && !confirm(`Only ${lt} of ${need}. Partial allocation?`)) return;
+    if(lt !== need) mismatches.push({ sku: line?.sku_code || `Line ${i + 1}`, picked: lt, need });
   }
 
-  if(!allocs.length){ err.textContent = 'No inventory selected'; return; }
+  if(!allocs.length) return uiToast('Select some inventory to allocate first', 'error');
+
+  // One review step for the whole allocation, instead of a native confirm()
+  // per line — ops used to get up to N dialogs in a row for a multi-line order.
+  if(mismatches.length){
+    const rows = mismatches.map(m => `<tr>
+      <td>${uiId(m.sku)}</td>
+      <td class="right">${uiNum(m.need)}</td>
+      <td class="right">${uiNum(m.picked)}</td>
+      <td>${m.picked > m.need
+            ? '<span class="ui-chip ui-chip-warn">over</span>'
+            : '<span class="ui-chip ui-chip-danger">short</span>'}</td></tr>`).join('');
+    const ok = await uiConfirm({
+      title: 'Allocation doesn\'t match the order',
+      body: `<table class="ui-table"><thead><tr><th>SKU</th><th class="right">Ordered</th>
+             <th class="right">Allocating</th><th>—</th></tr></thead><tbody>${rows}</tbody></table>
+             <p>Short lines leave the order un-shippable until the rest is allocated.
+             Over-allocated lines ship more than the customer ordered.</p>`,
+      confirmLabel: 'Allocate anyway',
+    });
+    if(!ok) return;
+  }
 
   try {
     const r = await fetch(`${API}/orders/${COI}/allocate`, {
@@ -862,11 +873,11 @@ async function submitAllocation(){
       body: JSON.stringify({allocations: allocs}),
     });
     const d = await r.json();
-    if(!r.ok){ err.textContent = d.error || 'Failed'; return; }
-    suc.textContent = `Allocated ${d.allocationsCreated} line(s)`;
-    setTimeout(() => openOrderDetail(COI), 1000);
+    if(!r.ok) return uiToast(d.error || 'Allocation failed', 'error');
+    uiToast(`Allocated ${d.allocationsCreated} line(s)`);
+    openOrderDetail(COI);
   } catch(e){
-    err.textContent = 'Network error';
+    uiToast('Network error — nothing was allocated', 'error');
   }
 }
 
