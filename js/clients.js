@@ -321,109 +321,98 @@ async function submitClientForm(m){
 
 // ----- KPI / SLA SETTINGS TAB -----
 
+const KPI_UNIT  = (u) => u === 'pct' ? '%' : u === 'hours' ? 'hrs' : u === 'minutes' ? 'min' : '';
+const KPI_DIR   = (d) => d === 'higher_is_better' ? 'Higher is better'
+                       : d === 'lower_is_better'  ? 'Lower is better'
+                       : 'Informational';
+
 async function loadClientKpiTab(){
   if(!_currentClient) return;
-  const body   = document.getElementById('cliKpiBody');
-  const status = document.getElementById('cliKpiStatus');
-  status.textContent = '';
-  body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px;">Loading…</div>';
+  const body = document.getElementById('cliKpiBody');
+  body.innerHTML = uiSpinner('Loading KPI targets…');
 
-  // Catalog is the same regardless of client — cache after first call.
+  // Catalog is client-independent — cache after the first call.
   if(!_kpiCatalog) _kpiCatalog = await apiGet('/kpi-catalog');
   const config = await apiGet(`/clients/${_currentClient.id}/kpi-config`);
-  if(!config){
-    body.innerHTML = '<div style="color:var(--red);padding:20px;">Could not load KPI config</div>';
-    return;
-  }
+  if(!config){ body.innerHTML = uiError('Could not load the KPI config'); return; }
   _kpiConfigRows = config;
   renderClientKpiTab();
 }
 
+const KPI_COLS = [
+  { key: '_on', label: 'On', render: r => {
+      const i = _kpiConfigRows.indexOf(r);
+      return `<input type="checkbox" class="alloc-chk js-kpi-enabled" data-idx="${esc(i)}" ${r.enabled ? 'checked' : ''}>`;
+    } },
+  { key: '_metric', label: 'Metric', render: r =>
+      `<div>${esc(r.custom_label || r.label)}</div>` +
+      (r.description ? `<div class="ui-hint">${esc(r.description)}</div>` : '') },
+  { key: '_dir', label: 'Direction', render: r =>
+      `<span class="ui-muted">${esc(KPI_DIR(r.direction))}</span>` },
+  { key: '_target', label: 'Target', render: r => {
+      if(r.direction === 'info') return '<span class="ui-muted">—</span>';
+      const i = _kpiConfigRows.indexOf(r);
+      return `<input type="number" step="0.1" class="ui-input kpi-num js-kpi-target" data-idx="${esc(i)}"
+                value="${r.target_value == null ? '' : esc(r.target_value)}">
+              <span class="ui-hint">${esc(KPI_UNIT(r.unit))}</span>`;
+    } },
+  { key: '_warn', label: 'Warning', render: r => {
+      if(r.direction === 'info') return '<span class="ui-muted">—</span>';
+      const i = _kpiConfigRows.indexOf(r);
+      return `<input type="number" step="0.1" class="ui-input kpi-num js-kpi-warning" data-idx="${esc(i)}"
+                value="${r.warning_threshold == null ? '' : esc(r.warning_threshold)}">
+              <span class="ui-hint">${esc(KPI_UNIT(r.unit))}</span>`;
+    } },
+];
+
 function renderClientKpiTab(){
   const body = document.getElementById('cliKpiBody');
-  if(!_kpiConfigRows.length){
-    body.innerHTML = '<div class="empty-state" style="padding:24px;">No metrics in catalog</div>';
-    return;
-  }
+  uiTable(body, {
+    columns: KPI_COLS, rows: _kpiConfigRows, rowKey: 'metric_key',
+    empty: 'No metrics in the catalog.',
+  });
 
-  const unitLabel = (u) => u === 'pct' ? '%' : u === 'hours' ? 'hrs' : u === 'minutes' ? 'min' : '';
-  const dirLabel  = (d) => d === 'higher_is_better' ? 'Higher is better'
-                       : d === 'lower_is_better'  ? 'Lower is better'
-                       : 'Informational';
-
-  body.innerHTML = `
-    <div style="overflow:auto;">
-      <table class="data-table" style="margin:0;">
-        <thead>
-          <tr>
-            <th style="width:60px;text-align:center;">On</th>
-            <th>Metric</th>
-            <th style="width:140px;">Direction</th>
-            <th style="width:140px;">Target</th>
-            <th style="width:140px;">Warning</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${_kpiConfigRows.map((r, i) => {
-            const isInfo = r.direction === 'info';
-            return `
-              <tr>
-                <td style="text-align:center;">
-                  <input type="checkbox" class="js-kpi-enabled" data-idx="${esc(i)}" ${r.enabled ? 'checked' : ''}
-                         style="width:18px;height:18px;cursor:pointer;">
-                </td>
-                <td>
-                  <div style="font-weight:600;">${esc(r.label)}</div>
-                  <div style="font-size:11px;color:var(--text2);margin-top:2px;">${esc(r.description || '')}</div>
-                </td>
-                <td><span style="font-size:12px;color:var(--text2);">${esc(dirLabel(r.direction))}</span></td>
-                <td>
-                  ${isInfo
-                    ? '<span style="color:var(--muted);font-size:12px;">—</span>'
-                    : `<input type="number" step="0.1" class="form-input js-kpi-target" data-idx="${esc(i)}"
-                              value="${r.target_value == null ? '' : esc(r.target_value)}"
-                              style="width:90px;padding:6px 8px;font-size:13px;">
-                       <span style="font-size:11px;color:var(--text2);margin-left:4px;">${esc(unitLabel(r.unit))}</span>`}
-                </td>
-                <td>
-                  ${isInfo
-                    ? '<span style="color:var(--muted);font-size:12px;">—</span>'
-                    : `<input type="number" step="0.1" class="form-input js-kpi-warning" data-idx="${esc(i)}"
-                              value="${r.warning_threshold == null ? '' : esc(r.warning_threshold)}"
-                              style="width:90px;padding:6px 8px;font-size:13px;">
-                       <span style="font-size:11px;color:var(--text2);margin-left:4px;">${esc(unitLabel(r.unit))}</span>`}
-                </td>
-              </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>`;
-
-  // Wire input changes — keep _kpiConfigRows in sync as the user edits
-  body.querySelectorAll('.js-kpi-enabled').forEach(cb => {
+  // Keep _kpiConfigRows in step as the user edits.
+  body.querySelectorAll('.js-kpi-enabled').forEach(cb =>
     cb.addEventListener('change', e => {
       _kpiConfigRows[parseInt(e.target.dataset.idx)].enabled = e.target.checked;
-    });
-  });
-  body.querySelectorAll('.js-kpi-target').forEach(inp => {
+    }));
+  const num = (e) => { const v = e.target.value.trim(); return v === '' ? null : Number(v); };
+  body.querySelectorAll('.js-kpi-target').forEach(inp =>
     inp.addEventListener('input', e => {
-      const v = e.target.value.trim();
-      _kpiConfigRows[parseInt(e.target.dataset.idx)].target_value = v === '' ? null : Number(v);
-    });
-  });
-  body.querySelectorAll('.js-kpi-warning').forEach(inp => {
+      _kpiConfigRows[parseInt(e.target.dataset.idx)].target_value = num(e);
+    }));
+  body.querySelectorAll('.js-kpi-warning').forEach(inp =>
     inp.addEventListener('input', e => {
-      const v = e.target.value.trim();
-      _kpiConfigRows[parseInt(e.target.dataset.idx)].warning_threshold = v === '' ? null : Number(v);
-    });
-  });
+      _kpiConfigRows[parseInt(e.target.dataset.idx)].warning_threshold = num(e);
+    }));
 }
 
 async function saveClientKpiConfig(){
   if(!_currentClient) return;
-  const status = document.getElementById('cliKpiStatus');
-  status.style.color = 'var(--text2)';
-  status.textContent = 'Saving…';
+
+  // A warning threshold on the wrong side of the target never fires — the KPI
+  // would go straight from good to breached with no amber. Catch it here; the
+  // server doesn't check it.
+  const backwards = _kpiConfigRows.filter(r => {
+    if(r.direction === 'info' || r.target_value == null || r.warning_threshold == null) return false;
+    return r.direction === 'higher_is_better'
+      ? Number(r.warning_threshold) < Number(r.target_value)   // warn must be ABOVE target
+      : Number(r.warning_threshold) > Number(r.target_value);  // warn must be BELOW target
+  });
+  if(backwards.length){
+    const ok = await uiConfirm({
+      title: 'Warning thresholds look backwards',
+      body: backwards.map(r =>
+        `<strong>${esc(r.custom_label || r.label)}</strong>: target ${esc(r.target_value)}, warning ${esc(r.warning_threshold)} — ` +
+        (r.direction === 'higher_is_better'
+          ? 'for "higher is better", the warning should sit ABOVE the target.'
+          : 'for "lower is better", the warning should sit BELOW the target.')).join('<br><br>') +
+        '<br><br>As set, these metrics will never show amber — they jump straight from good to breached.',
+      confirmLabel: 'Save anyway',
+    });
+    if(!ok) return;
+  }
 
   const rows = _kpiConfigRows.map((r, i) => ({
     metric_key:        r.metric_key,
@@ -441,28 +430,22 @@ async function saveClientKpiConfig(){
       body:    JSON.stringify({ rows }),
     });
     const d = await r.json();
-    if(!r.ok){
-      status.style.color = 'var(--red)';
-      status.textContent = d.error || 'Save failed';
-      return;
-    }
+    if(!r.ok) return uiToast(d.error || 'Save failed', 'error');
     _kpiConfigRows = d;
-    status.style.color = 'var(--green)';
-    status.textContent = '✓ Saved — portal home will reflect the new targets on next refresh';
-    setTimeout(() => { status.textContent = ''; }, 4000);
+    uiToast('KPI targets saved — the client\'s portal picks them up on next load');
   } catch(e){
-    status.style.color = 'var(--red)';
-    status.textContent = 'Network error';
+    uiToast('Network error — targets not saved', 'error');
   }
 }
 
 async function resetClientKpiConfig(){
   if(!_currentClient) return;
-  if(!confirm('Reset all KPI / SLA settings on this client to the catalog defaults?')) return;
-
-  const status = document.getElementById('cliKpiStatus');
-  status.style.color = 'var(--text2)';
-  status.textContent = 'Resetting…';
+  const ok = await uiConfirm({
+    title: 'Reset KPI / SLA settings to defaults?',
+    body: `Every metric on <strong>${esc(_currentClient.name || '')}</strong> goes back to the catalog defaults. Custom targets and warning thresholds on this client are lost.`,
+    confirmLabel: 'Reset to defaults', danger: true,
+  });
+  if(!ok) return;
 
   try {
     const r = await fetch(`${API}/clients/${_currentClient.id}/kpi-config/seed`, {
@@ -471,19 +454,11 @@ async function resetClientKpiConfig(){
       body:    JSON.stringify({}),
     });
     const d = await r.json();
-    if(!r.ok){
-      status.style.color = 'var(--red)';
-      status.textContent = d.error || 'Reset failed';
-      return;
-    }
-    // After seed, reload from server to get the merged defaults shown in the form.
+    if(!r.ok) return uiToast(d.error || 'Reset failed', 'error');
     await loadClientKpiTab();
-    status.style.color = 'var(--green)';
-    status.textContent = '✓ Reset to defaults';
-    setTimeout(() => { status.textContent = ''; }, 4000);
+    uiToast('Reset to catalog defaults');
   } catch(e){
-    status.style.color = 'var(--red)';
-    status.textContent = 'Network error';
+    uiToast('Network error — nothing was reset', 'error');
   }
 }
 
@@ -753,11 +728,15 @@ function renderSlaRulesBody(){
 async function saveSlaRule(idx){
   const r = _slaRules[idx];
   if(!r) return;
-  if(!r.rule_label || !r.rule_label.trim()){
-    alert('Rule name is required');
-    return;
+  if(!r.rule_label || !r.rule_label.trim()) return uiToast('The rule needs a name', 'error');
+
+  // An exception fee with no label bills the customer for something their
+  // invoice can't explain. Catch it before it reaches an invoice line.
+  if(r.exception_charge_amount != null && !(r.exception_charge_label || '').trim()){
+    return uiToast('Name the exception charge — an unlabelled fee shows up on the invoice with no explanation', 'error');
   }
-  // For custom rules, regenerate rule_key from the label so it's stable
+
+  // Custom rules: keep rule_key derived from the label so it stays stable.
   if(r._custom && r.rule_key.startsWith('custom_')){
     r.rule_key = 'custom_' + r.rule_label.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40);
   }
@@ -776,10 +755,12 @@ async function saveSlaRule(idx){
       }),
     });
     const d = await res.json();
-    if(!res.ok){ alert(d.error || 'Save failed'); return; }
-    // Reload from server so we get the canonical row + clear _draft flags
+    if(!res.ok) return uiToast(d.error || 'Save failed', 'error');
+    uiToast(`“${r.rule_label}” saved — it's now visible on the client's portal`);
     await loadClientRulesTab();
-  } catch(e){ alert('Network error'); }
+  } catch(e){
+    uiToast('Network error — the rule was not saved', 'error');
+  }
 }
 
 // =============================================================================
@@ -819,87 +800,99 @@ async function loadClientItemsTab(){
   fetchClientItems(search?.value.trim() || '');
 }
 
-async function fetchClientItems(searchTerm){
-  const body  = document.getElementById('cliItemsBody');
-  const count = document.getElementById('cliItemsCount');
-  body.innerHTML = '<tr><td colspan="7" class="empty-state">Loading…</td></tr>';
+const CLI_ITEM_LIMIT = 500;   // what the endpoint will return in one call
 
-  let url = `/clients/${_currentClient.id}/skus?limit=500`;
+const CLI_ITEM_COLS = [
+  { key: 'sku_code', label: 'SKU', mono: true },
+  { key: '_name', label: 'Description', sortValue: r => r.name, render: r =>
+      `<div>${esc(r.name || '')}</div>` +
+      (r.special_handling_instructions
+        ? `<div class="eo-line-lock">📋 ${esc(r.special_handling_instructions)}</div>` : '') },
+  { key: 'sku_type', label: 'Type', render: r =>
+      `<span class="ui-chip ui-chip-neutral">${esc(r.sku_type || '')}</span>` },
+  { key: 'uom', label: 'UOM' },
+  { key: 'qty_available', label: 'On hand', num: true },
+  { key: '_flags', label: 'Flags', sortable: false, render: r => {
+      const f = [];
+      if(r.is_lot_tracked)    f.push('<span class="ui-chip ui-chip-info">LOT</span>');
+      if(r.is_expiry_tracked) f.push('<span class="ui-chip ui-chip-info">EXP</span>');
+      if(r.is_hazmat) f.push(`<span class="ui-chip ui-chip-danger">⚠ HAZMAT${r.un_number ? ' ' + esc(r.un_number) : ''}${r.hazard_class ? ' · Cl ' + esc(r.hazard_class) : ''}</span>`);
+      if(r.attachment_count > 0) f.push(`<span class="ui-chip ui-chip-neutral">📎 ${esc(r.attachment_count)}</span>`);
+      return f.join(' ') || '<span class="ui-muted">—</span>';
+    } },
+];
+
+/* Public hook for other modules: "an item was saved — refresh the client's Item
+ * Master tab if it's on screen." inventory.js used to reach in and test for a
+ * specific element id, which meant renaming that element silently disabled the
+ * refresh (stale rows, no error). Modules ask clients.js; clients.js decides. */
+function refreshClientItemsIfOpen(){
+  if(!_currentClient) return;
+  if(!document.getElementById('cliItemsWrap')) return;   // items tab not rendered
+  const search = document.getElementById('cliItemsSearch');
+  fetchClientItems(search?.value.trim() || '');
+}
+
+async function fetchClientItems(searchTerm){
+  const host  = document.getElementById('cliItemsWrap');
+  const count = document.getElementById('cliItemsCount');
+  if(!host) return;
+  uiTableLoading(host, CLI_ITEM_COLS);
+
+  let url = `/clients/${_currentClient.id}/skus?limit=${CLI_ITEM_LIMIT}`;
   if(searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
   const rows = await apiGet(url);
-  if(!rows){
-    body.innerHTML = '<tr><td colspan="7" class="empty-state">Could not load items</td></tr>';
-    return;
+  if(!rows) return uiTableError(host, CLI_ITEM_COLS, 'Could not load items',
+    () => fetchClientItems(searchTerm));
+
+  // This endpoint returns a flat array with no total. If we got exactly the
+  // limit back, there are almost certainly more — say so rather than letting
+  // ops believe they're seeing the whole catalog.
+  const capped = rows.length >= CLI_ITEM_LIMIT;
+  if(count){
+    count.innerHTML = rows.length
+      ? `${esc(rows.length)} item${rows.length === 1 ? '' : 's'}` +
+        (capped ? ' <span class="ui-chip ui-chip-warn">first 500 — search to narrow</span>' : '')
+      : '';
   }
-  if(count) count.textContent = rows.length ? `· ${rows.length} item${rows.length === 1 ? '' : 's'}` : '';
 
-  if(!rows.length){
-    body.innerHTML = '<tr><td colspan="7" class="empty-state">No items yet — click + Add Item to create one</td></tr>';
-    return;
-  }
-
-  body.innerHTML = rows.map(r => {
-    const tracking = [];
-    if(r.is_lot_tracked)    tracking.push('<span class="chip chip-new" style="font-size:10px;">Lot</span>');
-    if(r.is_expiry_tracked) tracking.push('<span class="chip chip-new" style="font-size:10px;">Exp</span>');
-    if(r.is_hazmat) {
-      const txt = r.hazard_class
-        ? `⚠ Hazmat ${esc(r.un_number || '')} · Cl ${esc(r.hazard_class)}`
-        : '⚠ Hazmat';
-      tracking.push(`<span class="chip chip-danger" style="font-size:10px;">${txt}</span>`);
-    }
-    if(r.attachment_count > 0) {
-      tracking.push(`<span class="chip chip-warning" style="font-size:10px;">📎 ${r.attachment_count}</span>`);
-    }
-    return `
-      <tr class="js-cli-item-row" data-id="${esc(r.id)}" style="cursor:pointer;">
-        <td style="font-weight:600;color:var(--blue);">${esc(r.sku_code || '')}</td>
-        <td>
-          <div>${esc(r.name || '')}</div>
-          ${r.special_handling_instructions ? `<div style="font-size:11px;color:var(--amber);margin-top:2px;">📋 ${esc(r.special_handling_instructions)}</div>` : ''}
-        </td>
-        <td><span class="chip" style="font-size:11px;">${esc(r.sku_type || '')}</span></td>
-        <td style="color:var(--text2);">${esc(r.uom || '')}</td>
-        <td class="right" style="font-weight:600;color:${Number(r.qty_available) > 0 ? 'var(--green)' : 'var(--muted)'};">${esc(Number(r.qty_available || 0).toLocaleString())}</td>
-        <td>${tracking.join(' ')}</td>
-        <td style="text-align:right;"><button class="btn btn-ghost js-cli-item-edit" data-id="${esc(r.id)}" style="padding:3px 10px;font-size:12px;">Edit</button></td>
-      </tr>`;
-  }).join('');
-
-  // Hover + click — both row and edit button open the item modal
-  body.querySelectorAll('.js-cli-item-row').forEach(row => {
-    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
-    row.addEventListener('mouseout',  () => row.style.background = '');
-    row.addEventListener('click', () => openItemFormModal(row.dataset.id));
-  });
-  body.querySelectorAll('.js-cli-item-edit').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      openItemFormModal(btn.dataset.id);
-    });
+  uiTable(host, {
+    columns: CLI_ITEM_COLS, rows, rowKey: 'id',
+    sortable: true,
+    onRowClick: r => openItemFormModal(r.id),
+    empty: searchTerm
+      ? `No items match “${searchTerm}”.`
+      : 'No items yet — use Add item to create one.',
   });
 }
 
 async function deleteSlaRule(idx){
   const r = _slaRules[idx];
   if(!r) return;
-  // Drafts that haven't been saved yet — just remove locally
+  // Unsaved draft — nothing to delete server-side.
   if(!r.id){
     _slaRules.splice(idx, 1);
     renderSlaRulePresets();
     renderSlaRulesBody();
     return;
   }
-  if(!confirm(`Remove SLA rule "${r.rule_label}"?`)) return;
+  const ok = await uiConfirm({
+    title: `Remove “${r.rule_label}”?`,
+    body: 'The rule disappears from the client\'s portal, and its exception charge stops applying to new orders. Charges already billed stay billed.',
+    confirmLabel: 'Remove rule', danger: true,
+  });
+  if(!ok) return;
   try {
     const res = await fetch(`${API}/clients/${_currentClient.id}/sla-rules/${r.id}`, {
       method:'DELETE', headers:{'Authorization':`Bearer ${T}`},
     });
     if(!res.ok){
       const d = await res.json().catch(() => ({}));
-      alert(d.error || 'Delete failed');
-      return;
+      return uiToast(d.error || 'Delete failed', 'error');
     }
+    uiToast('Rule removed');
     await loadClientRulesTab();
-  } catch(e){ alert('Network error'); }
+  } catch(e){
+    uiToast('Network error — the rule was not removed', 'error');
+  }
 }

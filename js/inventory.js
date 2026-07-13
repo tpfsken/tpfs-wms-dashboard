@@ -1028,11 +1028,11 @@ async function submitItemForm(m){
     // Refresh whichever list is actually on screen — the user could be on
     // Inventory OR on a client's Item Master tab. Refresh only one and the
     // other shows stale rows.
+    // NOTE: ask clients.js, don't test for one of its element ids here. The old
+    // code guarded on #cliItemsBody, so renaming that element (D5b) silently
+    // disabled this refresh — no crash, just the stale rows it exists to prevent.
     if(typeof loadInventory === 'function') loadInventory();
-    if(typeof fetchClientItems === 'function' && document.getElementById('cliItemsBody')){
-      const search = document.getElementById('cliItemsSearch');
-      fetchClientItems(search?.value.trim() || '');
-    }
+    if(typeof refreshClientItemsIfOpen === 'function') refreshClientItemsIfOpen();
   } catch(e){
     uiToast('Network error — the item was not saved', 'error');
     return false;

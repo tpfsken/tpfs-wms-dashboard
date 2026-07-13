@@ -641,41 +641,25 @@
       <div class="cli-panel" data-tab="items" style="display:none;">
         <div class="card">
           <div class="card-head">
-            <div class="card-title">Item Master</div>
-            <div id="cliItemsCount" style="font-size:12px;color:var(--muted);margin-left:8px;"></div>
+            <div class="card-title">Item master</div>
+            <div class="ui-hint" id="cliItemsCount"></div>
             <div style="flex:1"></div>
-            <input type="text" class="form-input" id="cliItemsSearch" placeholder="Search SKU, UPC, or name..." style="max-width:280px;">
-            <button class="btn btn-primary" id="cliItemsAddBtn">+ Add Item</button>
+            <input type="text" class="ui-input" id="cliItemsSearch" placeholder="Search SKU, UPC, or name…" style="max-width:280px;">
+            <button class="ui-btn ui-btn-primary" id="cliItemsAddBtn">Add item</button>
           </div>
-          <div style="overflow:auto;max-height:60vh;">
-            <table class="data-table" style="margin:0;">
-              <thead>
-                <tr>
-                  <th>SKU</th>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>UOM</th>
-                  <th class="right">On-Hand</th>
-                  <th>Tracking</th>
-                  <th style="width:80px;text-align:right;"></th>
-                </tr>
-              </thead>
-              <tbody id="cliItemsBody"></tbody>
-            </table>
-          </div>
+          <div style="overflow:auto;max-height:60vh;" id="cliItemsWrap"></div>
         </div>
       </div>
       <div class="cli-panel" data-tab="kpi" style="display:none;">
         <div class="card">
           <div class="card-head">
-            <div class="card-title">KPI / SLA Settings</div>
-            <div style="font-size:12px;color:var(--text2);margin-left:12px;">Toggle metrics on/off and set target + warning thresholds for this client</div>
+            <div class="card-title">KPI / SLA targets</div>
+            <div class="ui-hint" style="margin-left:12px;">Toggle metrics on or off and set the target + warning thresholds this client's portal reports against</div>
             <div style="flex:1"></div>
-            <button class="btn btn-ghost" id="cliKpiSeedBtn">Reset to defaults</button>
-            <button class="btn btn-primary" id="cliKpiSaveBtn">Save</button>
+            <button class="ui-btn" id="cliKpiSeedBtn">Reset to defaults</button>
+            <button class="ui-btn ui-btn-primary" id="cliKpiSaveBtn">Save</button>
           </div>
-          <div id="cliKpiBody" style="padding:20px;"></div>
-          <div id="cliKpiStatus" style="padding:0 20px 16px;font-size:13px;"></div>
+          <div id="cliKpiBody"></div>
         </div>
       </div>
       <div class="cli-panel" data-tab="rules" style="display:none;">
