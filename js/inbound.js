@@ -13,7 +13,10 @@ let poLines = [];      // new-PO modal: pending lines
 // `key` on a sortable column is the API's sortBy value — it must exist in the
 // RECEIPT_SORTS whitelist in the API's queries/inbound.js.
 const INB_COLS = [
-  { key: 'po_number', label: 'PO #', mono: true },
+  { key: 'po_number', label: 'Receipt #', mono: true },
+  // The customer's own number — the one they'll quote at you on the phone.
+  { key: 'external_po', label: 'Customer PO', sortable: false, render: r => r.external_po
+      ? uiId(r.external_po) : '<span class="ui-muted">—</span>' },
   { key: 'client_name', label: 'Client' },
   { key: 'supplier_name', label: 'Supplier' },
   { key: 'line_count', label: 'Lines', num: true },
@@ -129,8 +132,9 @@ async function openPoDetail(id){
     `${d.client_name || ''} · ${d.supplier_name || ''}`;
 
   document.getElementById('poInfoGrid').innerHTML = uiMeta([
-    { k: 'PO #', v: uiId(d.po_number) },
-    { k: 'External', v: d.external_po ? uiId(d.external_po) : '<span class="ui-muted">—</span>' },
+    { k: 'Receipt # (ours)', v: uiId(d.po_number) },
+    { k: 'Customer PO (theirs)', v: d.external_po
+        ? uiId(d.external_po) : '<span class="ui-muted">—</span>' },
     { k: 'Supplier', v: esc(d.supplier_name || '—') },
     { k: 'Client', v: esc(d.client_name || '—') },
     { k: 'Expected arrival', v: d.expected_arrival
@@ -311,23 +315,31 @@ async function showNewPoModal(){
     title: 'New purchase order',
     width: 800,
     body: `
+      <!-- TWO different numbers, and conflating them is how a receipt gets
+           filed under a customer's PO number:
+             receipt #   = OURS. System-assigned from the sequence. Not typed.
+             customer PO = THEIRS. The number on their paperwork. -->
       <div class="ui-field-row">
         <div class="ui-field" data-field="npClientWrap">
           <label class="ui-label">Client *</label>
           <div class="cb-wrap" id="npClientWrap"></div>
           <div class="ui-field-err" style="display:none;"></div>
         </div>
-        ${uiField({ id: 'npPoNum', label: 'PO number',
-                    placeholder: 'Auto-generated (or type to override)',
-                    hint: 'Left blank, the server assigns the next number in the sequence.' })}
+        <div class="ui-field">
+          <label class="ui-label">Receipt # (ours)</label>
+          <input class="ui-input" id="npPoNum" value="" placeholder="Assigned on save — PO-600000, PO-600001…" readonly>
+          <div class="ui-hint">Our inbound number. The system assigns it — nothing to type.</div>
+        </div>
       </div>
       <div class="no-row-3">
         <div class="ui-field">
           <label class="ui-label">Supplier</label>
           <div class="cb-wrap" id="npSupplierWrap"></div>
         </div>
+        ${uiField({ id: 'npExtPo', label: 'Customer PO # (theirs)',
+                    placeholder: 'e.g. 15487',
+                    hint: 'The number on the customer’s paperwork.' })}
         ${uiField({ id: 'npArrival', label: 'Expected arrival', type: 'date' })}
-        ${uiField({ id: 'npExtPo', label: 'External PO #', placeholder: 'Vendor reference' })}
       </div>
       ${uiField({ id: 'npNotes', label: 'Notes' })}
 
@@ -469,12 +481,13 @@ async function submitNewPo(m){
       headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
       body: JSON.stringify({
         clientId: cid,
-        // Blank -> the API assigns it from the sequence (migration 063). The
-        // old client-side 'PO-{year}-{3 random digits}' had only 900 possible
-        // numbers a year and no uniqueness check.
-        poNumber: document.getElementById('npPoNum').value.trim() || null,
+        // Always null: OUR receipt number comes from the sequence (migration
+        // 063). The field is read-only in the form, so nothing can end up here
+        // by accident — a customer's PO number in particular.
+        poNumber: null,
         supplierName: cbVal('npSupplierWrap') || null,
-        externalPo: document.getElementById('npExtPo').value || null,
+        // THEIR number, off the customer's paperwork.
+        externalPo: document.getElementById('npExtPo').value.trim() || null,
         expectedArrival: document.getElementById('npArrival').value || null,
         notes: document.getElementById('npNotes').value || null,
         lines: poLines.map(l => ({
