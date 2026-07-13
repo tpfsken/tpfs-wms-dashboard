@@ -149,7 +149,10 @@ function _lotsForLine(line, allocations) {
 function _openDocWindow(html) {
   const w = window.open('', '_blank', 'width=900,height=1100');
   if (!w) {
-    alert('Pop-up blocked. Allow pop-ups for this site to print docs.');
+    // The printed docs themselves are excluded from the design system until
+    // their own batch, but the CHROME around them isn't — a native alert here
+    // was the last one in the app.
+    uiToast('Pop-up blocked — allow pop-ups for this site to print', 'error', 8000);
     return;
   }
   w.document.write(html);

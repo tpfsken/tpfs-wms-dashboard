@@ -132,13 +132,23 @@ async function refreshCertExpiryRibbon(){
     ribbon.textContent = label;
     ribbon.style.display = '';
     ribbon.onclick = () => {
-      // If user is admin/supervisor, jump to Users page where they can
-      // manage anyone's certs. Otherwise just tell them.
+      // Admin/supervisor can act on it — take them to the page where they can.
       if(U?.userType === 'admin' || U?.isSupervisor){
         navigateTo('users');
-      } else {
-        alert(expiring.map(c => `${c.cert_type_display} (${c.cert_number || 'no #'}) — expires ${new Date(c.expires_at).toLocaleDateString()} (${c.days_until_expiry}d)`).join('\n'));
+        return;
       }
+      // Everyone else can only be told. Say what's expiring and when, and who
+      // to go to — an alert() listing certs told them nothing actionable.
+      uiAlert({
+        title: 'Your certifications are expiring',
+        body: expiring.map(c => `
+          <div style="margin-bottom:8px;">
+            <strong>${esc(c.cert_type_display)}</strong>
+            ${c.cert_number ? `<span class="ui-muted"> · ${esc(c.cert_number)}</span>` : ''}
+            <div class="ui-hint">Expires ${esc(new Date(c.expires_at).toLocaleDateString())} — in ${esc(c.days_until_expiry)} day(s)</div>
+          </div>`).join('') +
+          '<div class="ui-hint">Ask a supervisor to record the renewal once you have it. Work needing this certification stops when it lapses.</div>',
+      });
     };
   } catch(_) {
     ribbon.style.display = 'none';

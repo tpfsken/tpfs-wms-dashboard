@@ -47,6 +47,9 @@ const UI_STATUS_MAP = {
   // intake
   UPLOADED: 'info', EXTRACTING: 'info', EXTRACTED: 'warn', EXTRACTION_FAILED: 'danger',
   REJECTED: 'neutral',
+  // hazmat certifications. expiring_soon is the only state you can still act on
+  // before someone is uncertified — it must not look the same as expired.
+  active: 'ok', expiring_soon: 'warn', expired: 'danger', revoked: 'neutral',
 };
 
 function uiChip(status, labelOverride) {

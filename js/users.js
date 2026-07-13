@@ -10,120 +10,160 @@
 // Cert types: GET /cert-types — populates the grant form's dropdown
 // =============================================================================
 
+'use strict';
 let _userCertCurrent = null;   // currently-open user object
 
+const USER_COLS = [
+  { key: 'full_name', label: 'Name' },
+  { key: 'email', label: 'Email' },
+  { key: '_role', label: 'Role', sortValue: u => u.user_type === 'admin' ? 0 : u.is_supervisor ? 1 : 2,
+    render: u => userRoleChip(u) },
+  // A hazmat picker with no live cert is the thing this page exists to catch.
+  { key: 'active_cert_count', label: 'Active certs', num: true, render: u => Number(u.active_cert_count) > 0
+      ? uiNum(u.active_cert_count)
+      : '<span class="ui-chip ui-chip-warn">none</span>' },
+];
+
 async function loadUsers(){
-  const body = document.getElementById('usersBody');
-  body.innerHTML = '<div class="empty-state">Loading…</div>';
+  uiTableLoading('usersBody', USER_COLS);
   const r = await apiGet('/users');
-  if(!r){ body.innerHTML = '<div class="empty-state" style="color:var(--red);">Could not load users</div>'; return; }
+  if(r === null) return uiTableError('usersBody', USER_COLS, 'Could not load users', loadUsers);
   const rows = r.rows || [];
-  if(!rows.length){
-    body.innerHTML = '<div class="empty-state">No users found</div>';
-    return;
-  }
-  body.innerHTML = `
-    <table class="data-table">
-      <thead><tr>
-        <th>Name</th><th>Email</th><th>Role</th>
-        <th class="right">Active Certs</th><th></th>
-      </tr></thead>
-      <tbody>${rows.map(u => `
-        <tr class="js-user-row" data-id="${esc(u.id)}" style="cursor:pointer;">
-          <td style="font-weight:600;">${esc(u.full_name || '—')}</td>
-          <td style="color:var(--text2);">${esc(u.email)}</td>
-          <td>${userRoleChip(u)}</td>
-          <td class="right" style="font-weight:600;color:${u.active_cert_count > 0 ? 'var(--green)' : 'var(--text2)'};">${esc(u.active_cert_count || 0)}</td>
-          <td><button class="btn btn-ghost" style="padding:4px 12px;font-size:12px;">Manage Certs →</button></td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
-  body.querySelectorAll('.js-user-row').forEach(row => {
-    row.addEventListener('click', () => openUserCertModal(row.dataset.id, rows.find(x => x.id === row.dataset.id)));
+
+  uiTable('usersBody', {
+    columns: USER_COLS, rows, rowKey: 'id',
+    sortable: true,
+    onRowClick: u => openUserCertModal(u.id, u),
+    empty: 'No users.',
   });
 }
 
 function userRoleChip(u){
-  if(u.user_type === 'admin')   return '<span class="chip chip-active">ADMIN</span>';
-  if(u.is_supervisor)            return '<span class="chip chip-warning">SUPERVISOR</span>';
-  return '<span class="chip" style="background:#2a2a2a;color:#bbb;">OPS</span>';
+  if(u.user_type === 'admin') return '<span class="ui-chip ui-chip-info">ADMIN</span>';
+  if(u.is_supervisor)         return '<span class="ui-chip ui-chip-warn">SUPERVISOR</span>';
+  return '<span class="ui-chip ui-chip-neutral">OPS</span>';
 }
 
 // =============================================================================
 // USER CERT MODAL — full cert history for one user, grant + revoke buttons
 // =============================================================================
 
+let CERT_M = null;   // open user-cert uiModal
+
+// Cert state -> the frozen tone scale. Expiring-soon is the one that matters:
+// it's the only state you can still act on before someone is uncertified.
+const CERT_TONE = {
+  active: 'ok', expiring_soon: 'warn', expired: 'danger', revoked: 'neutral',
+};
+
 async function openUserCertModal(userId, userObj){
   _userCertCurrent = { id: userId, ...(userObj || {}) };
-  document.getElementById('userCertTitle').textContent = userObj?.full_name || userObj?.email || 'User';
-  document.getElementById('userCertSub').textContent =
-    `${userObj?.email || ''} · ${userObj?.user_type || ''}${userObj?.is_supervisor ? ' · supervisor' : ''}`;
-  document.getElementById('grantCertForm').style.display = 'none';
-  document.getElementById('userCertModal').style.display = 'flex';
+
+  CERT_M = uiModal({
+    title: userObj?.full_name || userObj?.email || 'User',
+    width: 720,
+    body: `
+      <div class="ui-hint" style="margin-bottom:12px;">
+        ${esc(userObj?.email || '')} · ${esc(userObj?.user_type || '')}${userObj?.is_supervisor ? ' · supervisor' : ''}
+      </div>
+      <div class="item-sec-head">
+        <div class="ui-label">Certifications</div>
+        <span style="flex:1"></span>
+        <button class="ui-btn ui-btn-primary" id="certGrantBtn">Grant cert</button>
+      </div>
+      <div id="userCertList"></div>
+      <div id="grantCertForm" style="display:none;"></div>`,
+    actions: [{ label: 'Close' }],
+    onClose: () => { CERT_M = null; },
+  });
+
+  document.getElementById('certGrantBtn').addEventListener('click', openGrantCertForm);
   await renderUserCertList(userId);
 }
 
 async function renderUserCertList(userId){
   const list = document.getElementById('userCertList');
-  list.innerHTML = '<div class="empty-state">Loading…</div>';
+  if(!list) return;
+  list.innerHTML = uiSpinner('Loading certifications…');
   const r = await apiGet(`/users/${userId}/certs`);
-  if(!r){ list.innerHTML = '<div class="empty-state" style="color:var(--red);">Could not load certs</div>'; return; }
+  if(!r){ list.innerHTML = uiError('Could not load certifications'); return; }
   const rows = r.rows || [];
   if(!rows.length){
-    list.innerHTML = `<div class="empty-state" style="text-align:center;padding:20px;color:var(--text2);">No certifications on file. Click <strong>+ Grant Cert</strong> to add one.</div>`;
+    list.innerHTML = uiEmpty('No certifications on file — use Grant cert to add one.');
     return;
   }
+
   list.innerHTML = rows.map(c => {
-    const stateColor = c.state === 'active' ? 'var(--green)'
-                     : c.state === 'expiring_soon' ? 'var(--amber)'
-                     : c.state === 'expired' ? '#cc6600'
-                     : c.state === 'revoked' ? 'var(--red)'
-                     : 'var(--text2)';
-    const stateLabel = c.state.replace('_', ' ').toUpperCase();
-    const expiresStr = c.expires_at ? new Date(c.expires_at).toLocaleDateString() : '—';
-    const issuedStr  = c.issued_at  ? new Date(c.issued_at).toLocaleDateString()  : '—';
-    const modes = (c.covers_modes || []).join(', ');
-    const revokeBtn = c.state === 'active' || c.state === 'expiring_soon'
-      ? `<button class="btn btn-ghost js-revoke-cert" data-cert-id="${esc(c.id)}" style="padding:4px 10px;font-size:11px;color:var(--red);">Revoke</button>`
-      : '';
+    const canRevoke = c.state === 'active' || c.state === 'expiring_soon';
     return `
-      <div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;background:var(--panel);">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
-          <div style="font-weight:600;">${esc(c.cert_type_display || c.cert_type)}</div>
-          <span class="chip" style="background:transparent;color:${stateColor};border:1px solid ${stateColor};font-size:10px;">${esc(stateLabel)}</span>
-          <div style="flex:1"></div>
-          ${revokeBtn}
+      <div class="cert-card">
+        <div class="cert-card-head">
+          <strong>${esc(c.cert_type_display || c.cert_type)}</strong>
+          ${uiChip(c.state, (c.state || '').replace('_', ' '))}
+          <span style="flex:1"></span>
+          ${canRevoke ? `<button class="ui-btn ui-btn-danger js-revoke-cert" data-cert-id="${esc(c.id)}">Revoke</button>` : ''}
         </div>
-        <div style="font-size:12px;color:var(--text2);">
+        <div class="ui-hint">
           ${c.cert_number ? `Cert # ${esc(c.cert_number)} · ` : ''}
-          Issued ${esc(issuedStr)} · Expires ${esc(expiresStr)} · Covers: ${esc(modes)}
+          Issued ${esc(c.issued_at ? new Date(c.issued_at).toLocaleDateString() : '—')} ·
+          Expires ${esc(c.expires_at ? new Date(c.expires_at).toLocaleDateString() : '—')}
+          ${(c.covers_modes || []).length ? ` · Covers ${esc((c.covers_modes || []).join(', '))}` : ''}
+          ${c.issuing_body ? ` · ${esc(c.issuing_body)}` : ''}
         </div>
-        ${c.issuing_body ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;">Issued by: ${esc(c.issuing_body)}</div>` : ''}
-        ${c.revoked_at ? `<div style="font-size:11px;color:var(--red);margin-top:4px;">Revoked ${esc(new Date(c.revoked_at).toLocaleString())}${c.revoked_reason ? ' — ' + esc(c.revoked_reason) : ''}</div>` : ''}
-        ${c.notes ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;font-style:italic;">${esc(c.notes)}</div>` : ''}
+        ${c.revoked_at ? `<div class="ui-banner ui-banner-danger" style="margin:8px 0 0;">
+          Revoked ${esc(fmtTimeShort(c.revoked_at))}${c.revoked_reason ? ` — ${esc(c.revoked_reason)}` : ''}</div>` : ''}
+        ${c.notes ? `<div class="ui-hint" style="font-style:italic;">${esc(c.notes)}</div>` : ''}
       </div>`;
   }).join('');
 
-  list.querySelectorAll('.js-revoke-cert').forEach(btn => {
+  list.querySelectorAll('.js-revoke-cert').forEach(btn =>
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      revokeUserCert(btn.dataset.certId);
-    });
-  });
+      revokeUserCert(btn.dataset.certId, rows.find(x => x.id === btn.dataset.certId));
+    }));
 }
 
-async function revokeUserCert(certId){
-  const reason = prompt('Reason for revoke (required for audit):');
-  if(reason == null) return;
-  if(reason.trim().length < 5){ alert('Reason must be at least 5 characters.'); return; }
-  const r = await fetch(`${API}/users/${_userCertCurrent.id}/certs/${certId}/revoke`, {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${T}` },
-    body: JSON.stringify({ reason }),
+// UI_STATUS_MAP additions live in ui.js; cert states map through CERT_TONE for
+// anything the shared map doesn't know.
+function certChipTone(state){ return CERT_TONE[state] || 'neutral'; }
+
+async function revokeUserCert(certId, cert){
+  const who = _userCertCurrent?.full_name || _userCertCurrent?.email || 'this user';
+  uiModal({
+    title: `Revoke ${cert?.cert_type_display || cert?.cert_type || 'certification'}?`,
+    width: 520,
+    body:
+      `<div class="ui-banner ui-banner-danger">
+         <strong>${esc(who)}</strong> will no longer be certified for
+         ${esc((cert?.covers_modes || []).join(', ') || 'this mode')}. If they are mid-shift on
+         hazmat work, that work has to stop. The revocation is permanent and audited.
+       </div>` +
+      uiField({ id: 'revReason', label: 'Reason',
+                placeholder: 'e.g. cert suspended by issuer pending re-test',
+                hint: 'Recorded against the certification. Minimum 5 characters.' }),
+    actions: [
+      { label: 'Cancel' },
+      { label: 'Revoke certification', danger: true, onClick: async (m) => {
+          const reason = m.el.querySelector('#revReason').value.trim();
+          uiFieldError(m.el, 'revReason', reason.length >= 5 ? '' : 'At least 5 characters');
+          if(reason.length < 5) return false;
+
+          const r = await fetch(`${API}/users/${_userCertCurrent.id}/certs/${certId}/revoke`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${T}` },
+            body: JSON.stringify({ reason }),
+          });
+          const d = await r.json().catch(() => ({}));
+          if(!r.ok){ uiFieldError(m.el, 'revReason', d.error || 'Revoke failed'); return false; }
+          uiToast('Certification revoked', 'error');
+          renderUserCertList(_userCertCurrent.id);
+          // If it was ours, the topbar cert ribbon is now wrong.
+          if(_userCertCurrent.id === U?.id && typeof refreshCertExpiryRibbon === 'function'){
+            refreshCertExpiryRibbon();
+          }
+        } },
+    ],
   });
-  const d = await r.json().catch(() => ({}));
-  if(!r.ok){ alert(d.error || 'Revoke failed'); return; }
-  renderUserCertList(_userCertCurrent.id);
 }
 
 // =============================================================================
@@ -131,52 +171,86 @@ async function revokeUserCert(certId){
 // =============================================================================
 
 async function openGrantCertForm(){
-  const form = document.getElementById('grantCertForm');
-  form.style.display = 'block';
-  document.getElementById('grantCertNumber').value = '';
-  document.getElementById('grantCertNotes').value  = '';
-  document.getElementById('grantCertError').textContent = '';
-  // Default issued = today, expires = +1 year (sensible for IATA/IMDG;
-  // user can adjust)
   const today = new Date();
   const oneYr = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
-  document.getElementById('grantCertIssued').value  = today.toISOString().slice(0, 10);
-  document.getElementById('grantCertExpires').value = oneYr.toISOString().slice(0, 10);
 
-  // Populate cert type combo. INTERNAL_SAFETY_LEAD only available to admin.
+  const m = uiModal({
+    title: `Grant certification — ${_userCertCurrent?.full_name || _userCertCurrent?.email || ''}`,
+    width: 560,
+    body: `
+      <div class="ui-field" data-field="grantCertTypeWrap">
+        <label class="ui-label">Certification *</label>
+        <div class="cb-wrap" id="grantCertTypeWrap"></div>
+        <div class="ui-hint">Picking a type sets the usual validity window — override it if the certificate says otherwise.</div>
+        <div class="ui-field-err" style="display:none;"></div>
+      </div>
+      <div class="ui-field-row">
+        ${uiField({ id: 'grantCertIssued', label: 'Issued *', type: 'date',
+                    value: today.toISOString().slice(0, 10) })}
+        ${uiField({ id: 'grantCertExpires', label: 'Expires *', type: 'date',
+                    value: oneYr.toISOString().slice(0, 10) })}
+      </div>
+      ${uiField({ id: 'grantCertBody', label: 'Issuing body *',
+                  placeholder: 'e.g. IATA, or "Internal" for your own training program' })}
+      ${uiField({ id: 'grantCertNumber', label: 'Certificate #' })}
+      ${uiField({ id: 'grantCertNotes', label: 'Notes' })}`,
+    actions: [
+      { label: 'Cancel' },
+      { label: 'Grant', primary: true, onClick: submitGrantCert },
+    ],
+  });
+
+  // INTERNAL_SAFETY_LEAD is admin-only to grant.
   const types = await apiGet('/cert-types');
   const opts = (types?.rows || [])
     .filter(t => U?.userType === 'admin' || t.cert_type !== 'INTERNAL_SAFETY_LEAD')
     .map(t => ({ value: t.cert_type, label: t.display_name }));
+
   initCombo('grantCertTypeWrap', opts, {
-    placeholder: 'Select cert type...',
-    onChange: (val, label, opt) => {
-      // When user picks a cert type, suggest a default validity window.
-      // DOT/Forklift = 3 years (1095d), IATA/IMDG = 2 years (730d).
+    placeholder: 'Select a certification…',
+    onChange: (val) => {
+      // Usual validity windows: DOT / internal 3 years, IATA & IMDG 2 years,
+      // everything else 1. Ops can still override — the certificate wins.
       const days = (val === 'DOT' || val === 'INTERNAL_SAFETY_LEAD') ? 1095
-                 : (val === 'IATA_DGR' || val === 'IMDG')             ? 730
-                 :                                                       365;
-      const issued = new Date(document.getElementById('grantCertIssued').value || Date.now());
-      const expires = new Date(issued); expires.setDate(expires.getDate() + days);
+                 : (val === 'IATA_DGR' || val === 'IMDG')            ? 730
+                 :                                                      365;
+      const issued  = new Date(document.getElementById('grantCertIssued').value || Date.now());
+      const expires = new Date(issued);
+      expires.setDate(expires.getDate() + days);
       document.getElementById('grantCertExpires').value = expires.toISOString().slice(0, 10);
     },
   });
+  return m;
 }
 
-async function submitGrantCert(){
-  const err = document.getElementById('grantCertError');
-  err.textContent = '';
+// uiModal action — returning false keeps the modal open.
+async function submitGrantCert(m){
+  const v = (id) => document.getElementById(id).value.trim();
   const certType = cbVal('grantCertTypeWrap');
-  const issued   = document.getElementById('grantCertIssued').value;
-  const expires  = document.getElementById('grantCertExpires').value;
-  const number   = document.getElementById('grantCertNumber').value.trim();
-  const body     = document.getElementById('grantCertBody').value.trim();
-  const notes    = document.getElementById('grantCertNotes').value.trim();
+  const issued   = v('grantCertIssued');
+  const expires  = v('grantCertExpires');
+  const body     = v('grantCertBody');
 
-  if(!certType){ err.textContent = 'Pick a cert type'; return; }
-  if(!issued || !expires){ err.textContent = 'Issued + expires dates are required'; return; }
-  if(!body){ err.textContent = 'Issuing body is required (use "Internal" if generated by your training program)'; return; }
-  if(new Date(expires) < new Date(issued)){ err.textContent = 'Expires must be on or after Issued'; return; }
+  uiFieldError(m.el, 'grantCertTypeWrap', certType ? '' : 'Pick a certification');
+  uiFieldError(m.el, 'grantCertIssued', issued ? '' : 'Required');
+  uiFieldError(m.el, 'grantCertExpires', expires ? '' : 'Required');
+  uiFieldError(m.el, 'grantCertBody', body
+    ? '' : 'Required — use "Internal" if your own training program issued it');
+  if(!certType || !issued || !expires || !body) return false;
+
+  if(new Date(expires) < new Date(issued)){
+    uiFieldError(m.el, 'grantCertExpires', 'Expiry is before the issue date');
+    return false;
+  }
+  // A certificate that expired before it was even entered certifies nobody.
+  if(new Date(expires) < new Date()){
+    const ok = await uiConfirm({
+      title: 'This certificate is already expired',
+      body: `It expires <strong>${esc(expires)}</strong>, which is in the past. It will be recorded as EXPIRED and won't certify anyone for hazmat work.`,
+      confirmLabel: 'Record it anyway',
+    });
+    if(!ok) return false;
+  }
 
   try {
     const r = await fetch(`${API}/users/${_userCertCurrent.id}/certs`, {
@@ -184,23 +258,26 @@ async function submitGrantCert(){
       headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${T}` },
       body: JSON.stringify({
         cert_type: certType,
-        cert_number: number || null,
+        cert_number: v('grantCertNumber') || null,
         issuing_body: body,
         issued_at: issued,
         expires_at: expires,
-        notes: notes || null,
+        notes: v('grantCertNotes') || null,
       }),
     });
     const d = await r.json();
-    if(!r.ok){ err.textContent = d.error || 'Grant failed'; return; }
-    document.getElementById('grantCertForm').style.display = 'none';
+    if(!r.ok){ uiToast(d.error || 'Grant failed', 'error'); return false; }
+
+    uiToast('Certification granted');
     renderUserCertList(_userCertCurrent.id);
-    // If we just granted to ourselves, refresh the topbar ribbon
+    loadUsers();
+    // If we granted to ourselves, the topbar expiry ribbon is now stale.
     if(_userCertCurrent.id === U?.id && typeof refreshCertExpiryRibbon === 'function'){
       refreshCertExpiryRibbon();
     }
   } catch(e){
-    err.textContent = 'Network error';
+    uiToast('Network error — the certification was not granted', 'error');
+    return false;
   }
 }
 

@@ -1119,55 +1119,22 @@
 <!-- =================================================================== -->
 <div class="page" id="page-users">
   <div class="page-header">
-    <div><div class="page-title">👥 Users &amp; Certs</div><div class="page-subtitle">Hazmat certification management — grant, view, revoke</div></div>
+    <div><div class="page-title">Users &amp; certs</div><div class="page-subtitle">Hazmat certifications — grant, view, revoke</div></div>
+    <div style="flex:1"></div>
+    <button class="ui-btn" onclick="loadUsers()">Refresh</button>
   </div>
   <div class="card">
-    <div class="card-head"><div class="card-title">Active Users</div><div style="flex:1"></div><div style="font-size:12px;color:var(--muted);">Click a user to view + manage their certs</div></div>
-    <div id="usersBody" style="padding:16px;"></div>
-  </div>
-</div>
-
-<!-- USER DETAIL / CERT MANAGEMENT MODAL -->
-<div id="userCertModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10001;align-items:center;justify-content:center;">
-  <div class="modal" style="max-width:680px;">
-    <div class="modal-head">
-      <div>
-        <div class="modal-title" id="userCertTitle">User Certs</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:2px;" id="userCertSub">—</div>
-      </div>
+    <div class="card-head">
+      <div class="card-title">Staff</div>
       <div style="flex:1"></div>
-      <button class="btn btn-ghost" onclick="closeModal('userCertModal')" style="padding:6px 12px;">✕</button>
+      <div class="ui-hint">Click a user to manage their certifications</div>
     </div>
-    <div class="modal-body">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Active &amp; History</div>
-        <div style="flex:1"></div>
-        <button class="btn btn-primary" onclick="openGrantCertForm()" style="padding:6px 14px;font-size:12px;">+ Grant Cert</button>
-      </div>
-      <div id="userCertList"></div>
-
-      <!-- Grant form — toggled in/out of view by openGrantCertForm() -->
-      <div id="grantCertForm" style="display:none;border-top:1px solid var(--border);margin-top:14px;padding-top:14px;">
-        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">Grant a new hazmat certification</div>
-        <div class="form-group"><label class="form-label">Cert Type *</label><div class="cb-wrap" id="grantCertTypeWrap"></div></div>
-        <div class="form-row form-row-2">
-          <div class="form-group"><label class="form-label">Issued *</label><input type="date" class="form-input" id="grantCertIssued"></div>
-          <div class="form-group"><label class="form-label">Expires *</label><input type="date" class="form-input" id="grantCertExpires"></div>
-        </div>
-        <div class="form-row form-row-2">
-          <div class="form-group"><label class="form-label">Cert Number (optional)</label><input class="form-input" id="grantCertNumber" placeholder="Issuing body's reference"></div>
-          <div class="form-group"><label class="form-label">Issuing Body *</label><input class="form-input" id="grantCertBody" placeholder="e.g. DOT, IATA, Internal" value="Internal"></div>
-        </div>
-        <div class="form-group"><label class="form-label">Notes</label><textarea class="form-input" id="grantCertNotes" rows="2" placeholder="Optional context — training source, course id, etc."></textarea></div>
-        <div id="grantCertError" style="color:var(--red);font-size:13px;margin:8px 0;"></div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button class="btn btn-ghost" onclick="document.getElementById('grantCertForm').style.display='none'" style="padding:8px 14px;">Cancel</button>
-          <button class="btn btn-primary" onclick="submitGrantCert()" style="padding:8px 14px;">Grant Cert</button>
-        </div>
-      </div>
-    </div>
+    <div id="usersBody"></div>
   </div>
 </div>
+
+<!-- User cert modal retired in D6a — it is a uiModal now (openUserCertModal() /
+     openGrantCertForm() in js/users.js). -->
 
 <!-- INLINE SKU CREATE MODAL (used from Intake review when SKU code unknown) -->
 <div id="intakeSkuModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10001;align-items:center;justify-content:center;">
