@@ -37,6 +37,12 @@ async function doLogin(){
     sessionStorage.setItem('tpfs_token', T);
     sessionStorage.setItem('tpfs_user', JSON.stringify(U));
     document.getElementById('loginOverlay').style.display = 'none';
+
+    // Temp password (admin reset, or a new account). The API 403s every other
+    // route until this is cleared, so booting the app first would just render a
+    // dashboard where nothing loads and nothing explains why.
+    if(d.mustChangePassword){ pwForcedChange(); return; }
+
     // Phase 3: client portal users get the portal shell; ops/admin get the
     // full ops dashboard. Switch is purely on the JWT's userType claim.
     if(U && U.userType === 'client') bootPortal();
@@ -233,6 +239,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if(e.key === 'Enter') doLogin();
     });
   });
+  document.getElementById('loginForgotBtn')?.addEventListener('click', pwOpenForgot);
+
+  // A reset link from the email lands here as /?reset=<token>. Handle it BEFORE
+  // any session restore — someone resetting their password may well already have
+  // a stale session in this tab, and the reset must still work.
+  const _resetTok = new URLSearchParams(location.search).get('reset');
+  if(_resetTok) pwOpenResetFromUrl(_resetTok);
 
   // Sign out (sidebar + topbar)
   document.querySelectorAll('.js-signout').forEach(el => {
