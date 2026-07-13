@@ -1237,59 +1237,8 @@
 </div>
 
 <!-- CASE BREAK MODAL -->
-<div id="caseBreakModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
-  <div class="modal" style="max-width:680px;">
-    <div class="modal-head"><div class="modal-title">⊞ Case Break</div><div style="flex:1"></div><button class="btn btn-ghost" onclick="closeModal('caseBreakModal')" style="padding:6px 12px;">✕</button></div>
-    <div class="modal-body">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Break cases into eaches. Select a case LP, enter number of cases to break, and choose the target pick face location.</div>
-
-      <div class="form-group">
-        <label class="form-label">Search License Plate</label>
-        <input type="text" class="form-input" id="cbLpSearch" placeholder="Type LP number to search...">
-      </div>
-      <div id="cbLpResults" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:16px;max-height:200px;overflow-y:auto;"></div>
-
-      <div id="cbLpDetail" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px;">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-          <span class="lp-badge lp-original" style="font-size:14px;font-weight:600;" id="cbLpNum"></span>
-          <span style="font-size:13px;color:var(--text2);" id="cbLpSku"></span>
-          <span style="margin-left:auto;font-weight:600;color:var(--blue);" id="cbLpQty"></span>
-        </div>
-        <div class="detail-grid" style="grid-template-columns:1fr 1fr 1fr 1fr;">
-          <div><div class="detail-label">Lot</div><div class="detail-value" id="cbLpLot">—</div></div>
-          <div><div class="detail-label">Location</div><div class="detail-value" id="cbLpLoc">—</div></div>
-          <div><div class="detail-label">SKU Type</div><div class="detail-value" id="cbLpType">—</div></div>
-          <div><div class="detail-label">Each SKU</div><div class="detail-value" id="cbEachSku">—</div></div>
-        </div>
-        <div style="margin-top:4px;font-size:12px;color:var(--muted);" id="cbConversion"></div>
-      </div>
-
-      <div id="cbForm" style="display:none;">
-        <div class="form-row form-row-2">
-          <div class="form-group">
-            <label class="form-label">Cases to Break</label>
-            <input type="number" class="form-input" id="cbQty" min="1" value="1">
-            <div style="font-size:12px;color:var(--text2);margin-top:4px;" id="cbPreview"></div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Target Location (pick face)</label>
-            <div class="cb-wrap" id="cbLocationWrap"></div>
-          </div>
-        </div>
-      </div>
-
-      <div id="cbError" style="color:var(--red);font-size:13px;margin-top:8px;"></div>
-      <div id="cbSuccess" style="display:none;background:var(--green-bg);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:16px;margin-top:12px;">
-        <div style="font-weight:600;color:var(--green);margin-bottom:4px;">✓ Case Break Complete</div>
-        <div style="font-size:13px;color:var(--text2);" id="cbSuccessDetail"></div>
-      </div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="closeModal('caseBreakModal')">Cancel</button>
-      <button class="btn btn-primary" id="cbSubmitBtn" onclick="submitCaseBreak()" style="display:none;">Break Cases</button>
-    </div>
-  </div>
-</div>
+<!-- Case-break modal retired in D4b — it is a uiModal now
+     (showCaseBreakModal() in js/inventory.js). -->
 
 <!-- SHIP ORDER MODAL -->
 <!-- Ship-order modal retired in D3c — it is a uiModal now

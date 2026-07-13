@@ -224,6 +224,19 @@ body.portal-mode .portal-banner{
   .ord-grid { grid-template-columns: 1fr; }
 }
 
+/* ---- Case break (D4b) ---- */
+.cb-results{display:none;background:var(--bg);border:1px solid var(--border-h);
+  border-radius:var(--radius);margin-bottom:var(--sp-3);max-height:220px;overflow-y:auto;}
+.cb-row{display:flex;align-items:center;gap:12px;padding:10px 14px;cursor:pointer;
+  border-bottom:1px solid var(--border);font-size:var(--fs-body);}
+.cb-row:last-child{border-bottom:none;}
+.cb-row:hover{background:var(--hover);}
+.cb-row-name{flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cb-lp{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px 18px;margin-bottom:var(--sp-3);}
+.cb-lp-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:var(--fs-body);}
+.ui-err-text{color:var(--st-danger);}
+
 /* ---- New-order modal (D3e) ---- */
 .no-row-3{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-3);}
 .no-section-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}

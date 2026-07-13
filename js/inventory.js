@@ -125,111 +125,153 @@ async function loadInventory(){
 // CASE BREAK
 // =============================================================================
 let cbSelectedLp = null;
-let cbLocsList = [];
+let cbLocsList   = [];
+let CB_M         = null;   // open case-break uiModal
+let CB_SUBMIT    = null;   // its "Break cases" action button
 
 function openCaseBreakFor(r){
-  showCaseBreakModal().then(() => {
-    selectCBLp(r);
-    document.getElementById('cbLpSearch').value = r.lp_number;
-  });
+  showCaseBreakModal().then(() => selectCBLp(r));
 }
 
 async function showCaseBreakModal(){
-  document.getElementById('caseBreakModal').style.display = 'flex';
-  document.getElementById('caseBreakModal').style.zIndex  = '10000';
   cbSelectedLp = null;
-  document.getElementById('cbLpSearch').value = '';
-  document.getElementById('cbLpResults').style.display = 'none';
-  document.getElementById('cbLpDetail').style.display  = 'none';
-  document.getElementById('cbForm').style.display      = 'none';
-  document.getElementById('cbSubmitBtn').style.display = 'none';
-  document.getElementById('cbError').textContent = '';
-  document.getElementById('cbSuccess').style.display = 'none';
-  document.getElementById('cbQty').value = '1';
-  document.getElementById('cbPreview').textContent = '';
+
+  CB_M = uiModal({
+    title: 'Case break',
+    width: 680,
+    body: `
+      <div class="ui-dialog-body" style="margin-bottom:14px;">
+        Break cases into eaches. Find the case LP, say how many cases to break, and pick the
+        target pick-face location. The case pack quantity comes from the SKU configuration.
+      </div>
+      <div class="ui-field" data-field="cbLpSearch">
+        <label class="ui-label" for="cbLpSearch">License plate</label>
+        <input type="text" class="ui-input" id="cbLpSearch" placeholder="Type an LP number…" autocomplete="off">
+        <div class="ui-field-err" style="display:none;"></div>
+      </div>
+      <div id="cbLpResults" class="cb-results"></div>
+      <div id="cbLpDetail" class="cb-lp" style="display:none;"></div>
+      <div id="cbForm" style="display:none;">
+        <div class="ui-field-row">
+          <div class="ui-field" data-field="cbQty">
+            <label class="ui-label" for="cbQty">Cases to break</label>
+            <input type="number" class="ui-input" id="cbQty" min="1" value="1">
+            <div class="ui-hint" id="cbPreview"></div>
+            <div class="ui-field-err" style="display:none;"></div>
+          </div>
+          <div class="ui-field" data-field="cbLocationWrap">
+            <label class="ui-label">Target location (pick face)</label>
+            <div class="cb-wrap" id="cbLocationWrap"></div>
+            <div class="ui-field-err" style="display:none;"></div>
+          </div>
+        </div>
+      </div>`,
+    actions: [
+      { label: 'Cancel' },
+      { label: 'Break cases', primary: true, onClick: submitCaseBreak },
+    ],
+    onClose: () => { CB_M = null; CB_SUBMIT = null; cbSelectedLp = null; },
+  });
+
+  CB_SUBMIT = [...CB_M.el.querySelectorAll('.ui-dialog-actions button')]
+    .find(b => b.textContent.includes('Break cases'));
+  if(CB_SUBMIT) CB_SUBMIT.disabled = true;   // nothing to break until an LP is chosen
+
+  document.getElementById('cbLpSearch').addEventListener('input', searchCBLps);
+  document.getElementById('cbQty').addEventListener('input', updateCBPreview);
 
   if(!cbLocsList.length){
     const l = await apiGet('/locations');
-    if(l?.length) cbLocsList = l.map(x => ({id:x.id, code:x.code, zone:x.zone_name}));
+    if(l?.length) cbLocsList = l.map(x => ({ id: x.id, code: x.code, zone: x.zone_name }));
   }
   initCombo('cbLocationWrap',
-    cbLocsList.map(l => ({value:String(l.id), label:l.code, sub:l.zone || ''})),
-    {placeholder:'Select location...'}
-  );
+    cbLocsList.map(l => ({ value: String(l.id), label: l.code, sub: l.zone || '' })),
+    { placeholder: 'Select location…' });
 }
 
+/* The LP search used to pull `/inventory?limit=200` and filter in the browser —
+ * so it only ever searched the first 200 rows of the whole warehouse, sorted by
+ * expiry. An LP outside that window simply "did not exist". The API's skuCode
+ * filter already matches lp_number (and sku, name, lot, location), so search
+ * server-side and let the DB find it. */
 const searchCBLps = debounce(async function(){
-  const s = document.getElementById('cbLpSearch').value.trim();
+  const s   = document.getElementById('cbLpSearch')?.value.trim();
   const div = document.getElementById('cbLpResults');
-  if(s.length < 2){ div.style.display = 'none'; return; }
+  if(!div) return;
+  if(!s || s.length < 2){ div.style.display = 'none'; return; }
 
-  const d = await apiGet(`/inventory?limit=200`);
-  if(!d) return;
-  const rows = (d.rows || d) || [];
+  div.style.display = 'block';
+  div.innerHTML = uiSpinner('Searching…');
 
+  const qs = new URLSearchParams({
+    skuCode: '%' + s + '%', status: 'available', limit: 50,
+  });
+  const d = await apiGet(`/inventory?${qs.toString()}`);
+  const rows = (d?.rows || d || []);
+
+  // Case LPs only — an each/pallet LP can't be case-broken.
   const seen = new Set();
   const matches = rows.filter(r => {
     if(!r.lp_number || !r.lp_number.toLowerCase().includes(s.toLowerCase())) return false;
-    if((r.sku_type !== 'CASE' && r.uom !== 'CASE') || r.status !== 'available' || Number(r.quantity) <= 0) return false;
+    if((r.sku_type !== 'CASE' && r.uom !== 'CASE') || Number(r.quantity) <= 0) return false;
     if(seen.has(r.lp_number)) return false;
     seen.add(r.lp_number);
     return true;
   });
 
   if(!matches.length){
-    div.innerHTML = `<div class="empty-state" style="padding:12px;">No case LPs found matching "${esc(s)}"</div>`;
-    div.style.display = 'block';
+    div.innerHTML = uiEmpty(`No available case LPs matching “${s}”`);
     return;
   }
 
   div.innerHTML = matches.map(r => `
-    <div class="js-cb-lp-row"
-         data-payload='${esc(JSON.stringify({
-           lp_id: r.lp_id || null, id: r.id, lp_number: r.lp_number,
-           sku_code: r.sku_code, sku_name: r.sku_name || '',
-           sku_type: r.sku_type || r.uom, quantity: Number(r.quantity),
-           lot_number: r.lot_number || null, location_code: r.location_code || ''
-         }))}'
-         style="padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:12px;font-size:13px;">
+    <div class="cb-row js-cb-lp-row" data-payload='${esc(JSON.stringify({
+      lp_id: r.lp_id || null, id: r.id, lp_number: r.lp_number,
+      sku_code: r.sku_code, sku_name: r.sku_name || '',
+      sku_type: r.sku_type || r.uom, quantity: Number(r.quantity),
+      lot_number: r.lot_number || null, location_code: r.location_code || '',
+    }))}'>
       <span class="lp-badge lp-original">${esc(r.lp_number)}</span>
-      <span style="font-weight:600;color:var(--blue);">${esc(r.sku_code)}</span>
-      <span style="color:var(--text2);">${esc(r.sku_name || '')}</span>
-      <span style="margin-left:auto;font-weight:600;">${esc(r.quantity)} cases</span>
-      <span style="color:var(--text2);">${esc(r.location_code || '')}</span>
+      ${uiId(r.sku_code)}
+      <span class="cb-row-name">${esc(r.sku_name || '')}</span>
+      <span>${uiNum(r.quantity)} cases</span>
+      <span class="ui-muted">${esc(r.location_code || '')}</span>
     </div>`).join('');
-  div.style.display = 'block';
 
-  div.querySelectorAll('.js-cb-lp-row').forEach(row => {
-    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
-    row.addEventListener('mouseout',  () => row.style.background = '');
+  div.querySelectorAll('.js-cb-lp-row').forEach(row =>
     row.addEventListener('click', () => {
       try { selectCBLp(JSON.parse(row.dataset.payload)); }
-      catch(e){ console.error('cb lp parse error', e); }
-    });
-  });
+      catch(e){ uiToast('Could not read that LP row', 'error'); }
+    }));
 }, 300);
 
 function selectCBLp(r){
   cbSelectedLp = r;
   document.getElementById('cbLpResults').style.display = 'none';
   document.getElementById('cbLpSearch').value = r.lp_number;
-  document.getElementById('cbLpDetail').style.display  = 'block';
-  document.getElementById('cbForm').style.display      = 'block';
-  document.getElementById('cbSubmitBtn').style.display = 'inline-flex';
-  document.getElementById('cbSuccess').style.display = 'none';
-  document.getElementById('cbError').textContent = '';
+  document.getElementById('cbForm').style.display = '';
+  if(CB_SUBMIT) CB_SUBMIT.disabled = false;
 
-  document.getElementById('cbLpNum').textContent  = r.lp_number;
-  document.getElementById('cbLpSku').textContent  = `${r.sku_code} — ${r.sku_name || ''}`;
-  document.getElementById('cbLpQty').textContent  = `${r.quantity} cases on hand`;
-  document.getElementById('cbLpLot').textContent  = r.lot_number || '—';
-  document.getElementById('cbLpLoc').textContent  = r.location_code || '—';
-  document.getElementById('cbLpType').textContent = r.sku_type || r.uom || 'CASE';
-  document.getElementById('cbEachSku').textContent = '(resolved by API)';
-  document.getElementById('cbConversion').textContent = 'Case pack qty will be determined by SKU configuration';
+  const detail = document.getElementById('cbLpDetail');
+  detail.style.display = '';
+  detail.innerHTML = `
+    <div class="cb-lp-head">
+      <span class="lp-badge lp-original">${esc(r.lp_number)}</span>
+      ${uiId(r.sku_code)}
+      <span class="ui-muted">${esc(r.sku_name || '')}</span>
+      <span style="flex:1"></span>
+      <span class="ui-chip ui-chip-info">${esc(r.quantity)} cases on hand</span>
+    </div>
+    ${uiMeta([
+      { k: 'Lot', v: r.lot_number ? uiId(r.lot_number) : '<span class="ui-muted">—</span>' },
+      { k: 'Location', v: r.location_code ? uiId(r.location_code) : '<span class="ui-muted">—</span>' },
+      { k: 'SKU type', v: esc(r.sku_type || r.uom || 'CASE') },
+      { k: 'Each SKU', v: '<span class="ui-muted">resolved from the SKU config</span>' },
+    ])}`;
 
-  document.getElementById('cbQty').max = r.quantity;
-  document.getElementById('cbQty').value = 1;
+  const qty = document.getElementById('cbQty');
+  qty.max = r.quantity;
+  qty.value = 1;
   updateCBPreview();
 }
 
@@ -239,56 +281,47 @@ function updateCBPreview(){
   const max = Number(cbSelectedLp.quantity);
   const preview = document.getElementById('cbPreview');
   if(qty > max){
-    preview.innerHTML = `<span style="color:var(--red);">Cannot break ${esc(qty)} — only ${esc(max)} cases on this LP</span>`;
+    preview.innerHTML = `<span class="ui-err-text">Only ${esc(max)} case${max === 1 ? '' : 's'} on this LP</span>`;
     return;
   }
   if(qty <= 0){ preview.textContent = 'Enter at least 1 case'; return; }
-  preview.innerHTML = `Will break <strong>${esc(qty)}</strong> case${qty > 1 ? 's' : ''} → eaches moved to target location. <strong>${esc(max - qty)}</strong> case${max - qty !== 1 ? 's' : ''} remaining on LP.`;
+  const left = max - qty;
+  preview.innerHTML = `Breaks <strong>${esc(qty)}</strong> case${qty > 1 ? 's' : ''} into eaches at the target location · <strong>${esc(left)}</strong> case${left !== 1 ? 's' : ''} left on this LP`;
 }
 
-async function submitCaseBreak(){
-  const err = document.getElementById('cbError');
-  const suc = document.getElementById('cbSuccess');
-  err.textContent = '';
-  suc.style.display = 'none';
-
-  if(!cbSelectedLp){ err.textContent = 'Select a license plate first'; return; }
+// uiModal action — returning false keeps the modal open.
+async function submitCaseBreak(m){
+  if(!cbSelectedLp){ uiToast('Find and select a case LP first', 'error'); return false; }
   const qty   = parseInt(document.getElementById('cbQty').value) || 0;
   const locId = cbVal('cbLocationWrap');
-  if(qty <= 0){ err.textContent = 'Enter at least 1 case'; return; }
-  if(qty > Number(cbSelectedLp.quantity)){ err.textContent = `Only ${cbSelectedLp.quantity} cases on this LP`; return; }
-  if(!locId){ err.textContent = 'Select a target location'; return; }
 
-  document.getElementById('cbSubmitBtn').disabled = true;
-  try {
-    const lpId = cbSelectedLp.lp_id || cbSelectedLp.id;
-    if(!lpId){ err.textContent = 'LP ID not available. Add i.lp_id to the inventory query SELECT.'; return; }
-    const r = await fetch(`${API}/inventory/case-break`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
-      body: JSON.stringify({caseLpId: lpId, caseQuantity: qty, toLocationId: locId}),
-    });
-    const d = await r.json();
-    if(!r.ok){ err.textContent = d.error || 'Case break failed'; return; }
-
-    suc.style.display = 'block';
-    const remaining = Number(cbSelectedLp.quantity) - qty;
-    const childLp = d.childLpNumber || d.toLpNumber;
-    document.getElementById('cbSuccessDetail').innerHTML =
-      `Broke <strong>${esc(d.casesRemoved || qty)}</strong> case${qty > 1 ? 's' : ''} of <strong>${esc(d.caseSku || cbSelectedLp.sku_code)}</strong>` +
-      (childLp ? ` → New child LP <span class="lp-badge lp-child">${esc(childLp)}</span>` : '') +
-      (d.eachesCreated ? ` — <strong>${esc(d.eachesCreated)}</strong> EA of ${esc(d.eachSku || 'eaches')} created` : '') +
-      (d.conversionFactor ? ` (${esc(d.conversionFactor)} per case)` : '') +
-      ` — <strong>${esc(remaining)}</strong> case${remaining !== 1 ? 's' : ''} remaining on ${esc(d.fromLp || cbSelectedLp.lp_number)}` +
-      (d.lotNumber ? ` · Lot: ${esc(d.lotNumber)}` : '');
-    document.getElementById('cbForm').style.display = 'none';
-    document.getElementById('cbSubmitBtn').style.display = 'none';
-    setTimeout(() => loadInventory(), 500);
-  } catch(e){
-    err.textContent = 'Network error';
-  } finally {
-    document.getElementById('cbSubmitBtn').disabled = false;
+  uiFieldError(m.el, 'cbQty', qty > 0 ? '' : 'Enter at least 1 case');
+  uiFieldError(m.el, 'cbLocationWrap', locId ? '' : 'Pick a target location');
+  if(qty > Number(cbSelectedLp.quantity)){
+    uiFieldError(m.el, 'cbQty', `Only ${cbSelectedLp.quantity} cases on this LP`);
+    return false;
   }
+  if(qty <= 0 || !locId) return false;
+
+  const lpId = cbSelectedLp.lp_id || cbSelectedLp.id;
+  if(!lpId){ uiToast('That row has no LP id — it can\'t be case-broken', 'error'); return false; }
+
+  const r = await fetch(`${API}/inventory/case-break`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+    body: JSON.stringify({ caseLpId: lpId, caseQuantity: qty, toLocationId: locId }),
+  });
+  const d = await r.json();
+  if(!r.ok){ uiToast(d.error || 'Case break failed', 'error'); return false; }
+
+  const remaining = Number(cbSelectedLp.quantity) - qty;
+  const childLp = d.childLpNumber || d.toLpNumber;
+  uiToast(
+    `Broke ${d.casesRemoved || qty} case${qty > 1 ? 's' : ''} of ${d.caseSku || cbSelectedLp.sku_code}` +
+    (d.eachesCreated ? ` → ${d.eachesCreated} EA` : '') +
+    (childLp ? ` on ${childLp}` : '') +
+    ` · ${remaining} case${remaining !== 1 ? 's' : ''} left`);
+  loadInventory();
 }
 
 // =============================================================================

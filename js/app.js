@@ -240,10 +240,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Topbar global search was removed — each page has its own scoped search
   // (Inventory: SKU/lot, Orders: order #, Reports: SKU/lot/LP).
 
-  // Intake upload + case-break LP search
+  // Intake upload. (Case-break's LP search + qty inputs are wired inside its
+  // uiModal — D4b — so they don't exist at DOM-ready.)
   document.getElementById('intakeUploadInput')?.addEventListener('change', onIntakeFilesPicked);
-  document.getElementById('cbLpSearch')?.addEventListener('input', searchCBLps);
-  document.getElementById('cbQty')?.addEventListener('input', updateCBPreview);
 
   // SKU search input (new-PO). The new-order one is wired inside its uiModal
   // (D3e) — that input no longer exists at DOM-ready.
