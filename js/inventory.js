@@ -6,9 +6,15 @@
 // said nothing about the other 9,800.
 // =============================================================================
 
+// NOTE ON NAMING: there is no module system here — every top-level const is a
+// GLOBAL shared across every js/ file. invoices.js already owns INV_*, so the
+// on-hand list uses ONHAND_*. A duplicate top-level `const` is a SyntaxError
+// that kills the whole script, and (because app.js's `loaders` map references
+// the dead file's function) takes login down with it. Don't reuse a prefix.
+//
 // `key` on a sortable column is the API's sortBy value — it must exist in the
 // INVENTORY_SORTS whitelist in the API's queries/inventory.js.
-const INV_COLS = [
+const ONHAND_COLS = [
   { key: 'sku_code', label: 'SKU', render: r => {
       const sev = severityChip(r, { size: 'sm' });
       return `${uiId(r.sku_code || '')}${sev ? ' ' + sev : ''}`;
@@ -48,18 +54,18 @@ const INV_COLS = [
     } },
 ];
 
-let INV_LIMIT  = 50;
-let INV_OFFSET = 0;
-let INV_SORT   = 'expiry_date';   // FEFO: soonest-expiring first
-let INV_DIR    = 'asc';
-let INV_FILTER_SIG = '';
+let ONHAND_LIMIT  = 50;
+let ONHAND_OFFSET = 0;
+let ONHAND_SORT   = 'expiry_date';   // FEFO: soonest-expiring first
+let ONHAND_DIR    = 'asc';
+let ONHAND_FILTER_SIG = '';
 
 function invSetSort(key, dir){
-  INV_SORT = key; INV_DIR = dir; INV_OFFSET = 0;
+  ONHAND_SORT = key; ONHAND_DIR = dir; ONHAND_OFFSET = 0;
   loadInventory();
 }
 function invSetPage(limit, offset){
-  INV_LIMIT = limit; INV_OFFSET = offset;
+  ONHAND_LIMIT = limit; ONHAND_OFFSET = offset;
   loadInventory();
   document.getElementById('invListWrap')?.scrollIntoView({ block: 'start' });
 }
@@ -72,37 +78,37 @@ async function loadInventory(){
   // A filter change puts you back on page 1 — otherwise you land on page 7 of
   // a 2-page result and see an empty table.
   const sig = `${s}|${st}|${cl}`;
-  if(sig !== INV_FILTER_SIG){ INV_FILTER_SIG = sig; INV_OFFSET = 0; }
+  if(sig !== ONHAND_FILTER_SIG){ ONHAND_FILTER_SIG = sig; ONHAND_OFFSET = 0; }
 
   const qs = new URLSearchParams({
-    limit: INV_LIMIT, offset: INV_OFFSET, sortBy: INV_SORT, sortDir: INV_DIR,
+    limit: ONHAND_LIMIT, offset: ONHAND_OFFSET, sortBy: ONHAND_SORT, sortDir: ONHAND_DIR,
   });
   if(st) qs.set('status', st);
   if(s)  qs.set('skuCode', '%' + s + '%');
   if(cl) qs.set('clientId', cl);
 
-  uiTableLoading('invListWrap', INV_COLS);
+  uiTableLoading('invListWrap', ONHAND_COLS);
   const d = await apiGet(`/inventory?${qs.toString()}`);
-  if(d === null) return uiTableError('invListWrap', INV_COLS, 'Could not load inventory', loadInventory);
+  if(d === null) return uiTableError('invListWrap', ONHAND_COLS, 'Could not load inventory', loadInventory);
 
   const rows  = d.rows || d || [];
   const total = Number(d.total ?? rows.length);
 
-  if(!rows.length && INV_OFFSET > 0 && total > 0){   // stranded past the last page
-    INV_OFFSET = 0;
+  if(!rows.length && ONHAND_OFFSET > 0 && total > 0){   // stranded past the last page
+    ONHAND_OFFSET = 0;
     return loadInventory();
   }
 
   uiTable('invListWrap', {
-    columns: INV_COLS, rows, rowKey: 'id',
-    sortable: true, sortKey: INV_SORT, sortDir: INV_DIR,
+    columns: ONHAND_COLS, rows, rowKey: 'id',
+    sortable: true, sortKey: ONHAND_SORT, sortDir: ONHAND_DIR,
     onSort: invSetSort,          // server-side — sorting one page would lie
     onRowClick: r => openInventoryDetail(r.id),
     empty: (s || st || cl) ? 'No inventory matches that filter.' : 'No inventory on hand.',
   });
 
   uiPager('invPager', {
-    total, limit: INV_LIMIT, offset: INV_OFFSET,
+    total, limit: ONHAND_LIMIT, offset: ONHAND_OFFSET,
     noun: 'inventory rows', onChange: invSetPage,
   });
 
