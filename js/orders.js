@@ -883,43 +883,102 @@ async function submitAllocation(){
 // NEW ORDER MODAL
 // =============================================================================
 
+let NEW_M = null;   // open new-order uiModal
+
 async function showNewOrderModal(){
   await loadCC();
-  const m = document.getElementById('newOrderModal');
-  m.style.display = 'flex'; m.style.zIndex = '10000';
+  orderLines = [];
+
+  NEW_M = uiModal({
+    title: 'New outbound order',
+    width: 800,
+    body: `
+      <div class="ui-field-row">
+        <div class="ui-field" data-field="noClientWrap">
+          <label class="ui-label">Client *</label>
+          <div class="cb-wrap" id="noClientWrap"></div>
+          <div class="ui-field-err" style="display:none;"></div>
+        </div>
+        ${uiField({ id: 'noOrderNum', label: 'Order number',
+                    placeholder: 'Auto-generated (or type to override)',
+                    hint: 'Left blank, the server assigns the next number in the sequence.' })}
+      </div>
+      <div class="no-row-3">
+        <div class="ui-field"><label class="ui-label">Channel</label><div class="cb-wrap" id="noChannelWrap"></div></div>
+        <div class="ui-field"><label class="ui-label">Order type</label><div class="cb-wrap" id="noTypeWrap"></div></div>
+        <div class="ui-field"><label class="ui-label">Priority</label><div class="cb-wrap" id="noPriorityWrap"></div></div>
+      </div>
+
+      <div class="eo-section">
+        <div class="no-section-head">
+          <div class="ui-label">Ship to</div>
+          <div style="flex:1"></div>
+          <div class="cb-wrap" style="max-width:300px;" id="noPriorAddrWrap"></div>
+        </div>
+        <div class="ui-field-row">
+          ${uiField({ id: 'noCustName', label: 'Customer name *' })}
+          ${uiField({ id: 'noCustEmail', label: 'Email', type: 'email' })}
+        </div>
+        ${uiField({ id: 'noAddr1', label: 'Address line 1 *' })}
+        ${uiField({ id: 'noAddr2', label: 'Address line 2' })}
+        <div class="eo-addr-row">
+          ${uiField({ id: 'noCity', label: 'City *' })}
+          ${uiField({ id: 'noState', label: 'State *' })}
+          ${uiField({ id: 'noPostal', label: 'Postal *' })}
+          ${uiField({ id: 'noCountry', label: 'Country', value: 'US' })}
+        </div>
+      </div>
+
+      <div class="no-row-3">
+        <div class="ui-field"><label class="ui-label">Carrier</label><div class="cb-wrap" id="noCarrierWrap"></div></div>
+        ${uiField({ id: 'noShipMethod', label: 'Ship method', placeholder: 'GROUND, EXPRESS, LTL…' })}
+        ${uiField({ id: 'noShipDate', label: 'Ship by date', type: 'date' })}
+      </div>
+
+      <div class="eo-section">
+        <div class="no-section-head">
+          <div class="ui-label">Order lines</div>
+          <span class="ui-hint" id="noLinesCount"></span>
+          <div style="flex:1"></div>
+          <input type="text" class="ui-input no-search" id="noSkuSearch" placeholder="Search or click to browse SKUs…">
+        </div>
+        <div id="noSkuResults" class="no-results"></div>
+        <div id="noLinesWrap"></div>
+      </div>`,
+    actions: [
+      { label: 'Cancel' },
+      { label: 'Create order', primary: true, onClick: submitNewOrder },
+    ],
+    onClose: () => { NEW_M = null; },
+  });
 
   initCombo('noClientWrap',
-    clientsCache.map(c => ({value:String(c.id), label:`${c.code} — ${c.name}`})),
-    {placeholder:'Select client...', onChange:(v) => { if(v) onOrderClientChange(v); }}
-  );
+    clientsCache.map(c => ({ value: String(c.id), label: `${c.code} — ${c.name}` })),
+    { placeholder: 'Select client…', onChange: (v) => { if(v) onOrderClientChange(v); } });
   initCombo('noChannelWrap', [
-    {value:'MANUAL',label:'Manual'},{value:'SHOPIFY',label:'Shopify'},
-    {value:'EDI',label:'EDI'},{value:'PHONE',label:'Phone'},{value:'EMAIL',label:'Email'},
-  ], {placeholder:'Select...', value:'MANUAL'});
+    { value:'MANUAL', label:'Manual' }, { value:'SHOPIFY', label:'Shopify' },
+    { value:'EDI', label:'EDI' }, { value:'PHONE', label:'Phone' }, { value:'EMAIL', label:'Email' },
+  ], { placeholder:'Select…', value:'MANUAL' });
   initCombo('noTypeWrap', [
-    {value:'FULFILLMENT',label:'Fulfillment'},{value:'B2B',label:'B2B'},
-  ], {placeholder:'Select...', value:'FULFILLMENT'});
+    { value:'FULFILLMENT', label:'Fulfillment' }, { value:'B2B', label:'B2B' },
+  ], { placeholder:'Select…', value:'FULFILLMENT' });
   initCombo('noPriorityWrap', [
-    {value:'5',label:'Normal (5)'},{value:'7',label:'High (7)'},
-    {value:'9',label:'Rush (9)'},{value:'3',label:'Low (3)'},
-  ], {placeholder:'Select...', value:'5'});
+    { value:'5', label:'Normal (5)' }, { value:'7', label:'High (7)' },
+    { value:'9', label:'Rush (9)' }, { value:'3', label:'Low (3)' },
+  ], { placeholder:'Select…', value:'5' });
   initCombo('noCarrierWrap', [
-    {value:'UPS',label:'UPS'},{value:'FEDEX',label:'FedEx'},{value:'USPS',label:'USPS'},
-    {value:'DHL',label:'DHL'},{value:'OTHER',label:'LTL/Other'},
-  ], {placeholder:'Select carrier...'});
+    { value:'UPS', label:'UPS' }, { value:'FEDEX', label:'FedEx' }, { value:'USPS', label:'USPS' },
+    { value:'DHL', label:'DHL' }, { value:'OTHER', label:'LTL / Other' },
+  ], { placeholder:'Select carrier…' });
   initCombo('noPriorAddrWrap', [],
-    {placeholder:'Load from prior order...', onChange:(v) => fillPriorAddress(v)});
+    { placeholder:'Load from a prior order…', onChange: (v) => fillPriorAddress(v) });
 
-  orderLines = [];
+  // The SKU box only browses once a client is chosen (SKUs are client-scoped).
+  const search = document.getElementById('noSkuSearch');
+  search.addEventListener('input', searchOrderSkus);
+  search.addEventListener('focus', searchOrderSkus);
+
   renderOL();
-  document.getElementById('noError').textContent = '';
-  // Order number is now generated server-side via a Postgres sequence
-  // (starts at 500000, increments by 1) when the field is left blank.
-  // Client-side random generation removed — collisions and gaps were
-  // both possible under concurrency. Ops can still type an explicit
-  // number here if they want to mirror an external order.
-  document.getElementById('noOrderNum').value = '';
-  document.getElementById('noOrderNum').placeholder = 'Auto-generated (or type to override)';
 }
 
 async function onOrderClientChange(cid){
@@ -960,7 +1019,14 @@ async function searchOrderSkus(){
   const cid = cbVal('noClientWrap');
   const s   = document.getElementById('noSkuSearch').value;
   const div = document.getElementById('noSkuResults');
-  if(!cid){ div.style.display = 'none'; return; }
+  if(!div) return;
+  if(!cid){
+    // Used to fail silently — ops would click the box, get nothing, and not
+    // know why. Say what's missing.
+    div.innerHTML = uiEmpty('Pick a client first — SKUs are scoped to the client.');
+    div.style.display = 'block';
+    return;
+  }
 
   const [skuRes, invRes] = await Promise.all([
     apiGet(`/skus?clientId=${encodeURIComponent(cid)}&search=${encodeURIComponent(s)}`),
@@ -989,9 +1055,9 @@ async function searchOrderSkus(){
   });
 
   const d = Object.values(skuMap);
+  div.style.display = 'block';
   if(!d?.length){
-    div.innerHTML = '<div class="empty-state" style="padding:12px;">No SKUs or lots found</div>';
-    div.style.display = 'block';
+    div.innerHTML = uiEmpty(s ? `No SKUs or lots matching “${s}”` : 'No SKUs on this client');
     return;
   }
 
@@ -1001,25 +1067,23 @@ async function searchOrderSkus(){
     : new Set();
 
   div.innerHTML = d.map(x => {
-    const availColor = (x.qty_available || 0) > 0 ? 'var(--green)' : 'var(--red)';
+    const avail = Number(x.qty_available || 0);
     return `
-      <div style="border-bottom:1px solid var(--border);">
-        <div class="js-sku-row"
-             data-sku-id="${esc(x.id)}"
-             data-sku-code="${esc(x.sku_code)}"
-             data-sku-name="${esc(x.name || '')}"
-             data-uom="${esc(x.uom)}"
-             data-avail="${esc(x.qty_available || 0)}"
-             style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;font-size:13px;">
-          <span style="font-weight:600;color:var(--blue);">${esc(x.sku_code)}</span>
-          <span style="color:var(--text2);">${esc(x.name || '')}</span>
-          <span style="margin-left:auto;color:${availColor};font-weight:600;">${esc(x.qty_available || 0)} avail</span>
-          <span class="js-sku-arrow" style="color:var(--muted);font-size:11px;">▶</span>
+      <div class="no-sku">
+        <div class="no-sku-row js-sku-row"
+             data-sku-id="${esc(x.id)}" data-sku-code="${esc(x.sku_code)}"
+             data-sku-name="${esc(x.name || '')}" data-uom="${esc(x.uom)}"
+             data-avail="${esc(avail)}">
+          <span class="js-sku-arrow no-sku-arrow">▸</span>
+          ${uiId(x.sku_code)}
+          <span class="no-sku-name">${esc(x.name || '')}</span>
+          ${avail > 0
+            ? `<span class="no-sku-avail">${uiNum(avail)} available</span>`
+            : '<span class="ui-chip ui-chip-danger">none available</span>'}
         </div>
-        <div class="sku-lots" id="lots_${esc(x.id)}" style="display:none;"></div>
+        <div class="sku-lots no-lots" id="lots_${esc(x.id)}"></div>
       </div>`;
   }).join('');
-  div.style.display = 'block';
 
   div.querySelectorAll('.js-sku-row').forEach(row => {
     row.addEventListener('click', () => {
@@ -1041,77 +1105,60 @@ async function expandSkuLots(el, skuId, skuCode, skuName, uom, totalAvail, lotFi
   const lotsDiv = document.getElementById('lots_' + skuId);
   if(!lotsDiv) return;
   const arrow = el.querySelector('.js-sku-arrow');
-  if(lotsDiv.style.display === 'block'){
-    lotsDiv.style.display = 'none';
-    if(arrow) arrow.textContent = '▶';
+
+  if(lotsDiv.classList.contains('open')){       // toggle closed
+    lotsDiv.classList.remove('open');
+    lotsDiv.innerHTML = '';
+    if(arrow) arrow.textContent = '▸';
     return;
   }
-  if(arrow) arrow.textContent = '▼';
-  lotsDiv.style.display = 'block';
-  lotsDiv.innerHTML = '<div style="padding:8px 16px 8px 32px;color:var(--muted);font-size:12px;">Loading lots...</div>';
+  lotsDiv.classList.add('open');
+  if(arrow) arrow.textContent = '▾';
+  lotsDiv.innerHTML = uiSpinner('Loading lots…');
 
   const cid = cbVal('noClientWrap');
   const d = await apiGet(`/inventory?limit=100&clientId=${encodeURIComponent(cid)}&skuCode=${encodeURIComponent('%' + skuCode + '%')}&status=available`);
   const allRows = (d?.rows || d || []).filter(r => r.quantity > 0);
 
+  // If the user's search term matched a LOT (not the sku code/name), only show
+  // the lots that matched — that's what they were looking for.
   const lf = (lotFilter || '').toLowerCase().trim();
   const skuMatches = lf && (skuCode.toLowerCase().includes(lf) || skuName.toLowerCase().includes(lf));
   const rows = (lf && !skuMatches)
     ? allRows.filter(r => (r.lot_number || '').toLowerCase().includes(lf))
     : allRows;
 
-  if(!rows.length){
-    lotsDiv.innerHTML = '<div style="padding:8px 16px 8px 32px;color:var(--muted);font-size:12px;">No available inventory</div>';
-    return;
-  }
+  if(!rows.length){ lotsDiv.innerHTML = uiEmpty('No available inventory for this SKU.'); return; }
 
-  const header = `
-    <div style="padding:6px 16px 6px 32px;display:grid;grid-template-columns:140px 100px 130px 120px 60px 80px;gap:8px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;border-top:1px solid var(--border);background:rgba(0,0,0,.15);">
-      <span>Lot</span><span>Expiry</span><span>LP</span><span>Location</span><span>Qty</span><span></span>
-    </div>`;
-
-  const body = rows.map(r => {
-    const expiringSoon = r.expiry_date && new Date(r.expiry_date) < new Date(Date.now() + 30 * 864e5);
-    const lpClass = r.lp_type === 'CHILD' ? 'lp-child' : 'lp-original';
-    return `
-      <div class="js-lot-row"
-           data-sku-id="${esc(skuId)}"
-           data-sku-code="${esc(skuCode)}"
-           data-sku-name="${esc(skuName)}"
-           data-uom="${esc(uom)}"
-           data-lot="${esc(r.lot_number || '')}"
-           data-expiry="${esc(r.expiry_date || '')}"
-           data-lp="${esc(r.lp_number || '')}"
-           data-location="${esc(r.location_code || '')}"
-           data-qty="${esc(r.quantity || 0)}"
-           style="padding:8px 16px 8px 32px;border-top:1px solid var(--border);display:grid;grid-template-columns:140px 100px 130px 120px 60px 80px;align-items:center;gap:8px;font-size:12px;cursor:pointer;transition:background .1s;">
-        <span style="color:var(--blue);font-weight:600;">${esc(r.lot_number || 'No lot')}</span>
-        <span style="color:${expiringSoon ? 'var(--red)' : 'var(--text2)'};">${esc(r.expiry_date ? new Date(r.expiry_date).toLocaleDateString() : '—')}</span>
-        <span class="lp-badge ${lpClass}">${esc(r.lp_number || '—')}</span>
-        <span style="color:var(--muted);">${esc(r.location_code || '—')}</span>
-        <span style="font-weight:600;color:var(--green);">${esc(r.quantity)}</span>
-        <span style="color:var(--blue);font-size:11px;font-weight:600;">+ Add</span>
-      </div>`;
-  }).join('');
-
-  lotsDiv.innerHTML = header + body;
-
-  lotsDiv.querySelectorAll('.js-lot-row').forEach(row => {
-    row.addEventListener('mouseover', () => row.style.background = 'var(--hover)');
-    row.addEventListener('mouseout',  () => row.style.background = '');
-    row.addEventListener('click', () => {
-      addOLWithLot(
-        row.dataset.skuId, row.dataset.skuCode, row.dataset.skuName, row.dataset.uom,
-        row.dataset.lot, row.dataset.expiry, row.dataset.lp, row.dataset.location,
-        Number(row.dataset.qty)
-      );
-    });
+  uiTable(lotsDiv, {
+    columns: [
+      { key: '_lot', label: 'Lot', render: r => uiId(r.lot_number || 'No lot') },
+      { key: '_exp', label: 'Expiry', render: r => {
+          if(!r.expiry_date) return '<span class="ui-muted">—</span>';
+          const soon = new Date(r.expiry_date) < new Date(Date.now() + 30 * 864e5);
+          const txt = new Date(r.expiry_date).toLocaleDateString();
+          return soon ? `<span class="ui-chip ui-chip-danger">${esc(txt)}</span>` : uiId(txt);
+        } },
+      { key: '_lp', label: 'LP', render: r => r.lp_number
+          ? `<span class="lp-badge ${r.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(r.lp_number)}</span>`
+          : '<span class="ui-muted">—</span>' },
+      { key: 'location_code', label: 'Location', mono: true },
+      { key: 'quantity', label: 'Available', num: true },
+      { key: '_add', label: '', render: () => '<span class="pno-add">+ Add</span>' },
+    ],
+    rows, rowKey: 'lp_number',
+    onRowClick: (r) => addOLWithLot(
+      skuId, skuCode, skuName, uom,
+      r.lot_number || '', r.expiry_date || '', r.lp_number || '', r.location_code || '',
+      Number(r.quantity || 0)),
   });
 }
 
 function addOLWithLot(skuId, skuCode, skuName, uom, lotNum, expiry, lpNum, location, avail){
   const key = skuId + '_' + (lotNum || 'nolot');
-  if(orderLines.find(l => l._key === key)) return;
+  if(orderLines.find(l => l._key === key)){
+    return uiToast(`${skuCode}${lotNum ? ' / ' + lotNum : ''} is already on the order`, 'error');
+  }
   orderLines.push({
     _key: key, skuId, code: skuCode, name: skuName, uom,
     lotNum, expiry, lpNum, location, avail, qty: 1,
@@ -1119,113 +1166,118 @@ function addOLWithLot(skuId, skuCode, skuName, uom, lotNum, expiry, lpNum, locat
   renderOL();
   document.getElementById('noSkuSearch').value = '';
   document.getElementById('noSkuResults').style.display = 'none';
+  uiToast(`${skuCode} added`);
 }
 
 function addOL(id, code, name, uom, avail){
   addOLWithLot(id, code, name, uom, '', '', '', '', avail);
 }
 
+const NO_LINE_COLS = [
+  { key: 'code', label: 'SKU', mono: true },
+  { key: 'name', label: 'Description' },
+  { key: '_lot', label: 'Lot', render: l => l.lotNum ? uiId(l.lotNum) : '<span class="ui-muted">—</span>' },
+  { key: '_exp', label: 'Expiry', render: l => {
+      if(!l.expiry) return '<span class="ui-muted">—</span>';
+      const soon = new Date(l.expiry) < new Date(Date.now() + 30 * 864e5);
+      const txt = new Date(l.expiry).toLocaleDateString();
+      return soon ? `<span class="ui-chip ui-chip-danger">${esc(txt)}</span>` : uiId(txt);
+    } },
+  { key: '_lp', label: 'LP', render: l => l.lpNum
+      ? `<span class="lp-badge lp-original">${esc(l.lpNum)}</span>` : '<span class="ui-muted">—</span>' },
+  { key: '_loc', label: 'Location', render: l => l.location ? uiId(l.location) : '<span class="ui-muted">—</span>' },
+  { key: 'avail', label: 'Available', num: true },
+  { key: '_qty', label: 'Qty', render: l => {
+      const over = Number(l.qty) > Number(l.avail);
+      return `<input type="number" class="ui-input ord-pick-qty js-ol-qty${over ? ' pno-qty-over' : ''}"
+                data-key="${esc(l._key)}" value="${esc(l.qty)}" min="1">`;
+    } },
+  { key: '_rm', label: '', render: l =>
+      `<button class="ui-btn js-ol-remove" data-key="${esc(l._key)}" aria-label="Remove line">✕</button>` },
+];
+
 function renderOL(){
-  const b = document.getElementById('noLinesBody');
-  const e = document.getElementById('noLinesEmpty');
-  if(!orderLines.length){
-    b.innerHTML = '';
-    e.style.display = 'block';
-    return;
+  const host = document.getElementById('noLinesWrap');
+  if(!host) return;
+  const count = document.getElementById('noLinesCount');
+  if(count){
+    const n = orderLines.length;
+    const qty = orderLines.reduce((s, l) => s + (Number(l.qty) || 0), 0);
+    count.textContent = n ? `${n} ${n === 1 ? 'line' : 'lines'} · ${qty} units` : '';
   }
-  e.style.display = 'none';
 
-  b.innerHTML = orderLines.map((l, i) => `
-    <tr>
-      <td style="font-weight:600;color:var(--blue);">${esc(l.code)}</td>
-      <td style="color:var(--text2);font-size:12px;">${esc(l.name)}</td>
-      <td style="color:var(--blue);font-size:12px;">${esc(l.lotNum || '—')}</td>
-      <td style="font-size:12px;color:var(--text2);">${esc(l.expiry ? new Date(l.expiry).toLocaleDateString() : '—')}</td>
-      <td style="font-size:12px;">${l.lpNum ? `<span class="lp-badge lp-original">${esc(l.lpNum)}</span>` : '—'}</td>
-      <td style="font-size:12px;color:var(--muted);">${esc(l.location || '—')}</td>
-      <td class="right" style="color:var(--green);font-size:12px;">${esc(l.avail)}</td>
-      <td><input type="number" class="form-input js-ol-qty" data-i="${i}" value="${esc(l.qty)}" min="1" max="${esc(l.avail)}" style="width:72px;padding:6px 8px;"></td>
-      <td><button class="btn btn-ghost js-ol-remove" data-i="${i}" style="padding:4px 8px;color:var(--red);">✕</button></td>
-    </tr>`).join('');
-
-  b.querySelectorAll('.js-ol-qty').forEach(inp => {
-    inp.addEventListener('change', () => {
-      orderLines[parseInt(inp.dataset.i)].qty = parseInt(inp.value) || 1;
-    });
+  uiTable(host, {
+    columns: NO_LINE_COLS, rows: orderLines, rowKey: '_key',
+    empty: 'No lines yet — search a SKU above, then pick the lot you want.',
   });
-  b.querySelectorAll('.js-ol-remove').forEach(btn => {
-    btn.addEventListener('click', () => {
-      orderLines.splice(parseInt(btn.dataset.i), 1);
+
+  host.querySelectorAll('.js-ol-qty').forEach(inp =>
+    inp.addEventListener('input', () => {
+      const l = orderLines.find(x => x._key === inp.dataset.key);
+      if(!l) return;
+      l.qty = parseInt(inp.value) || 1;
+      inp.classList.toggle('pno-qty-over', Number(l.qty) > Number(l.avail));
+      if(count){
+        const n = orderLines.length;
+        const qty = orderLines.reduce((s, x) => s + (Number(x.qty) || 0), 0);
+        count.textContent = `${n} ${n === 1 ? 'line' : 'lines'} · ${qty} units`;
+      }
+    }));
+  host.querySelectorAll('.js-ol-remove').forEach(btn =>
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      orderLines = orderLines.filter(l => l._key !== btn.dataset.key);
       renderOL();
-    });
-  });
+    }));
 }
 
-async function submitNewOrder(){
-  const err = document.getElementById('noError');
-  err.textContent = '';
+// uiModal action — returning false keeps the modal open.
+async function submitNewOrder(m){
+  const v = (id) => document.getElementById(id).value.trim();
   const cid = cbVal('noClientWrap');
-  const num = document.getElementById('noOrderNum').value.trim();
-  const cn  = document.getElementById('noCustName').value.trim();
-  if(!cid){ err.textContent = 'Select a client'; return; }
-  if(!orderLines.length){ err.textContent = 'Add at least one line'; return; }
-  if(!cn){ err.textContent = 'Enter customer name'; return; }
+  const cn  = v('noCustName');
 
-  try {
-    const r = await fetch(`${API}/orders`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
-      body: JSON.stringify({
-        clientId: cid,
-        // Order number is optional — backend auto-generates from the
-        // orders_order_number_seq sequence when left blank. Pass null
-        // (not '') so the backend's "no orderNumber" branch fires
-        // cleanly.
-        orderNumber: num || null,
-        channel: cbVal('noChannelWrap') || 'MANUAL',
-        orderType: cbVal('noTypeWrap') || 'FULFILLMENT',
-        priority: parseInt(cbVal('noPriorityWrap')) || 5,
-        carrierCode: cbVal('noCarrierWrap') || null,
-        shipMethod: document.getElementById('noShipMethod').value || null,
-        requiredShipDate: document.getElementById('noShipDate').value || null,
-        customerName: cn,
-        customerEmail: document.getElementById('noCustEmail').value || null,
-        shipTo: {
-          name: cn,
-          line1:   document.getElementById('noAddr1').value,
-          line2:   document.getElementById('noAddr2').value,
-          city:    document.getElementById('noCity').value,
-          state:   document.getElementById('noState').value,
-          postal:  document.getElementById('noPostal').value,
-          country: document.getElementById('noCountry').value || 'US',
-        },
-        lines: orderLines.map(l => ({skuId: l.skuId, qty: l.qty, uom: l.uom})),
-      }),
-    });
-    const d = await r.json();
-    if(!r.ok){ err.textContent = d.error || 'Failed'; return; }
-    closeModal('newOrderModal');
+  uiFieldError(m.el, 'noClientWrap', cid ? '' : 'Select a client');
+  uiFieldError(m.el, 'noCustName', cn ? '' : 'Customer name is required');
+  if(!cid || !cn) return false;
+  if(!orderLines.length){ uiToast('Add at least one line', 'error'); return false; }
 
-    // Drop the user straight into allocation for the order they just
-    // created — the most natural next step is "now decide which lots
-    // fulfill it", and forcing them to bounce back to the list and find
-    // the order again was a documented friction point.
-    if(d.id){
-      await openOrderDetail(d.id);
-      // Small delay so COD is populated by the detail load before we
-      // try to render allocation lines off it
-      setTimeout(() => {
-        if(typeof showAllocPanel === 'function') showAllocPanel(d.id);
-        // Scroll the allocate panel into view
-        const ap = document.getElementById('allocPanel');
-        if(ap) ap.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 250);
-    } else {
-      loadOrders();
-    }
-  } catch(e){
-    err.textContent = 'Network error';
-  }
+  const r = await fetch(`${API}/orders`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+    body: JSON.stringify({
+      clientId: cid,
+      // Blank -> null so the API's sequence-generated number branch fires.
+      orderNumber: v('noOrderNum') || null,
+      channel:   cbVal('noChannelWrap') || 'MANUAL',
+      orderType: cbVal('noTypeWrap') || 'FULFILLMENT',
+      priority:  parseInt(cbVal('noPriorityWrap')) || 5,
+      carrierCode: cbVal('noCarrierWrap') || null,
+      shipMethod: v('noShipMethod') || null,
+      requiredShipDate: document.getElementById('noShipDate').value || null,
+      customerName: cn,
+      customerEmail: v('noCustEmail') || null,
+      shipTo: {
+        name: cn,
+        line1: v('noAddr1'), line2: v('noAddr2'),
+        city: v('noCity'), state: v('noState'), postal: v('noPostal'),
+        country: v('noCountry') || 'US',
+      },
+      lines: orderLines.map(l => ({ skuId: l.skuId, qty: l.qty, uom: l.uom })),
+    }),
+  });
+  const d = await r.json();
+  if(!r.ok){ uiToast(d.error || 'Order could not be created', 'error'); return false; }
+  uiToast(`Order ${d.order_number} created — allocate it now`);
+
+  if(!d.id){ loadOrders(); return; }
+
+  // Drop straight into allocation: "which lots fulfil this" is the real next
+  // step, and bouncing back to the list to find the order was a known friction
+  // point. Await the detail load instead of racing it on a timer.
+  await openOrderDetail(d.id);
+  await showAllocPanel(d.id);
+  document.getElementById('allocPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // =============================================================================

@@ -245,9 +245,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('cbLpSearch')?.addEventListener('input', searchCBLps);
   document.getElementById('cbQty')?.addEventListener('input', updateCBPreview);
 
-  // SKU search inputs (new-order + new-PO)
-  document.getElementById('noSkuSearch')?.addEventListener('input', searchOrderSkus);
-  document.getElementById('noSkuSearch')?.addEventListener('focus', searchOrderSkus);
+  // SKU search input (new-PO). The new-order one is wired inside its uiModal
+  // (D3e) — that input no longer exists at DOM-ready.
   document.getElementById('npSkuSearch')?.addEventListener('input', searchPoSkus);
   document.getElementById('npSkuSearch')?.addEventListener('focus', searchPoSkus);
 

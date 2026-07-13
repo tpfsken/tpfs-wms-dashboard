@@ -224,6 +224,23 @@ body.portal-mode .portal-banner{
   .ord-grid { grid-template-columns: 1fr; }
 }
 
+/* ---- New-order modal (D3e) ---- */
+.no-row-3{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-3);}
+.no-section-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+.no-search{max-width:260px;}
+.no-results{display:none;background:var(--bg);border:1px solid var(--border-h);
+  border-radius:var(--radius);margin-bottom:12px;max-height:340px;overflow-y:auto;}
+.no-sku{border-bottom:1px solid var(--border);}
+.no-sku:last-child{border-bottom:none;}
+.no-sku-row{display:flex;align-items:center;gap:12px;padding:9px 14px;cursor:pointer;
+  font-size:var(--fs-body);}
+.no-sku-row:hover{background:var(--hover);}
+.no-sku-arrow{color:var(--muted);font-size:10px;width:10px;}
+.no-sku-name{flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.no-sku-avail{color:var(--st-ok);font-weight:600;font-size:12px;white-space:nowrap;}
+.no-lots{display:none;padding:0 14px 10px 24px;background:var(--stripe);}
+.no-lots.open{display:block;}
+
 /* ---- Edit-order modal (D3d) ---- */
 .eo-section{border-top:1px solid var(--border);margin:16px 0;padding-top:14px;}
 .eo-addr-row{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-3);}
