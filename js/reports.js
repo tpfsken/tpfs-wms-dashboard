@@ -618,10 +618,14 @@ function renderTimeline(rows){
       ? new Date(e.created_at).toLocaleString('en-US', {month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'})
       : '—';
     const colors = {
-      'receipt':    {icon:'📦', bg:'var(--blue-bg)',  fg:'var(--blue)'},
+      // Typographic marks only — no emoji. These render identically on the
+      // warehouse tablet, in a client's browser, and in a printed/PDF report;
+      // colour emoji do not, and they read as toys on a client-facing audit trail.
+      // Stock IN is ↓, stock OUT is ↑ — direction is the fastest thing to scan.
+      'receipt':    {icon:'↓',  bg:'var(--blue-bg)',  fg:'var(--blue)'},
       'case_break': {icon:'⊞',  bg:'var(--purple-bg)',fg:'var(--purple)'},
       'pick':       {icon:'✓',  bg:'var(--amber-bg)', fg:'var(--amber)'},
-      'ship':       {icon:'🚚', bg:'var(--green-bg)', fg:'var(--green)'},
+      'ship':       {icon:'↑',  bg:'var(--green-bg)', fg:'var(--green)'},
       'adjustment': {icon:'±',  bg:'var(--red-bg)',   fg:'var(--red)'},
     };
     const c = colors[e.transaction_type] || {icon:'•', bg:'rgba(255,255,255,.06)', fg:'var(--text2)'};

@@ -1947,7 +1947,7 @@ async function openInventoryDetail(invId){
         ])}
         ${inv.description ? `<div class="ui-hint" style="margin-top:12px;">${esc(inv.description)}</div>` : ''}
         ${inv.special_handling_instructions
-          ? `<div class="ui-banner ui-banner-warn" style="margin-top:12px;">📋 <strong>Special handling:</strong> ${esc(inv.special_handling_instructions)}</div>` : ''}
+          ? `<div class="ui-banner ui-banner-warn" style="margin-top:12px;">⚠ <strong>Special handling:</strong> ${esc(inv.special_handling_instructions)}</div>` : ''}
       </div>
     </div>`;
 
