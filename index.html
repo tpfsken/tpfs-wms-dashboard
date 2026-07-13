@@ -1043,11 +1043,21 @@
     </div>
 
     <div id="cmpHistoryTab" style="display:none;">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;">All extractions across time. Use this for forensic replay — every field's source citation, prior value, reviewer trail, and applied SKU column are queryable.</div>
-      <div id="cmpHistoryFilters" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
-        <input class="form-input" id="cmpHistorySearch" placeholder="Search SKU code or filename..." style="max-width:260px;">
+      <div class="ui-hint" style="margin-bottom:14px;">Every SDS extraction, every version — including auto-applied ones that never needed a human, and withdrawn uploads. Click a row for the full field-by-field trail: source citation, prior value, who reviewed it.</div>
+      <div id="cmpHistoryFilters" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+        <input class="ui-input" id="cmpHistorySearch" placeholder="Search SKU code, name, or filename…" style="max-width:280px;">
+        <select class="ui-input" id="cmpHistoryBand" style="max-width:200px;" onchange="cmpHistSetBand(this.value)">
+          <option value="">All triage bands</option>
+          <option value="auto_applied">Auto-applied</option>
+          <option value="review_high">Review — high</option>
+          <option value="review_low">Review — low</option>
+          <option value="rejected">Rejected</option>
+        </select>
       </div>
-      <div id="cmpHistoryBody"></div>
+      <div class="card">
+        <div style="overflow:auto;" id="cmpHistoryBody"></div>
+        <div id="cmpHistoryPager"></div>
+      </div>
     </div>
 
     <div id="cmpSettingsTab" style="display:none;">

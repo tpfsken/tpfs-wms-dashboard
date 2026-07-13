@@ -113,41 +113,98 @@ function cmpQueueCard(r){
 // HISTORY (queue includes only review/rejected — history shows everything)
 // =============================================================================
 
-async function loadComplianceHistory(){
-  const body = document.getElementById('cmpHistoryBody');
-  body.innerHTML = uiSpinner('Loading…');
-  // NOTE: there is no history endpoint. This tab re-renders the REVIEW QUEUE
-  // and calls it history, so auto-applied and already-completed extractions —
-  // the ones a forensic view exists to show — are not here. Say that plainly
-  // rather than letting an auditor believe this is the full record.
-  const r = await apiGet('/sds-queue');
-  if(!r){ body.innerHTML = uiError('Could not load history'); return; }
-  const rows = r.rows || [];
+/* Real history: GET /sds-extractions — every band, every version, including
+ * withdrawn documents. This is the audit surface. "Who approved this UN number,
+ * when, and what did the document say before it was replaced?" has to be
+ * answerable here, so nothing is filtered out to keep the view tidy. */
+let CMP_HIST_LIMIT  = 50;
+let CMP_HIST_OFFSET = 0;
+let CMP_HIST_BAND   = '';
 
-  const q = (document.getElementById('cmpHistorySearch')?.value || '').toLowerCase().trim();
-  const filtered = q
-    ? rows.filter(x =>
-        (x.sku_code || '').toLowerCase().includes(q) ||
-        (x.original_filename || '').toLowerCase().includes(q))
-    : rows;
+const CMP_HIST_COLS = [
+  { key: '_when', label: 'Extracted', sortable: false, render: r =>
+      `<div>${uiId(fmtTimeShort(r.started_at))}</div>` +
+      `<div class="ui-hint">${esc(cmpTimeAgo(r.started_at))}</div>` },
+  { key: '_sku', label: 'SKU', sortable: false, render: r =>
+      `<div>${uiId(r.sku_code || '')}</div>` +
+      `<div class="ui-hint">${esc(r.sku_name || '')}</div>` },
+  { key: '_client', label: 'Client', sortable: false, render: r => esc(r.client_name || '') },
+  { key: '_doc', label: 'Document', sortable: false, render: r =>
+      `<div>${uiId(r.original_filename || 'sds.pdf')}</div>` +
+      `<div class="ui-hint">v${esc(r.version_number)}</div>` },
+  { key: '_band', label: 'Triage', sortable: false, render: r =>
+      uiChip(r.triage_band, (r.triage_band || '').replace('_', ' ')) },
+  { key: '_conf', label: 'Weakest field', sortable: false, render: r => r.overall_confidence == null
+      ? '<span class="ui-muted">—</span>'
+      : uiNum(Math.round(Number(r.overall_confidence) * 100) + '%') },
+  // The outcome is the audit answer: how many fields actually landed on the SKU.
+  { key: '_outcome', label: 'Applied', sortable: false, render: r => {
+      const applied = Number(r.applied_count || 0);
+      const total   = Number(r.field_count || 0);
+      const seen    = Number(r.reviewed_count || 0);
+      if(r.withdrawn_at) return '<span class="ui-chip ui-chip-neutral">withdrawn</span>';
+      if(!total) return '<span class="ui-muted">—</span>';
+      const chip = applied === total ? 'ok' : applied ? 'warn' : 'neutral';
+      return `<span class="ui-chip ui-chip-${chip}">${esc(applied)} of ${esc(total)}</span>` +
+             (seen ? `<div class="ui-hint">${esc(seen)} reviewed by hand</div>` : '');
+    } },
+  { key: '_state', label: '', sortable: false, render: r => r.withdrawn_at
+      ? `<span class="ui-hint" title="${esc(r.withdrawn_reason || '')}">withdrawn ${esc(cmpTimeAgo(r.withdrawn_at))}</span>`
+      : '' },
+];
 
-  const caveat = `<div class="ui-banner ui-banner-warn">
-      This is <strong>not</strong> a full history — there is no history endpoint yet, so this shows
-      the same items as the review queue. Auto-applied and completed extractions are not listed.
-    </div>`;
-
-  body.innerHTML = caveat + (filtered.length
-    ? filtered.map(r => cmpQueueCard(r)).join('')
-    : uiEmpty(q ? 'Nothing matches that search.' : 'Nothing in the queue.'));
-
-  body.querySelectorAll('.cmp-queue-card').forEach(el =>
-    el.addEventListener('click', () => cmpOpenReviewer(el.dataset.id)));
+function cmpHistSetPage(limit, offset){
+  CMP_HIST_LIMIT = limit; CMP_HIST_OFFSET = offset;
+  loadComplianceHistory();
 }
 
-// Wire history search debounce on first call
+async function loadComplianceHistory(){
+  const host = document.getElementById('cmpHistoryBody');
+  const q    = (document.getElementById('cmpHistorySearch')?.value || '').trim();
+
+  const qs = new URLSearchParams({ limit: CMP_HIST_LIMIT, offset: CMP_HIST_OFFSET });
+  if(q) qs.set('q', q);
+  if(CMP_HIST_BAND) qs.set('band', CMP_HIST_BAND);
+
+  uiTableLoading(host, CMP_HIST_COLS);
+  const d = await apiGet(`/sds-extractions?${qs.toString()}`);
+  if(d === null) return uiTableError(host, CMP_HIST_COLS, 'Could not load history', loadComplianceHistory);
+
+  const rows  = d.rows || [];
+  const total = Number(d.total ?? rows.length);
+
+  if(!rows.length && CMP_HIST_OFFSET > 0 && total > 0){
+    CMP_HIST_OFFSET = 0;
+    return loadComplianceHistory();
+  }
+
+  uiTable(host, {
+    columns: CMP_HIST_COLS, rows, rowKey: 'id',
+    onRowClick: r => cmpOpenReviewer(r.id),
+    empty: q ? `Nothing matches “${q}”.` : 'No SDS extractions yet.',
+  });
+
+  uiPager('cmpHistoryPager', {
+    total, limit: CMP_HIST_LIMIT, offset: CMP_HIST_OFFSET,
+    noun: 'extractions', onChange: cmpHistSetPage,
+  });
+}
+
+// Band filter — set from the markup's combo.
+function cmpHistSetBand(band){
+  CMP_HIST_BAND = band || '';
+  CMP_HIST_OFFSET = 0;
+  loadComplianceHistory();
+}
+
+// History search — a new search goes back to page 1, or you land on page 4 of a
+// 1-page result and see nothing.
 document.addEventListener('DOMContentLoaded', () => {
   const s = document.getElementById('cmpHistorySearch');
-  if(s) s.addEventListener('input', debounce(loadComplianceHistory, 250));
+  if(s) s.addEventListener('input', debounce(() => {
+    CMP_HIST_OFFSET = 0;
+    loadComplianceHistory();
+  }, 250));
 });
 
 // =============================================================================
