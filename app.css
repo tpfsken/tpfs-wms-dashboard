@@ -224,6 +224,11 @@ body.portal-mode .portal-banner{
   .ord-grid { grid-template-columns: 1fr; }
 }
 
+/* ---- Print menu section label ---- */
+.ord-print-sep{font-size:var(--fs-caps);font-weight:600;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--muted);padding:8px 12px 4px;
+  border-top:1px solid var(--border);margin-top:4px;}
+
 /* ---- Compliance (D5d) ---- */
 .cmp-card-head{display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;
   font-size:var(--fs-body);}
