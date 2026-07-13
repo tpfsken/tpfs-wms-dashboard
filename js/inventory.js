@@ -41,18 +41,33 @@ const ONHAND_COLS = [
   { key: 'quantity', label: 'Qty', num: true },
   { key: 'status', label: 'Status', render: r => uiChip(r.status) },
   { key: '_act', label: '', sortable: false, render: r => {
-      const isCaseAvail = (r.sku_type === 'CASE' || r.uom === 'CASE')
-        && r.status === 'available' && Number(r.quantity) > 0 && r.lp_id;
       // Case-break is an ops action — portal users never see it.
-      if(!isCaseAvail || (typeof isPortalMode === 'function' && isPortalMode())) return '';
-      return `<button class="ui-btn js-break-btn" data-payload='${esc(JSON.stringify({
-        lp_id: r.lp_id, id: r.id, lp_number: r.lp_number,
-        sku_code: r.sku_code, sku_name: r.sku_name || '',
-        sku_type: r.sku_type || r.uom, quantity: Number(r.quantity),
-        lot_number: r.lot_number || null, location_code: r.location_code || '',
-      }))}'>Break</button>`;
+      if(!canCaseBreak(r) || (typeof isPortalMode === 'function' && isPortalMode())) return '';
+      return `<button class="ui-btn js-break-btn" data-payload='${esc(JSON.stringify(cbPayload(r)))}'>Break</button>`;
     } },
 ];
+
+/* Can this inventory line be case-broken?
+ * The API is the real authority (it rejects anything whose SKU isn't type CASE,
+ * or that has no EACH child SKU) — this just decides whether to OFFER the
+ * action. It accepts CS as well as CASE because the UOM list ships "CS — Case":
+ * a case SKU carrying uom=CS used to show no Break button at all. */
+function canCaseBreak(r){
+  const type = String(r.sku_type || '').toUpperCase();
+  // The list calls it `uom`; the detail endpoint calls it `sku_uom`.
+  const uom  = String(r.uom || r.sku_uom || '').toUpperCase();
+  const isCase = type === 'CASE' || uom === 'CASE' || uom === 'CS';
+  return isCase && r.status === 'available' && Number(r.quantity) > 0 && !!r.lp_id;
+}
+
+function cbPayload(r){
+  return {
+    lp_id: r.lp_id, id: r.id, lp_number: r.lp_number,
+    sku_code: r.sku_code, sku_name: r.sku_name || '',
+    sku_type: r.sku_type || r.uom || r.sku_uom, quantity: Number(r.quantity),
+    lot_number: r.lot_number || null, location_code: r.location_code || '',
+  };
+}
 
 let ONHAND_LIMIT  = 50;
 let ONHAND_OFFSET = 0;
@@ -1775,13 +1790,30 @@ async function openInventoryDetail(invId){
     });
   }
 
-  // Ops can jump straight from "what is this" to "fix the item master".
-  if(!(typeof isPortalMode === 'function' && isPortalMode()) && inv.sku_id){
+  // Ops actions on the line you're actually looking at. Without these, drilling
+  // into a row was a dead end — you had to close the modal and go re-find the
+  // same LP to do anything with it.
+  if(!(typeof isPortalMode === 'function' && isPortalMode())){
     const acts = m.el.querySelector('.ui-dialog-actions');
-    const btn = document.createElement('button');
-    btn.className = 'ui-btn';
-    btn.textContent = 'Edit item master';
-    btn.addEventListener('click', () => { m.close(); openItemFormModal(inv.sku_id); });
-    acts.insertBefore(btn, acts.firstChild);
+
+    if(canCaseBreak(inv)){
+      const brk = document.createElement('button');
+      brk.className = 'ui-btn ui-btn-primary';
+      brk.textContent = 'Case break';
+      brk.addEventListener('click', () => {
+        m.close();
+        // Carries the LP straight through — no re-searching for it.
+        openCaseBreakFor(cbPayload(inv));
+      });
+      acts.insertBefore(brk, acts.firstChild);
+    }
+
+    if(inv.sku_id){
+      const edit = document.createElement('button');
+      edit.className = 'ui-btn';
+      edit.textContent = 'Edit item master';
+      edit.addEventListener('click', () => { m.close(); openItemFormModal(inv.sku_id); });
+      acts.insertBefore(edit, acts.firstChild);
+    }
   }
 }
