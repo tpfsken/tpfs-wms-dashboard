@@ -10,19 +10,22 @@ let COD = null;          // current order data
 let AIC = {};            // allocation inventory cache by order line id
 let orderLines = [];     // new-order modal: pending lines
 
+// NOTE: `key` on a sortable column is the API's sortBy value — it must exist in
+// the ORDER_SORTS whitelist in the API's queries/orders.js, or the click sorts
+// nothing. sortDefault sets the FIRST click's direction (dates: newest first).
 const ORD_COLS = [
   { key: 'order_number', label: 'Order #', mono: true },
   { key: 'client_name', label: 'Client' },
   { key: 'channel', label: 'Channel' },
   { key: 'order_type', label: 'Type' },
   { key: 'customer_name', label: 'Customer' },
-  { key: '_shipTo', label: 'Ship to', render: o =>
+  { key: 'ship_to_city', label: 'Ship to', render: o =>
       `<span class="ui-muted">${esc([o.ship_to_city, o.ship_to_state].filter(Boolean).join(', ') || '—')}</span>` },
   { key: 'carrier_code', label: 'Carrier' },
   { key: 'line_count', label: 'Lines', num: true },
   { key: 'total_units', label: 'Units', num: true },
-  // Short date to keep the row dense; full timestamp on hover.
-  { key: '_created', label: 'Created', render: o => {
+  // Short date keeps the row dense; full timestamp on hover.
+  { key: 'created_at', label: 'Created', sortDefault: 'desc', render: o => {
       if(!o.created_at) return '<span class="ui-muted">—</span>';
       const d = new Date(o.created_at);
       const thisYear = d.getFullYear() === new Date().getFullYear();
@@ -30,7 +33,7 @@ const ORD_COLS = [
         thisYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: '2-digit' });
       return `<span class="ui-id" title="${esc(d.toLocaleString())}">${esc(short)}</span>`;
     } },
-  { key: '_shipBy', label: 'Ship by', render: o => {
+  { key: 'required_ship_date', label: 'Ship by', render: o => {
       if (!o.required_ship_date) return '<span class="ui-muted">—</span>';
       const d = new Date(o.required_ship_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       // Past SLA is the one thing on this row ops must not miss.
@@ -38,8 +41,29 @@ const ORD_COLS = [
         ? `<span class="ui-chip ui-chip-danger">${esc(d)}</span>`
         : uiId(d);
     } },
+  // Sorts by workflow position server-side, not alphabetically.
   { key: 'status', label: 'Status', render: o => uiChip(o.status) },
 ];
+
+// List paging + sort state. Sorting and paging are BOTH server-side: sorting a
+// single page client-side would sort the page, not the list — which quietly
+// lies at 200+ orders/day.
+let ORD_LIMIT  = 50;
+let ORD_OFFSET = 0;
+let ORD_SORT   = 'created_at';   // newest first by default
+let ORD_DIR    = 'desc';
+let ORD_FILTER_SIG = '';         // search+status signature, to detect changes
+
+function ordSetSort(key, dir){
+  ORD_SORT = key; ORD_DIR = dir;
+  ORD_OFFSET = 0;                // a new sort means a new page 1
+  loadOrders();
+}
+function ordSetPage(limit, offset){
+  ORD_LIMIT = limit; ORD_OFFSET = offset;
+  loadOrders();
+  document.getElementById('ordListWrap')?.scrollIntoView({ block: 'start' });
+}
 
 async function loadOrders(){
   document.getElementById('ordDetailView').style.display = 'none';
@@ -47,18 +71,42 @@ async function loadOrders(){
 
   const s  = document.getElementById('ordSearch')?.value || '';
   const st = (_cbState['ordStatusFilterWrap']?.selected?.value) || '';
-  let u = '/orders?limit=100';
-  if(st) u += `&status=${encodeURIComponent(st)}`;
-  if(s)  u += `&search=${encodeURIComponent(s)}`;
+
+  // Changing the search or status filter puts you back on page 1 — otherwise
+  // you'd land on page 4 of a 2-page result and see an empty table.
+  const sig = `${s}|${st}`;
+  if(sig !== ORD_FILTER_SIG){ ORD_FILTER_SIG = sig; ORD_OFFSET = 0; }
+
+  const qs = new URLSearchParams({
+    limit: ORD_LIMIT, offset: ORD_OFFSET, sortBy: ORD_SORT, sortDir: ORD_DIR,
+  });
+  if(st) qs.set('status', st);
+  if(s)  qs.set('search', s);
 
   uiTableLoading('ordListWrap', ORD_COLS);
-  const d = await apiGet(u);
+  const d = await apiGet(`/orders?${qs.toString()}`);
   if(d === null) return uiTableError('ordListWrap', ORD_COLS, 'Could not load orders', loadOrders);
 
+  const rows  = d.data || d.rows || d || [];
+  const total = Number(d.total ?? rows.length);
+
+  // Filtering/searching can strand you on a page that no longer exists.
+  if(!rows.length && ORD_OFFSET > 0 && total > 0){
+    ORD_OFFSET = 0;
+    return loadOrders();
+  }
+
   uiTable('ordListWrap', {
-    columns: ORD_COLS, rows: (d.data || d.rows || d || []), rowKey: 'id',
+    columns: ORD_COLS, rows, rowKey: 'id',
+    sortable: true, sortKey: ORD_SORT, sortDir: ORD_DIR,
+    onSort: ordSetSort,             // server-side: refetch, don't sort the page
     onRowClick: o => openOrderDetail(o.id),
     empty: s || st ? 'No orders match that filter.' : 'No orders yet.',
+  });
+
+  uiPager('ordPager', {
+    total, limit: ORD_LIMIT, offset: ORD_OFFSET,
+    noun: 'orders', onChange: ordSetPage,
   });
 }
 

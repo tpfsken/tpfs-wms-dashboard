@@ -276,25 +276,108 @@ function _uiCell(col, row) {
   if (col.mono) return uiId(v);
   return esc(v ?? '');
 }
-function uiTable(container, { columns, rows, rowKey = 'id', onRowClick = null, empty = 'Nothing here yet.' }) {
+
+/* Sorting. A column sorts on col.sortValue(row) when given — needed for render-
+ * only columns whose `key` isn't a real field (e.g. '_created' -> created_at).
+ * Otherwise it sorts on row[col.key]. Blanks always sink to the bottom,
+ * whichever direction you're sorting — an empty ship-date is not "earliest". */
+function _uiSortVal(col, row) {
+  return col.sortValue ? col.sortValue(row) : row[col.key];
+}
+function _uiCompare(a, b) {
+  const blankA = a === null || a === undefined || a === '';
+  const blankB = b === null || b === undefined || b === '';
+  if (blankA && blankB) return 0;
+  if (blankA) return 1;          // blanks sink
+  if (blankB) return -1;
+  const na = Number(a), nb = Number(b);
+  if (Number.isFinite(na) && Number.isFinite(nb) && String(a).trim() !== '' && String(b).trim() !== '') {
+    return na - nb;
+  }
+  const da = Date.parse(a), db = Date.parse(b);
+  if (!Number.isNaN(da) && !Number.isNaN(db)) return da - db;
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+}
+
+/* uiTable sorting has two modes:
+ *   - LOCAL  (default): sorts the rows it was handed. Fine for a detail table
+ *     that holds everything it will ever hold (order lines, invoice lines).
+ *   - SERVER (pass onSort): the table renders the header state and calls
+ *     onSort(key, dir) — the caller refetches. USE THIS FOR ANY PAGED LIST.
+ *     Sorting a page client-side sorts the page, not the list, which is a lie.
+ */
+function uiTable(container, opts) {
+  const { columns, rows, rowKey = 'id', onRowClick = null,
+          empty = 'Nothing here yet.', sortable = false, onSort = null } = opts;
   const el = typeof container === 'string' ? document.getElementById(container) : container;
-  const head = columns.map(c =>
-    `<th class="${c.money || c.num ? 'right' : ''}">${esc(c.label ?? '')}</th>`).join('');
-  if (!rows || !rows.length) {
+
+  // Server mode: the caller owns sort state. Local mode: it lives on the
+  // element, so a re-render (refresh, filter change) keeps the user's choice.
+  const state = onSort
+    ? { key: opts.sortKey ?? null, dir: opts.sortDir ?? 'asc' }
+    : (el._uiSort || (el._uiSort = { key: opts.sortKey ?? null, dir: opts.sortDir ?? 'asc' }));
+  const canSort = (c) => sortable && c.sortable !== false && (c.sortValue || c.key);
+
+  let view = rows || [];
+  if (state.key && !onSort) {
+    const col = columns.find(c => c.key === state.key);
+    if (col) {
+      const sign = state.dir === 'desc' ? -1 : 1;
+      // Blanks sink in BOTH directions, so sort them outside the sign flip.
+      view = [...view].sort((r1, r2) => {
+        const a = _uiSortVal(col, r1), b = _uiSortVal(col, r2);
+        const blankA = a === null || a === undefined || a === '';
+        const blankB = b === null || b === undefined || b === '';
+        if (blankA || blankB) return _uiCompare(a, b);
+        return sign * _uiCompare(a, b);
+      });
+    }
+  }
+
+  const head = columns.map(c => {
+    const cls = [c.money || c.num ? 'right' : '', canSort(c) ? 'ui-th-sort' : ''].filter(Boolean).join(' ');
+    const active = state.key === c.key;
+    const arrow = !canSort(c) ? ''
+      : `<span class="ui-sort${active ? ' ui-sort-on' : ''}">${active && state.dir === 'desc' ? '▼' : '▲'}</span>`;
+    return `<th class="${cls}"${canSort(c) ? ` data-sort="${esc(c.key)}"` : ''}>${esc(c.label ?? '')}${arrow}</th>`;
+  }).join('');
+
+  const wireSort = () => {
+    if (!sortable) return;
+    el.querySelectorAll('th[data-sort]').forEach(th =>
+      th.addEventListener('click', () => {
+        const k = th.dataset.sort;
+        // Same column -> flip direction. New column -> start descending for
+        // dates (newest first is what people mean), ascending otherwise.
+        const col = columns.find(c => c.key === k);
+        let dir;
+        if (state.key === k) dir = state.dir === 'asc' ? 'desc' : 'asc';
+        else dir = col?.sortDefault || 'asc';
+        state.key = k; state.dir = dir;
+        if (onSort) onSort(k, dir);
+        else uiTable(el, opts);
+      }));
+  };
+
+  if (!view.length) {
     el.innerHTML = `<table class="ui-table"><thead><tr>${head}</tr></thead>
       <tbody><tr><td colspan="${columns.length}"><div class="ui-empty">${esc(empty)}</div></td></tr></tbody></table>`;
+    wireSort();
     return;
   }
+
   el.innerHTML = `<table class="ui-table"><thead><tr>${head}</tr></thead><tbody>
-    ${rows.map(r => `<tr${onRowClick ? ` class="ui-row-click" data-key="${esc(r[rowKey])}"` : ''}>
+    ${view.map(r => `<tr${onRowClick ? ` class="ui-row-click" data-key="${esc(r[rowKey])}"` : ''}>
       ${columns.map(c => `<td class="${c.money || c.num ? 'right' : ''}">${_uiCell(c, r)}</td>`).join('')}
     </tr>`).join('')}
   </tbody></table>`;
+
   if (onRowClick) {
-    const byKey = Object.fromEntries(rows.map(r => [String(r[rowKey]), r]));
+    const byKey = Object.fromEntries(view.map(r => [String(r[rowKey]), r]));
     el.querySelectorAll('.ui-row-click').forEach(tr =>
       tr.addEventListener('click', () => onRowClick(byKey[tr.dataset.key])));
   }
+  wireSort();
 }
 function uiTableLoading(container, columns) {
   const el = typeof container === 'string' ? document.getElementById(container) : container;
@@ -313,6 +396,55 @@ function uiTableError(container, columns, msg, retryFn) {
       <div class="ui-error">⚠ ${esc(msg || 'Failed to load')} ${retryFn ? '<button class="ui-btn" id="uiRetryBtn">Retry</button>' : ''}</div>
     </td></tr></tbody></table>`;
   if (retryFn) el.querySelector('#uiRetryBtn').addEventListener('click', retryFn);
+}
+
+/* ---------------------------------------------------------------------------
+ * PAGER — for every server-paged list. Says how much there IS, not just what
+ * fits on screen. A list that silently stops at its limit is a data-integrity
+ * bug, not a layout choice.
+ *
+ *   uiPager('pagerEl', { total, limit, offset, onChange: (limit, offset) => …,
+ *                        noun: 'orders' });
+ * ------------------------------------------------------------------------- */
+const UI_PAGE_SIZES = [50, 100, 250, 500];
+
+function uiPager(container, { total = 0, limit = 50, offset = 0, onChange, noun = 'rows' }) {
+  const el = typeof container === 'string' ? document.getElementById(container) : container;
+  if (!el) return;
+  if (!total) { el.innerHTML = ''; return; }
+
+  const from = offset + 1;
+  const to   = Math.min(offset + limit, total);
+  const page = Math.floor(offset / limit) + 1;
+  const pages = Math.max(1, Math.ceil(total / limit));
+
+  el.className = 'ui-pager';
+  el.innerHTML = `
+    <span class="ui-pager-count">
+      ${esc(from.toLocaleString())}–${esc(to.toLocaleString())} of
+      <strong>${esc(total.toLocaleString())}</strong> ${esc(noun)}
+    </span>
+    <span style="flex:1"></span>
+    <label class="ui-pager-size">
+      Show
+      <select class="ui-input" id="uiPagerSize">
+        ${UI_PAGE_SIZES.map(n => `<option value="${n}"${n === limit ? ' selected' : ''}>${n}</option>`).join('')}
+      </select>
+    </label>
+    <button class="ui-btn" id="uiPagerFirst" ${offset === 0 ? 'disabled' : ''}>« First</button>
+    <button class="ui-btn" id="uiPagerPrev"  ${offset === 0 ? 'disabled' : ''}>‹ Prev</button>
+    <span class="ui-pager-page">Page ${esc(page)} of ${esc(pages)}</span>
+    <button class="ui-btn" id="uiPagerNext"  ${to >= total ? 'disabled' : ''}>Next ›</button>
+    <button class="ui-btn" id="uiPagerLast"  ${to >= total ? 'disabled' : ''}>Last »</button>`;
+
+  el.querySelector('#uiPagerSize').addEventListener('change', (e) =>
+    onChange(Number(e.target.value), 0));           // page size change -> back to page 1
+  el.querySelector('#uiPagerFirst').addEventListener('click', () => onChange(limit, 0));
+  el.querySelector('#uiPagerPrev').addEventListener('click', () =>
+    onChange(limit, Math.max(0, offset - limit)));
+  el.querySelector('#uiPagerNext').addEventListener('click', () => onChange(limit, offset + limit));
+  el.querySelector('#uiPagerLast').addEventListener('click', () =>
+    onChange(limit, (pages - 1) * limit));
 }
 
 /* ---------------------------------------------------------------------------

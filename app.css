@@ -747,6 +747,12 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .ui-table tbody tr:nth-child(even){background:var(--stripe);}
 .ui-row-click{cursor:pointer;}
 .ui-row-click:hover{background:var(--hover) !important;}
+/* sortable headers */
+.ui-table th.ui-th-sort{cursor:pointer;user-select:none;}
+.ui-table th.ui-th-sort:hover{color:var(--text);}
+.ui-sort{margin-left:4px;font-size:8px;opacity:0;transition:opacity .12s;}
+.ui-table th.ui-th-sort:hover .ui-sort{opacity:.45;}
+.ui-sort-on{opacity:1 !important;color:var(--blue);}
 
 /* ---- stat tiles (Ledger heroes) ---- */
 .ui-tiles{display:flex;gap:var(--sp-3);flex-wrap:wrap;margin-bottom:var(--sp-4);}
@@ -836,6 +842,15 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .ui-group[open]>summary::before{content:'▾';}
 .ui-group-body{padding:0 var(--sp-3) var(--sp-3);}
 .ui-muted{color:var(--text2);font-weight:500;}
+
+/* ---- pager ---- */
+.ui-pager{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;
+  padding:10px var(--sp-4);border-top:1px solid var(--border);
+  font-size:var(--fs-body);color:var(--text2);}
+.ui-pager-count strong{color:var(--text);}
+.ui-pager-page{font-variant-numeric:tabular-nums;padding:0 var(--sp-2);white-space:nowrap;}
+.ui-pager-size{display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.ui-pager-size .ui-input{width:auto;padding:4px 6px;}
 
 /* ---- banners (page-level warnings above the content) ---- */
 .ui-banner{padding:11px 14px;border-radius:var(--radius-sm);margin-bottom:var(--sp-3);

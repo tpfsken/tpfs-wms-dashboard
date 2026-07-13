@@ -141,7 +141,12 @@
 
   <div class="page" id="page-orders">
     <div class="page-header"><button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button><div><div class="page-title">Orders</div><div class="page-subtitle">Outbound order management</div></div><div style="flex:1"></div><input type="text" class="ui-input" id="ordSearch" placeholder="Search order #…" style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="ordStatusFilterWrap"></div><button class="ui-btn" onclick="loadOrders()">Refresh</button><button class="ui-btn ui-btn-primary ops-only" onclick="showNewOrderModal()">New order</button><button class="ui-btn ui-btn-primary portal-only" onclick="navigateTo('portalNewOrder')">New order</button></div>
-    <div id="ordListView"><div class="card"><div style="overflow:auto;" id="ordListWrap"></div></div></div>
+    <div id="ordListView">
+      <div class="card">
+        <div style="overflow:auto;" id="ordListWrap"></div>
+        <div id="ordPager"></div>
+      </div>
+    </div>
     <div id="ordDetailView" style="display:none;">
       <div class="page-header">
         <button class="ui-btn" onclick="closeOrderDetail()">← Orders</button>

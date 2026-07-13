@@ -12,7 +12,10 @@
 // old cache is purged on activate.
 // =============================================================================
 
-const CACHE_NAME = 'tpfs-wms-shell-v23';
+const CACHE_NAME = 'tpfs-wms-shell-v25';
+// Every <script> in index.html must be listed here. ui.js in particular:
+// without it the cached shell loads and then every screen dies offline,
+// because the whole design system is missing.
 const SHELL_ASSETS = [
   '/',
   '/index.html',
@@ -20,6 +23,7 @@ const SHELL_ASSETS = [
   '/manifest.json',
   '/icons/icon.svg',
   '/js/util.js',
+  '/js/ui.js',
   '/js/combo.js',
   '/js/printDocs.js',
   '/js/clients.js',
@@ -29,6 +33,10 @@ const SHELL_ASSETS = [
   '/js/inbound.js',
   '/js/intake.js',
   '/js/billing.js',
+  '/js/billingEngine.js',
+  '/js/invoices.js',
+  '/js/compliance.js',
+  '/js/users.js',
   '/js/reports.js',
   '/js/portal.js',
   '/js/picker.js',
