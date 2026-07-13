@@ -279,6 +279,10 @@ body.portal-mode .portal-banner{
   border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;margin:8px 0;}
 .item-audit{font-size:12px;margin-top:10px;max-height:280px;overflow-y:auto;}
 
+/* ---- Withdrawn document row (kept for audit, visibly retired) ---- */
+.ui-file-gone{opacity:.55;}
+.ui-file-gone .ui-file-name{text-decoration:line-through;}
+
 /* ---- Inventory detail (D4c) ---- */
 .inv-sec{margin-bottom:var(--sp-3);}
 .inv-sec-body{padding:14px 18px;}

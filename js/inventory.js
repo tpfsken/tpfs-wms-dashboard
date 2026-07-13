@@ -34,6 +34,15 @@ const ONHAND_COLS = [
       if(Number.isFinite(days) && days <= 30) return `<span class="ui-chip ui-chip-warn">${esc(txt)}</span>`;
       return uiId(txt);
     } },
+  // A COA certifies one production LOT. No lot -> the question doesn't apply.
+  // A lot with no COA is a gap you want to see from the list, not discover at
+  // pick time when the truck is waiting.
+  { key: '_coa', label: 'COA', sortable: false, render: r => {
+      if(!r.lot_number) return '<span class="ui-muted">—</span>';
+      return r.has_coa
+        ? '<span class="ui-chip ui-chip-ok">ON FILE</span>'
+        : '<span class="ui-chip ui-chip-warn">MISSING</span>';
+    } },
   { key: 'location_code', label: 'Location', mono: true },
   { key: 'lp_number', label: 'LP', render: r => r.lp_number
       ? `<span class="lp-badge ${r.lp_type === 'CHILD' ? 'lp-child' : 'lp-original'}">${esc(r.lp_number)}</span>`
@@ -1750,6 +1759,139 @@ async function uploadItemAttachments(skuId, files){
 // + receiver), and any current allocations holding the LP.
 // =============================================================================
 
+/* =============================================================================
+ * LOT COA — list / open / attach / withdraw, from the inventory detail.
+ *
+ * The client portal reaches this same modal, so uploads and withdrawals are
+ * ops-only: a customer sees their lot's certificate, not the internal trail of
+ * which document was pulled and why.
+ * ========================================================================== */
+async function renderLotCoa(lotId, lotNumber){
+  const body    = document.getElementById('coaBody');
+  const actions = document.getElementById('coaActions');
+  if(!body) return;
+  const portal = (typeof isPortalMode === 'function' && isPortalMode());
+
+  body.innerHTML = uiSpinner('Loading…');
+  const rows = await apiGet(`/lots/${lotId}/documents`);
+  if(rows === null){ body.innerHTML = uiError('Could not load the COA'); return; }
+
+  const live = rows.filter(r => !r.withdrawn_at);
+  const gone = rows.filter(r => r.withdrawn_at);
+
+  if(!portal && actions){
+    actions.innerHTML = `
+      <button class="ui-btn" id="coaAddBtn">${live.length ? 'Replace COA' : 'Attach COA'}</button>
+      <input type="file" id="coaAddInput" accept="application/pdf,image/*" style="display:none;">`;
+    document.getElementById('coaAddBtn').addEventListener('click', () =>
+      document.getElementById('coaAddInput').click());
+    document.getElementById('coaAddInput').addEventListener('change', async (e) => {
+      const file = (e.target.files || [])[0];
+      e.target.value = '';
+      if(!file) return;
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('doc_type', 'COA');
+      const r = await fetch(`${API}/lots/${lotId}/documents`, {
+        method: 'POST', headers: { Authorization: `Bearer ${T}` }, body: fd,
+      });
+      if(!r.ok){
+        const d = await r.json().catch(() => ({}));
+        return uiToast(d.error || 'Upload failed', 'error');
+      }
+      uiToast(`COA attached to lot ${lotNumber || ''}`);
+      renderLotCoa(lotId, lotNumber);
+      loadInventory();     // the list's COA flag just changed
+    });
+  }
+
+  if(!live.length && !gone.length){
+    body.innerHTML = `<div class="ui-banner ui-banner-warn">
+      <strong>No COA on file for lot ${esc(lotNumber || '')}.</strong>
+      It can't be included in an outbound docs pack until one is attached.
+    </div>`;
+    return;
+  }
+
+  const fileRow = (r, withdrawn) => `
+    <div class="ui-file${withdrawn ? ' ui-file-gone' : ''}">
+      <span class="ui-file-ext">${esc((r.mime_type || '').includes('image') ? 'IMG' : 'PDF')}</span>
+      <span class="ui-file-meta">
+        <span class="ui-file-name">${esc(r.original_filename || 'coa.pdf')}</span>
+        <span class="ui-hint">
+          ${esc(fmtBytes(r.byte_size))} · ${esc(r.uploaded_by_name || '')} · ${esc(fmtTimeShort(r.uploaded_at))}
+          ${withdrawn ? ` · <strong>withdrawn</strong>: ${esc(r.withdrawn_reason || '')}` : ''}
+        </span>
+      </span>
+      <button class="ui-btn js-coa-open" data-id="${esc(r.id)}">Open</button>
+      ${(!withdrawn && !portal)
+        ? `<button class="ui-btn ui-btn-danger js-coa-wd" data-id="${esc(r.id)}">Withdraw</button>` : ''}
+    </div>`;
+
+  body.innerHTML =
+    (live.length ? live.map(r => fileRow(r, false)).join('')
+                 : `<div class="ui-banner ui-banner-warn">No live COA — the one(s) below were withdrawn.</div>`) +
+    // The withdraw trail is internal: it explains why a certificate was pulled.
+    (!portal && gone.length
+      ? `<div class="ui-label" style="margin-top:12px;">Withdrawn</div>` + gone.map(r => fileRow(r, true)).join('')
+      : '');
+
+  body.querySelectorAll('.js-coa-open').forEach(b =>
+    b.addEventListener('click', () => openLotDocument(b.dataset.id)));
+  body.querySelectorAll('.js-coa-wd').forEach(b =>
+    b.addEventListener('click', () => withdrawLotDocument(b.dataset.id, lotId, lotNumber)));
+}
+
+// Streamed through the API with an auth check — no presigned S3 URL is handed
+// to the browser (same discipline as the SDS pipeline).
+async function openLotDocument(docId){
+  const r = await fetch(`${API}/lot-documents/${docId}/download`, {
+    headers: { Authorization: `Bearer ${T}` },
+  });
+  if(!r.ok) return uiToast('Could not open that document', 'error');
+  const blob = await r.blob();
+  const url  = URL.createObjectURL(blob);
+  if(!window.open(url, '_blank', 'noopener')) uiToast('Pop-up blocked — allow pop-ups to view it', 'error');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+async function withdrawLotDocument(docId, lotId, lotNumber){
+  uiModal({
+    title: 'Withdraw this COA?',
+    width: 520,
+    body:
+      `<div class="ui-banner ui-banner-warn">
+         For a wrong or superseded certificate. It stays in the audit trail — a COA that already
+         shipped with an order has to remain on the record — but it stops appearing on docs packs,
+         and the lot goes back to <strong>no COA on file</strong>.
+       </div>` +
+      uiField({ id: 'coaWdReason', label: 'Reason',
+                placeholder: 'e.g. certificate is for lot B-2291, not this one',
+                hint: 'Minimum 5 characters.' }),
+    actions: [
+      { label: 'Cancel' },
+      { label: 'Withdraw', danger: true, onClick: async (m) => {
+          const reason = m.el.querySelector('#coaWdReason').value.trim();
+          uiFieldError(m.el, 'coaWdReason', reason.length >= 5 ? '' : 'At least 5 characters');
+          if(reason.length < 5) return false;
+          const r = await fetch(`${API}/lot-documents/${docId}/withdraw`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` },
+            body: JSON.stringify({ reason }),
+          });
+          if(!r.ok){
+            const d = await r.json().catch(() => ({}));
+            uiFieldError(m.el, 'coaWdReason', d.error || 'Withdraw failed');
+            return false;
+          }
+          uiToast('COA withdrawn — this lot now has no certificate on file', 'error');
+          renderLotCoa(lotId, lotNumber);
+          loadInventory();
+        } },
+    ],
+  });
+}
+
 async function openInventoryDetail(invId){
   const m = uiModal({
     title: 'Inventory',
@@ -1864,6 +2006,19 @@ async function openInventoryDetail(invId){
       <div class="inv-sec-body">${uiEmpty('No receiving record for this LP — entered directly, or it predates this WMS.')}</div>
     </div>`;
 
+  // ---- COA (lot documents) ----
+  // Only meaningful for lot-tracked stock: a COA certifies a production lot.
+  const coaSection = inv.lot_id ? `
+    <div class="card inv-sec">
+      <div class="card-head">
+        <div class="card-title">Certificate of Analysis</div>
+        <div class="ui-hint" style="margin-left:8px;">for lot ${esc(inv.lot_number || '')}</div>
+        <div style="flex:1"></div>
+        <span id="coaActions"></span>
+      </div>
+      <div class="inv-sec-body" id="coaBody"></div>
+    </div>` : '';
+
   // ---- Current allocations ----
   const allocs = d.current_allocations || [];
   const alloc = allocs.length ? `
@@ -1875,7 +2030,9 @@ async function openInventoryDetail(invId){
       <div id="invAllocWrap"></div>
     </div>` : '';
 
-  body.innerHTML = header + item + lot + family + inbound + alloc;
+  body.innerHTML = header + item + lot + coaSection + family + inbound + alloc;
+
+  if(inv.lot_id) renderLotCoa(inv.lot_id, inv.lot_number);
 
   if(allocs.length){
     uiTable('invAllocWrap', {
