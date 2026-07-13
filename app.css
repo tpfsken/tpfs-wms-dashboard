@@ -224,6 +224,17 @@ body.portal-mode .portal-banner{
   .ord-grid { grid-template-columns: 1fr; }
 }
 
+/* ---- Receiving (D4e) ---- */
+.rec-line{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px 16px;margin-bottom:12px;}
+.rec-line-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;
+  font-size:var(--fs-body);font-weight:600;}
+.rec-line-fields{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-3);}
+.rec-line-fields .ui-field{margin-bottom:0;}
+.pl-lot{width:120px;}
+.pl-exp{width:150px;}
+@media (max-width: 900px){ .rec-line-fields{grid-template-columns:1fr 1fr;} }
+
 /* ---- Item-master form (D4d-2) ---- */
 .item-sec-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;}
 .item-checks{display:flex;gap:18px;flex-wrap:wrap;}

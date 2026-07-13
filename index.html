@@ -234,15 +234,40 @@
 
   <div class="page" id="page-inbound">
     <div id="inbListView">
-      <div class="page-header"><div><div class="page-title">Receiving</div><div class="page-subtitle">Purchase orders and inbound</div></div><div style="flex:1"></div><button class="btn btn-ghost" onclick="loadInbound()">Refresh</button><button class="btn btn-primary" onclick="showNewPoModal()">+ New PO</button></div>
-      <div class="card"><div style="overflow:auto;"><table class="data-table"><thead><tr><th>PO #</th><th>Client</th><th>Supplier</th><th class="right">Lines</th><th class="right">Expected</th><th class="right">Received</th><th>Date</th><th>Status</th></tr></thead><tbody id="inbBody"></tbody></table></div></div>
+      <div class="page-header"><div><div class="page-title">Receiving</div><div class="page-subtitle">Purchase orders and inbound</div></div><div style="flex:1"></div><button class="ui-btn" onclick="loadInbound()">Refresh</button><button class="ui-btn ui-btn-primary" onclick="showNewPoModal()">New PO</button></div>
+      <div class="card">
+        <div style="overflow:auto;" id="inbListWrap"></div>
+        <div id="inbPager"></div>
+      </div>
     </div>
     <div id="inbDetailView" style="display:none;">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;"><button class="btn btn-ghost" onclick="closePoDetail()">← Back</button><div><div style="font-size:18px;font-weight:700;" id="poDetailTitle"></div><div style="font-size:13px;color:var(--text2);" id="poDetailSub"></div></div><div style="flex:1"></div><span class="chip" id="poDetailStatus"></span></div>
-      <div class="detail-panel" style="margin-bottom:16px;"><div class="detail-grid" id="poInfoGrid"></div></div>
-      <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">PO Lines</div></div><div><table class="data-table"><thead><tr><th>Line</th><th>SKU</th><th>Description</th><th>UOM</th><th>Lot</th><th class="right">Expected</th><th class="right">Received</th><th class="right">Remaining</th></tr></thead><tbody id="poLinesBody"></tbody></table></div></div>
-      <div id="receivingFormSection" class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Receive Items</div><div class="card-badge" style="background:var(--blue-bg);color:var(--blue);">Assign LP + Location</div></div><div style="padding:20px;"><div id="receiveLinesList"></div><div style="display:flex;gap:8px;margin-top:16px;"><button class="btn btn-primary" id="submitReceiveBtn" onclick="submitReceive()">Receive &amp; Create LPs</button><button class="btn btn-success" id="completePoBtn" onclick="completePo()" style="display:none;">Complete PO</button></div><div id="receiveError" style="color:var(--red);font-size:13px;margin-top:8px;"></div><div id="receiveSuccess" style="color:var(--green);font-size:13px;margin-top:8px;"></div></div></div>
-      <div class="card"><div class="card-head"><div class="card-title">Receiving History</div><div class="card-badge" style="background:var(--green-bg);color:var(--green);" id="recHistBadge">0</div></div><div><table class="data-table"><thead><tr><th>SKU</th><th>Lot</th><th>LP #</th><th>Type</th><th>Location</th><th class="right">Qty</th><th>Condition</th><th>By</th><th>Time</th></tr></thead><tbody id="recHistBody"></tbody></table></div></div>
+      <div class="page-header">
+        <button class="ui-btn" onclick="closePoDetail()">← Receiving</button>
+        <div><div class="page-title" id="poDetailTitle"></div><div class="page-subtitle" id="poDetailSub"></div></div>
+        <div style="flex:1"></div>
+      </div>
+      <div class="card ord-info" id="poInfoGrid"></div>
+      <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">PO lines</div></div><div id="poLinesWrap"></div></div>
+      <div id="receivingFormSection" class="card" style="margin-bottom:16px;">
+        <div class="card-head">
+          <div class="card-title">Receive items</div>
+          <div class="ui-hint" style="margin-left:8px;">Assigns an LP and a location to each line</div>
+        </div>
+        <div style="padding:16px 20px 20px;">
+          <div id="receiveLinesList"></div>
+          <div class="alloc-foot">
+            <button class="ui-btn ui-btn-primary" id="submitReceiveBtn" onclick="submitReceive()">Receive &amp; create LPs</button>
+            <button class="ui-btn" id="completePoBtn" onclick="completePo()" style="display:none;">Complete PO</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">Receiving history</div>
+          <div class="card-badge" style="background:var(--green-bg);color:var(--green);" id="recHistBadge">0</div>
+        </div>
+        <div id="recHistWrap"></div>
+      </div>
     </div>
   </div>
 
@@ -1205,36 +1230,9 @@
 <!-- New-order modal retired in D3e — it is a uiModal now (showNewOrderModal()
      in js/orders.js), with the SKU/lot browser inside it. -->
 
-<!-- NEW PO MODAL -->
-<div id="newPoModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
-  <div class="modal" style="max-width:800px;">
-    <div class="modal-head"><div class="modal-title">New Purchase Order</div><div style="flex:1"></div><button class="btn btn-ghost" onclick="closeModal('newPoModal')" style="padding:6px 12px;">✕</button></div>
-    <div class="modal-body">
-      <div class="form-row form-row-2">
-        <div class="form-group"><label class="form-label">Client *</label><div class="cb-wrap" id="npClientWrap"></div></div>
-        <div class="form-group"><label class="form-label">PO Number *</label><input class="form-input" id="npPoNum" placeholder="PO-2025-XXX"></div>
-      </div>
-      <div class="form-row form-row-3">
-        <div class="form-group"><label class="form-label">Supplier</label><div class="cb-wrap" id="npSupplierWrap"></div></div>
-        <div class="form-group"><label class="form-label">Expected Arrival</label><input class="form-input" id="npArrival" type="date"></div>
-        <div class="form-group"><label class="form-label">External PO #</label><input class="form-input" id="npExtPo" placeholder="Vendor reference"></div>
-      </div>
-      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:16px;">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-          <div style="font-size:14px;font-weight:600;">PO Lines</div>
-          <div style="flex:1"></div>
-          <input type="text" class="form-input" id="npSkuSearch" placeholder="Click to browse SKUs..." style="max-width:240px;">
-        </div>
-        <div id="npSkuResults" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:12px;max-height:200px;overflow-y:auto;"></div>
-        <table class="data-table" style="margin-bottom:8px;"><thead><tr><th>SKU</th><th>Description</th><th>UOM</th><th style="width:100px;">Qty</th><th>Lot #</th><th>Expiry</th><th style="width:50px;"></th></tr></thead><tbody id="npLinesBody"></tbody></table>
-        <div id="npLinesEmpty" class="empty-state" style="padding:20px;">Search and add SKUs above</div>
-      </div>
-      <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="npNotes" placeholder="Special instructions..."></div>
-      <div id="npError" style="color:var(--red);font-size:13px;margin-top:8px;"></div>
-    </div>
-    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('newPoModal')">Cancel</button><button class="btn btn-primary" onclick="submitNewPo()">Create PO</button></div>
-  </div>
-</div>
+<!-- New-PO modal retired in D4e — it is a uiModal now (showNewPoModal() in
+     js/inbound.js). The PO number now comes from a server sequence
+     (migration 063), not from Math.random(). -->
 
 <!-- CASE BREAK MODAL -->
 <!-- Case-break modal retired in D4b — it is a uiModal now
