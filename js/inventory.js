@@ -587,7 +587,7 @@ async function openItemFormModal(skuId){
         const MAX = 25 * 1024 * 1024;
         for(const f of files){
           if(f.size > MAX){
-            alert(`${f.name} is over 25MB — skipped`);
+            uiToast(`${f.name} is ${(f.size / 1048576).toFixed(1)}MB — 25MB max`, 'error');
             continue;
           }
           _itemPendingDocs.push(f);
@@ -1114,14 +1114,19 @@ async function renderHandlingUnits(){
     const i  = +btn.dataset.idx;
     const hu = _itemHandlingUnits[i];
     const d  = computeDensity(hu.length_in, hu.width_in, hu.height_in, hu.weight_lbs);
-    if(d == null){ alert('Need L, W, H, and weight all > 0 on this row to compute density.'); return; }
+    if(d == null){
+      return uiToast('Needs length, width, height and weight — all greater than 0 — to compute density', 'error');
+    }
     hu.freight_class = String(densityToFreightClass(d));
     renderHandlingUnits();
+    uiToast(`Density ${d.toFixed(2)} lb/ft³ → freight class ${hu.freight_class}`);
   }));
 
   // Remove button (create mode only — editing locks to one row)
   wrap.querySelectorAll('.js-hu-rm').forEach(btn => btn.addEventListener('click', () => {
-    if(_itemHandlingUnits.length <= 1){ alert('Need at least one handling unit.'); return; }
+    if(_itemHandlingUnits.length <= 1){
+      return uiToast('An item needs at least one handling unit', 'error');
+    }
     _itemHandlingUnits.splice(+btn.dataset.idx, 1);
     renderHandlingUnits();
   }));
@@ -1278,14 +1283,16 @@ async function openSdsDocument(docId, filename){
     const r = await fetch(`${API}/sds-documents/${docId}/download`, {
       headers: { 'Authorization': `Bearer ${T}` },
     });
-    if(!r.ok){ alert('Could not load SDS — ' + (await r.text() || r.status)); return; }
+    if(!r.ok){
+      return uiToast(`Could not open the SDS — ${(await r.text()) || r.status}`, 'error');
+    }
     const blob = await r.blob();
     const url = URL.createObjectURL(blob);
-    // Open in a new tab; revoke after a delay so the tab can read it
-    window.open(url, '_blank');
+    // Open in a new tab; revoke after a delay so the tab can read it first.
+    window.open(url, '_blank', 'noopener');
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch(e){
-    alert('Network error opening SDS');
+    uiToast('Network error opening the SDS', 'error');
   }
 }
 
@@ -1547,15 +1554,23 @@ async function loadItemAttachmentsList(skuId){
   body.querySelectorAll('.js-item-att-dl').forEach(b =>
     b.addEventListener('click', async () => {
       const d = await apiGet(`/skus/${skuId}/attachments/${b.dataset.attId}/url`);
-      if(d?.url) window.open(d.url, '_blank');
+      if(!d?.url) return uiToast('Could not get a download link for that document', 'error');
+      window.open(d.url, '_blank', 'noopener');
     }));
   body.querySelectorAll('.js-item-att-rm').forEach(b =>
     b.addEventListener('click', async () => {
-      if(!confirm('Remove this document?')) return;
+      const ok = await uiConfirm({
+        title: 'Remove this document?',
+        body: 'It is deleted from the item master. If it is the SDS, the hazmat fields it filled in stay as they are.',
+        confirmLabel: 'Remove', danger: true,
+      });
+      if(!ok) return;
       const r = await fetch(`${API}/skus/${skuId}/attachments/${b.dataset.attId}`, {
         method:'DELETE', headers:{'Authorization':`Bearer ${T}`},
       });
-      if(r.ok) loadItemAttachmentsList(skuId);
+      if(!r.ok) return uiToast('Could not remove the document', 'error');
+      uiToast('Document removed');
+      loadItemAttachmentsList(skuId);
     }));
 }
 
