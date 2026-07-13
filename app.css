@@ -217,11 +217,13 @@ body.portal-mode .portal-banner{
 .ord-pick-track{width:140px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;}
 .ord-pick-bar{height:100%;width:0%;background:var(--st-ok);transition:width .25s;}
 .ord-pick-foot{padding:12px 16px;border-top:1px solid var(--border);}
-/* Quantity inputs. 64px fit "5" and clipped "1000" — a warehouse types four- and
-   five-digit quantities, and a number you can't read is a number you can't
-   check. Wide enough for six digits plus the spinner. Tabular + right-aligned
-   so digits line up down a column. */
-.ord-pick-qty{width:96px;padding:4px 8px;display:inline-block;margin-right:6px;
+/* Sized inputs inside tables/rows.
+   NOTE THE `.ui-input` IN EVERY SELECTOR. These rules live BEFORE the design
+   system block, and `.ui-input { width:100% }` has the same specificity — so a
+   bare `.ord-pick-qty { width:96px }` loses on source order and the input
+   stretches to fill its cell, swallowing the columns next to it. Pairing the
+   classes wins on specificity regardless of order. */
+.ui-input.ord-pick-qty{width:96px;padding:4px 8px;display:inline-block;margin-right:6px;
   font-variant-numeric:tabular-nums;text-align:right;}
 .ord-pick-handling{margin:6px 0 0;padding:5px 8px;font-size:12px;}
 
@@ -248,7 +250,8 @@ body.portal-mode .portal-banner{
 .intake-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;}
 
 /* ---- Client KPI targets (D5b) ---- */
-.kpi-num{width:90px;display:inline-block;padding:3px 6px;}
+.ui-input.kpi-num{width:90px;display:inline-block;padding:3px 6px;
+  text-align:right;font-variant-numeric:tabular-nums;}
 
 /* ---- Receiving (D4e) ---- */
 .rec-line{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
@@ -257,8 +260,8 @@ body.portal-mode .portal-banner{
   font-size:var(--fs-body);font-weight:600;}
 .rec-line-fields{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-3);}
 .rec-line-fields .ui-field{margin-bottom:0;}
-.pl-lot{width:120px;}
-.pl-exp{width:150px;}
+.ui-input.pl-lot{width:130px;}
+.ui-input.pl-exp{width:160px;}
 @media (max-width: 900px){ .rec-line-fields{grid-template-columns:1fr 1fr;} }
 
 /* ---- Item-master form (D4d-2) ---- */
@@ -319,12 +322,13 @@ body.portal-mode .portal-banner{
   border-bottom:1px solid var(--border);}
 .eo-line-info{flex:1;min-width:0;}
 .eo-line-lock{font-size:11px;color:var(--st-warn);margin-top:2px;}
-.eo-line-qty{width:96px;text-align:right;padding:5px 8px;font-variant-numeric:tabular-nums;}
+.ui-input.eo-line-qty{width:96px;flex:0 0 auto;text-align:right;padding:5px 8px;
+  font-variant-numeric:tabular-nums;}
 .eo-add-line{background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-top:8px;}
 .eo-add-row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-top:6px;}
 .eo-add-sku{flex:2;min-width:180px;margin-bottom:0;position:relative;}
-.eo-add-qty{width:90px;}
-.eo-add-uom{width:84px;}
+.ui-input.eo-add-qty{width:96px;flex:0 0 auto;text-align:right;font-variant-numeric:tabular-nums;}
+.ui-input.eo-add-uom{width:90px;flex:0 0 auto;}
 .eo-sku-results{display:none;position:absolute;top:100%;left:0;right:0;z-index:20;
   background:var(--panel);border:1px solid var(--border-h);border-radius:var(--radius-sm);
   margin-top:4px;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.4);}
@@ -353,7 +357,7 @@ body.portal-mode .portal-banner{
 .alloc-line-tools{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
 .alloc-line-tools .ui-input{max-width:260px;}
 .alloc-chk{width:16px;height:16px;accent-color:var(--blue);}
-.alloc-qty{width:96px;padding:4px 8px;text-align:right;font-variant-numeric:tabular-nums;}
+.ui-input.alloc-qty{width:96px;padding:4px 8px;text-align:right;font-variant-numeric:tabular-nums;}
 .alloc-foot{display:flex;gap:8px;margin-top:16px;}
 
 /* ---- Portal home: card hub (D2c) ---- */
@@ -389,7 +393,7 @@ body.portal-mode .portal-banner{
 .pno-lots{display:none;padding:0 14px 10px 24px;background:var(--stripe);}
 .pno-lots.open{display:block;}
 .pno-add{color:var(--blue);font-weight:600;font-size:12px;}
-.pno-qty{width:96px;padding:4px 8px;text-align:right;font-variant-numeric:tabular-nums;}
+.ui-input.pno-qty{width:96px;padding:4px 8px;text-align:right;font-variant-numeric:tabular-nums;}
 .pno-qty-over{border-color:var(--st-warn);color:var(--st-warn);}
 .pno-submitbar{position:sticky;bottom:0;z-index:10;margin-top:auto;
   display:flex;align-items:center;gap:10px;
