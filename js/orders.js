@@ -1360,68 +1360,145 @@ async function printOrderDoc(kind){
 // stay as-is — line edits are a future feature.
 // =============================================================================
 
+/* One PIN gate for every line edit that touches an allocated order — replaces
+ * the three separate prompt()-for-PIN chains that used to live in
+ * addNewOrderLine / saveEditedLineQty / removeOrderLine.
+ * Resolves to the PIN string, or null if cancelled. */
+function askSupervisorPin({ title, body }){
+  return new Promise((resolve) => {
+    let settled = false;
+    uiModal({
+      title, width: 460,
+      body: `<div class="ui-banner ui-banner-warn">${body}</div>` +
+            uiField({ id: 'spPin', label: 'Supervisor PIN', type: 'password', placeholder: '4–8 digits' }),
+      actions: [
+        { label: 'Cancel' },
+        { label: 'Authorize', primary: true, onClick: (m) => {
+            const pin = m.el.querySelector('#spPin').value.trim();
+            if(!/^\d{4,8}$/.test(pin)){
+              uiFieldError(m.el, 'spPin', 'PIN must be 4–8 digits');
+              return false;
+            }
+            settled = true;
+            resolve(pin);
+          } },
+      ],
+      onClose: () => { if(!settled) resolve(null); },
+    });
+    setTimeout(() => document.getElementById('spPin')?.focus(), 50);
+  });
+}
+
+// The order needs a PIN for line edits only once it has live allocations.
+function editNeedsPin(){
+  return (COD?.allocations || []).some(a => a.status !== 'CANCELLED');
+}
+
+let EDIT_M = null;   // open edit-order uiModal
+
 function openEditOrderModal(){
   if(!COI || !COD) return;
   if(COD.status === 'SHIPPED'){
-    alert('Cannot edit a SHIPPED order — it has already left the warehouse.');
-    return;
+    return uiToast('A SHIPPED order can\'t be edited — it has already left the warehouse', 'error');
   }
 
-  document.getElementById('editOrderTitle').textContent = `Edit Order — ${COD.order_number || ''}`;
-  document.getElementById('eoExternalNum').value = COD.external_order_number || '';
-  document.getElementById('eoProNum').value      = COD.pro_number || '';
-  // <input type=date> wants YYYY-MM-DD; trim any time portion off ISO strings
-  document.getElementById('eoShipDate').value =
-    COD.required_ship_date ? String(COD.required_ship_date).slice(0, 10) : '';
-  document.getElementById('eoCarrierCode').value = COD.carrier_code || '';
-  document.getElementById('eoShipMethod').value  = COD.ship_method || '';
-  document.getElementById('eoCustName').value    = COD.customer_name || '';
-  document.getElementById('eoCustEmail').value   = COD.customer_email || '';
-  document.getElementById('eoShipName').value    = COD.ship_to_name || '';
-  document.getElementById('eoAddr1').value       = COD.ship_to_line1 || '';
-  document.getElementById('eoAddr2').value       = COD.ship_to_line2 || '';
-  document.getElementById('eoCity').value        = COD.ship_to_city || '';
-  document.getElementById('eoState').value       = COD.ship_to_state || '';
-  document.getElementById('eoPostal').value      = COD.ship_to_postal || '';
-  document.getElementById('eoCountry').value     = COD.ship_to_country || 'US';
-  document.getElementById('eoNotes').value       = COD.notes || '';
-  document.getElementById('eoError').textContent = '';
+  const v = (x) => x || '';
+  EDIT_M = uiModal({
+    title: `Edit ${COD.order_number || 'order'}`,
+    width: 680,
+    body: `
+      <div class="ui-hint" style="margin-bottom:14px;">
+        Header fields and line items. Changes that touch allocated quantity need a supervisor PIN.
+      </div>
+      <div class="ui-field-row">
+        ${uiField({ id: 'eoExternalNum', label: 'External order #', value: v(COD.external_order_number) })}
+        ${uiField({ id: 'eoProNum', label: 'PRO # (carrier tracking)', value: v(COD.pro_number), placeholder: 'e.g. 12345-6789' })}
+      </div>
+      <div class="ui-field-row">
+        ${uiField({ id: 'eoShipDate', label: 'Required ship date', type: 'date',
+                    value: COD.required_ship_date ? String(COD.required_ship_date).slice(0, 10) : '' })}
+        ${uiField({ id: 'eoCarrierCode', label: 'Carrier code', value: v(COD.carrier_code) })}
+      </div>
+      ${uiField({ id: 'eoShipMethod', label: 'Ship method', value: v(COD.ship_method), placeholder: 'GROUND, EXPRESS, LTL…' })}
 
-  // Render the line items list
+      <div class="eo-section">
+        <div class="ui-label">Customer / ship to</div>
+        <div class="ui-field-row">
+          ${uiField({ id: 'eoCustName', label: 'Customer name', value: v(COD.customer_name) })}
+          ${uiField({ id: 'eoCustEmail', label: 'Customer email', type: 'email', value: v(COD.customer_email) })}
+        </div>
+        ${uiField({ id: 'eoShipName', label: 'Ship-to name', value: v(COD.ship_to_name) })}
+        ${uiField({ id: 'eoAddr1', label: 'Address line 1', value: v(COD.ship_to_line1) })}
+        ${uiField({ id: 'eoAddr2', label: 'Address line 2', value: v(COD.ship_to_line2) })}
+        <div class="eo-addr-row">
+          ${uiField({ id: 'eoCity', label: 'City', value: v(COD.ship_to_city) })}
+          ${uiField({ id: 'eoState', label: 'State', value: v(COD.ship_to_state) })}
+          ${uiField({ id: 'eoPostal', label: 'Postal', value: v(COD.ship_to_postal) })}
+          ${uiField({ id: 'eoCountry', label: 'Country', value: COD.ship_to_country || 'US' })}
+        </div>
+      </div>
+      ${uiField({ id: 'eoNotes', label: 'Notes', value: v(COD.notes) })}
+
+      <div class="eo-section">
+        <div class="eo-lines-head">
+          <div class="ui-label">Line items</div>
+          <span class="ui-hint">Qty changes on allocated lines need a PIN</span>
+          <span style="flex:1"></span>
+          <button type="button" class="ui-btn" id="eoAddLineBtn">+ Add line</button>
+        </div>
+        <div id="eoLinesBody"></div>
+        <div id="eoAddLineForm" class="eo-add-line" style="display:none;">
+          <div class="ui-label">New line</div>
+          <div class="eo-add-row">
+            <div class="ui-field eo-add-sku" data-field="eoNewSkuSearch">
+              <input type="text" class="ui-input" id="eoNewSkuSearch" placeholder="Search SKU code or name…">
+              <div id="eoNewSkuResults" class="eo-sku-results"></div>
+              <input type="hidden" id="eoNewSkuId">
+              <div class="ui-field-err" style="display:none;"></div>
+            </div>
+            <input type="number" class="ui-input eo-add-qty" id="eoNewQty" min="1" step="1" placeholder="Qty">
+            <input type="text" class="ui-input eo-add-uom" id="eoNewUom" value="EACH">
+            <button type="button" class="ui-btn ui-btn-primary" id="eoSaveLineBtn">Add</button>
+            <button type="button" class="ui-btn" id="eoCancelLineBtn">Cancel</button>
+          </div>
+        </div>
+      </div>`,
+    actions: [
+      { label: 'Cancel' },
+      { label: 'Save changes', primary: true, onClick: submitEditOrder },
+    ],
+    onClose: () => { EDIT_M = null; },
+  });
+
   renderEditOrderLines();
-  // Wire add-line buttons (idempotent)
   wireEditOrderLineHandlers();
-
-  document.getElementById('editOrderModal').style.display = 'flex';
 }
 
 // ---- Edit Order: line item editor ----------------------------------
 
 function renderEditOrderLines(){
   const body = document.getElementById('eoLinesBody');
+  if(!body) return;
   const lines = COD?.lines || [];
   if(!lines.length){
-    body.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0;">No line items. Add one →</div>';
+    body.innerHTML = uiEmpty('No line items — add one.');
     return;
   }
   body.innerHTML = lines.map(l => {
     const allocated = Number(l.allocated_qty || 0);
     const hasAlloc  = allocated > 0;
-    const lockHint  = hasAlloc
-      ? `<div style="font-size:10px;color:var(--amber);margin-top:2px;">${allocated} already allocated — PIN to reduce or remove</div>`
-      : '';
     return `
-      <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
-        <div style="flex:1;">
-          <div style="font-weight:600;color:var(--blue);font-family:ui-monospace,Menlo,monospace;">${esc(l.sku_code || '')}</div>
-          <div style="font-size:12px;color:var(--text2);">${esc(l.sku_name || '')}</div>
-          ${lockHint}
+      <div class="eo-line">
+        <div class="eo-line-info">
+          <div>${uiId(l.sku_code || '')}</div>
+          <div class="ui-hint">${esc(l.sku_name || '')}</div>
+          ${hasAlloc ? `<div class="eo-line-lock">${esc(allocated)} already allocated — PIN needed to reduce or remove</div>` : ''}
         </div>
-        <div style="width:90px;">
-          <input type="number" class="form-input js-eo-line-qty" data-line-id="${esc(l.id)}" data-original="${esc(l.ordered_qty)}" min="${esc(allocated)}" step="1" value="${esc(l.ordered_qty || 0)}" style="padding:6px 8px;font-size:13px;text-align:right;">
-        </div>
-        <div style="font-size:11px;color:var(--text2);align-self:center;">${esc(l.sku_uom || l.uom || 'EA')}</div>
-        <button type="button" class="btn btn-ghost js-eo-line-rm" data-line-id="${esc(l.id)}" data-has-alloc="${hasAlloc ? '1' : '0'}" style="padding:4px 10px;font-size:12px;color:var(--red);">✕</button>
+        <input type="number" class="ui-input eo-line-qty js-eo-line-qty" data-line-id="${esc(l.id)}"
+               data-original="${esc(l.ordered_qty)}" min="${esc(allocated)}" step="1" value="${esc(l.ordered_qty || 0)}">
+        <span class="ui-hint">${esc(l.sku_uom || l.uom || 'EA')}</span>
+        <button type="button" class="ui-btn js-eo-line-rm" data-line-id="${esc(l.id)}"
+                data-has-alloc="${hasAlloc ? '1' : '0'}" aria-label="Remove line">✕</button>
       </div>`;
   }).join('');
 
@@ -1472,32 +1549,34 @@ function wireEditOrderLineHandlers(){
 
 async function searchEditOrderSkus(term){
   const results = document.getElementById('eoNewSkuResults');
-  if(!COD?.client_id){ return; }
+  if(!COD?.client_id || !results) return;
   let url = `/skus?clientId=${encodeURIComponent(COD.client_id)}&limit=10`;
   if(term) url += `&search=${encodeURIComponent(term)}`;
   const list = await apiGet(url);
   const rows = Array.isArray(list) ? list : (list?.rows || list?.data || []);
-  if(!rows.length){
-    results.innerHTML = '<div style="padding:8px 12px;font-size:12px;color:var(--muted);">no matches</div>';
-    results.style.display = 'block';
-    return;
-  }
-  results.innerHTML = rows.map(r => `
-    <div class="js-eo-sku-pick" data-sku-id="${esc(r.id)}" data-sku-code="${esc(r.sku_code)}" data-sku-name="${esc(r.name || '')}" data-uom="${esc(r.uom || 'EACH')}" style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;">
-      <div style="font-weight:600;color:var(--blue);">${esc(r.sku_code)}</div>
-      <div style="color:var(--text2);">${esc(r.name || '')}</div>
-    </div>
-  `).join('');
   results.style.display = 'block';
-  results.querySelectorAll('.js-eo-sku-pick').forEach(el => {
+  if(!rows.length){ results.innerHTML = uiEmpty('No matching SKUs'); return; }
+
+  results.innerHTML = rows.map(r => `
+    <div class="eo-sku-pick js-eo-sku-pick" data-sku-id="${esc(r.id)}" data-sku-code="${esc(r.sku_code)}"
+         data-sku-name="${esc(r.name || '')}" data-uom="${esc(r.uom || 'EACH')}">
+      ${uiId(r.sku_code)} <span class="ui-muted">${esc(r.name || '')}</span>
+    </div>`).join('');
+  results.querySelectorAll('.js-eo-sku-pick').forEach(el =>
     el.addEventListener('click', () => {
       document.getElementById('eoNewSkuId').value = el.dataset.skuId;
       document.getElementById('eoNewSkuSearch').value = `${el.dataset.skuCode} — ${el.dataset.skuName}`;
       document.getElementById('eoNewUom').value = el.dataset.uom;
       results.style.display = 'none';
       document.getElementById('eoNewQty').focus();
-    });
-  });
+    }));
+}
+
+// Refresh COD from the server after any line mutation so allocated_qty and
+// friends stay honest.
+async function refreshEditOrderLines(){
+  const fresh = await apiGet(`/orders/${COI}`);
+  if(fresh){ COD = fresh; renderEditOrderLines(); }
 }
 
 async function addNewOrderLine(){
@@ -1505,17 +1584,16 @@ async function addNewOrderLine(){
   const qty   = Number(document.getElementById('eoNewQty').value);
   const uom   = document.getElementById('eoNewUom').value.trim() || 'EACH';
 
-  if(!skuId){ alert('Pick a SKU first'); return; }
-  if(!qty || qty <= 0){ alert('Qty must be > 0'); return; }
+  if(!skuId) return uiToast('Pick a SKU first', 'error');
+  if(!qty || qty <= 0) return uiToast('Quantity must be greater than 0', 'error');
 
-  // Server requires PIN if order has allocations — check first to know
-  // whether to prompt.
-  const needsPin = (COD?.allocations || []).some(a => a.status !== 'CANCELLED');
   let pin = null;
-  if(needsPin){
-    pin = prompt('Order has allocations — supervisor PIN required to add a new line:');
-    if(pin == null) return;
-    if(!/^\d{4,8}$/.test(pin)){ alert('PIN must be 4–8 digits'); return; }
+  if(editNeedsPin()){
+    pin = await askSupervisorPin({
+      title: 'Add a line to an allocated order',
+      body: 'This order already has allocations. Adding a line changes what the warehouse has to fulfil, so it needs supervisor authorization.',
+    });
+    if(pin === null) return;
   }
 
   const r = await fetch(`${API}/orders/${COI}/lines`, {
@@ -1524,26 +1602,31 @@ async function addNewOrderLine(){
     body: JSON.stringify({ skuId, qty, uom, pin }),
   });
   const d = await r.json();
-  if(!r.ok){ alert(d.error || 'Add line failed'); return; }
+  if(!r.ok) return uiToast(d.error || 'Could not add the line', 'error');
+  uiToast('Line added');
   document.getElementById('eoAddLineForm').style.display = 'none';
-  // Reload order detail to refresh COD.lines
-  const fresh = await apiGet(`/orders/${COI}`);
-  if(fresh){ COD = fresh; renderEditOrderLines(); }
+  refreshEditOrderLines();
 }
 
 async function saveEditedLineQty(input){
-  const lineId = input.dataset.lineId;
-  const newQty = Number(input.value);
+  const lineId   = input.dataset.lineId;
+  const newQty   = Number(input.value);
   const original = Number(input.dataset.original);
-  if(newQty === original) return; // no change
-  if(newQty <= 0){ alert('Qty must be > 0'); input.value = original; return; }
+  if(newQty === original) return;
+  if(newQty <= 0){
+    uiToast('Quantity must be greater than 0', 'error');
+    input.value = original;
+    return;
+  }
 
-  const needsPin = (COD?.allocations || []).some(a => a.status !== 'CANCELLED');
   let pin = null;
-  if(needsPin){
-    pin = prompt(`Order has allocations — supervisor PIN required to change qty:`);
-    if(pin == null){ input.value = original; return; }
-    if(!/^\d{4,8}$/.test(pin)){ alert('PIN must be 4–8 digits'); input.value = original; return; }
+  if(editNeedsPin()){
+    pin = await askSupervisorPin({
+      title: 'Change quantity on an allocated order',
+      body: `Changing this line from <strong>${esc(original)}</strong> to <strong>${esc(newQty)}</strong> on an
+             order that already has allocations needs supervisor authorization.`,
+    });
+    if(pin === null){ input.value = original; return; }
   }
 
   const r = await fetch(`${API}/orders/${COI}/lines/${lineId}`, {
@@ -1552,26 +1635,34 @@ async function saveEditedLineQty(input){
     body: JSON.stringify({ qty: newQty, pin }),
   });
   const d = await r.json();
-  if(!r.ok){ alert(d.error || 'Save failed'); input.value = original; return; }
+  if(!r.ok){
+    uiToast(d.error || 'Could not save the quantity', 'error');
+    input.value = original;
+    return;
+  }
   input.dataset.original = newQty;
-  // Refresh order data so allocated_qty etc. stays in sync
-  const fresh = await apiGet(`/orders/${COI}`);
-  if(fresh){ COD = fresh; renderEditOrderLines(); }
+  uiToast('Quantity updated');
+  refreshEditOrderLines();
 }
 
 async function removeOrderLine(lineId, hasAlloc){
   if(hasAlloc){
-    alert('This line has active allocations. Unallocate first (on the order detail Allocations panel), then come back to remove the line.');
-    return;
+    return uiToast('This line has active allocations — unallocate it first, then remove the line', 'error');
   }
-  if(!confirm('Remove this line from the order?')) return;
+  const ok = await uiConfirm({
+    title: 'Remove this line?',
+    body: 'The line is removed from the order.',
+    confirmLabel: 'Remove line', danger: true,
+  });
+  if(!ok) return;
 
-  const needsPin = (COD?.allocations || []).some(a => a.status !== 'CANCELLED');
   let pin = null;
-  if(needsPin){
-    pin = prompt('Order has other allocations — supervisor PIN required to remove a line:');
-    if(pin == null) return;
-    if(!/^\d{4,8}$/.test(pin)){ alert('PIN must be 4–8 digits'); return; }
+  if(editNeedsPin()){
+    pin = await askSupervisorPin({
+      title: 'Remove a line from an allocated order',
+      body: 'Other lines on this order are already allocated, so removing a line needs supervisor authorization.',
+    });
+    if(pin === null) return;
   }
 
   const r = await fetch(`${API}/orders/${COI}/lines/${lineId}`, {
@@ -1580,21 +1671,18 @@ async function removeOrderLine(lineId, hasAlloc){
     body: JSON.stringify({ pin }),
   });
   const d = await r.json();
-  if(!r.ok){ alert(d.error || 'Remove failed'); return; }
-  const fresh = await apiGet(`/orders/${COI}`);
-  if(fresh){ COD = fresh; renderEditOrderLines(); }
+  if(!r.ok) return uiToast(d.error || 'Could not remove the line', 'error');
+  uiToast('Line removed');
+  refreshEditOrderLines();
 }
 
+// uiModal action — returning false keeps the modal open.
 async function submitEditOrder(){
-  const err = document.getElementById('eoError');
-  err.textContent = '';
-
-  // Build a body of just the editable fields. Empty strings -> null
-  // so blanking a field clears it on the server side.
+  // Blank fields are sent as null so clearing a field clears it server-side.
   const v = (id) => document.getElementById(id).value.trim();
   const body = {
     externalOrderNumber: v('eoExternalNum') || null,
-    proNumber:           v('eoProNum') || null,
+    proNumber:           v('eoProNum')      || null,
     requiredShipDate:    v('eoShipDate')    || null,
     carrierCode:         v('eoCarrierCode') || null,
     shipMethod:          v('eoShipMethod')  || null,
@@ -1609,24 +1697,15 @@ async function submitEditOrder(){
     shipToCountry:       v('eoCountry')     || null,
     notes:               v('eoNotes')       || null,
   };
-
-  const btn = document.getElementById('eoSaveBtn');
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try {
-    const r = await fetch(`${API}/orders/${COI}`, {
-      method: 'PATCH',
-      headers: {'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
-      body: JSON.stringify(body),
-    });
-    const d = await r.json();
-    if(!r.ok){ err.textContent = d.error || 'Save failed'; return; }
-    closeModal('editOrderModal');
-    openOrderDetail(COI); // refresh the detail view to show new values
-  } catch(e){
-    err.textContent = 'Network error';
-  } finally {
-    btn.disabled = false; btn.textContent = 'Save Changes';
-  }
+  const r = await fetch(`${API}/orders/${COI}`, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+    body: JSON.stringify(body),
+  });
+  const d = await r.json();
+  if(!r.ok){ uiToast(d.error || 'Save failed', 'error'); return false; }
+  uiToast('Order updated');
+  openOrderDetail(COI);
 }
 
 // =============================================================================

@@ -224,6 +224,28 @@ body.portal-mode .portal-banner{
   .ord-grid { grid-template-columns: 1fr; }
 }
 
+/* ---- Edit-order modal (D3d) ---- */
+.eo-section{border-top:1px solid var(--border);margin:16px 0;padding-top:14px;}
+.eo-addr-row{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-3);}
+.eo-lines-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.eo-line{display:flex;align-items:flex-start;gap:8px;padding:8px 0;
+  border-bottom:1px solid var(--border);}
+.eo-line-info{flex:1;min-width:0;}
+.eo-line-lock{font-size:11px;color:var(--st-warn);margin-top:2px;}
+.eo-line-qty{width:90px;text-align:right;padding:5px 8px;}
+.eo-add-line{background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-top:8px;}
+.eo-add-row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-top:6px;}
+.eo-add-sku{flex:2;min-width:180px;margin-bottom:0;position:relative;}
+.eo-add-qty{width:90px;}
+.eo-add-uom{width:84px;}
+.eo-sku-results{display:none;position:absolute;top:100%;left:0;right:0;z-index:20;
+  background:var(--panel);border:1px solid var(--border-h);border-radius:var(--radius-sm);
+  margin-top:4px;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+.eo-sku-pick{padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;
+  font-size:var(--fs-body);}
+.eo-sku-pick:last-child{border-bottom:none;}
+.eo-sku-pick:hover{background:var(--hover);}
+
 /* ---- Ship modal (D3c) ---- */
 .ship-dims{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-3);}
 .ship-rates-bar{display:flex;align-items:center;gap:var(--sp-3);margin:var(--sp-1) 0 var(--sp-3);}

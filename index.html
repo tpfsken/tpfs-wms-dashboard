@@ -1570,92 +1570,9 @@
 <!-- EDIT ORDER MODAL — header-level edits (customer / ship-to / dates /
      notes). Line edits live in their own future feature. Available on
      any order before SHIPPED. -->
-<div id="editOrderModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
-  <div class="modal" style="max-width:680px;">
-    <div class="modal-head">
-      <div class="modal-title" id="editOrderTitle">Edit Order</div>
-      <div style="flex:1"></div>
-      <button class="btn btn-ghost" onclick="closeModal('editOrderModal')" style="padding:6px 12px;">✕</button>
-    </div>
-    <div class="modal-body">
-      <div style="font-size:11px;color:var(--text2);background:var(--bg);padding:8px 12px;border-radius:6px;margin-bottom:14px;">
-        Header-level edits only — line items + allocations stay as-is. To change the lines, cancel + recreate the order or wait for the line-edit feature.
-      </div>
-
-      <div class="form-row form-row-2">
-        <div class="form-group"><label class="form-label">External Order #</label><input class="form-input" id="eoExternalNum"></div>
-        <div class="form-group"><label class="form-label">PRO # <span style="color:var(--text2);font-weight:400;">(carrier tracking)</span></label><input class="form-input" id="eoProNum" placeholder="e.g. 12345-6789"></div>
-      </div>
-      <div class="form-row form-row-2">
-        <div class="form-group"><label class="form-label">Required Ship Date</label><input class="form-input" type="date" id="eoShipDate"></div>
-        <div class="form-group"><label class="form-label">Carrier Code</label><input class="form-input" id="eoCarrierCode"></div>
-      </div>
-      <div class="form-row form-row-2">
-        <div class="form-group"><label class="form-label">Ship Method</label><input class="form-input" id="eoShipMethod" placeholder="GROUND, EXPRESS, LTL..."></div>
-      </div>
-
-      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:14px;">
-        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-bottom:8px;">Customer / Ship To</div>
-        <div class="form-row form-row-2">
-          <div class="form-group"><label class="form-label">Customer Name</label><input class="form-input" id="eoCustName"></div>
-          <div class="form-group"><label class="form-label">Customer Email</label><input class="form-input" id="eoCustEmail" type="email"></div>
-        </div>
-        <div class="form-group"><label class="form-label">Ship-To Name</label><input class="form-input" id="eoShipName"></div>
-        <div class="form-group"><label class="form-label">Address Line 1</label><input class="form-input" id="eoAddr1"></div>
-        <div class="form-group"><label class="form-label">Address Line 2</label><input class="form-input" id="eoAddr2"></div>
-        <div class="form-row form-row-4">
-          <div class="form-group"><label class="form-label">City</label><input class="form-input" id="eoCity"></div>
-          <div class="form-group"><label class="form-label">State</label><input class="form-input" id="eoState"></div>
-          <div class="form-group"><label class="form-label">Postal</label><input class="form-input" id="eoPostal"></div>
-          <div class="form-group"><label class="form-label">Country</label><input class="form-input" id="eoCountry" value="US"></div>
-        </div>
-      </div>
-
-      <div class="form-group"><label class="form-label">Notes</label><textarea class="form-input" id="eoNotes" rows="2"></textarea></div>
-
-      <!-- Line Items — full editor with add / qty change / remove. PIN
-           is required server-side when the order has any allocations,
-           so we don't gate at this level; the API does. -->
-      <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:14px;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-          <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Line Items</div>
-          <div style="font-size:11px;color:var(--muted);">Changes that touch allocated qty require supervisor PIN</div>
-          <div style="flex:1"></div>
-          <button type="button" class="btn btn-ghost" id="eoAddLineBtn" style="padding:4px 12px;font-size:12px;color:var(--blue);">+ Add Line</button>
-        </div>
-        <div id="eoLinesBody" style="font-size:13px;"></div>
-        <!-- Add-line form (hidden by default) -->
-        <div id="eoAddLineForm" style="display:none;background:var(--bg);border-radius:8px;padding:12px;margin-top:8px;">
-          <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">New line</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-            <div style="flex:2;min-width:180px;">
-              <label class="form-label" style="font-size:10px;">SKU</label>
-              <input type="text" class="form-input" id="eoNewSkuSearch" placeholder="Search SKU code or name…">
-              <div id="eoNewSkuResults" style="display:none;background:var(--panel);border:1px solid var(--border);border-radius:6px;margin-top:4px;max-height:200px;overflow-y:auto;"></div>
-              <input type="hidden" id="eoNewSkuId">
-            </div>
-            <div style="width:90px;">
-              <label class="form-label" style="font-size:10px;">Qty</label>
-              <input type="number" class="form-input" id="eoNewQty" min="1" step="1">
-            </div>
-            <div style="width:80px;">
-              <label class="form-label" style="font-size:10px;">UOM</label>
-              <input type="text" class="form-input" id="eoNewUom" value="EACH">
-            </div>
-            <button type="button" class="btn btn-primary" id="eoSaveLineBtn" style="padding:8px 16px;font-size:12px;">Add</button>
-            <button type="button" class="btn btn-ghost" id="eoCancelLineBtn" style="padding:8px 12px;font-size:12px;">Cancel</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="eoError" style="color:var(--red);font-size:13px;margin-top:10px;"></div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="closeModal('editOrderModal')">Cancel</button>
-      <button class="btn btn-primary" id="eoSaveBtn" onclick="submitEditOrder()">Save Changes</button>
-    </div>
-  </div>
-</div>
+<!-- Edit-order modal retired in D3d — it is a uiModal now (openEditOrderModal()
+     in js/orders.js). The three prompt()-for-PIN chains in its line editor are
+     replaced by one askSupervisorPin() gate. -->
 
 <!-- INVENTORY DETAIL MODAL — opens on row click, shows full origin trail -->
 <div id="invDetailModal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
