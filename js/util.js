@@ -93,8 +93,13 @@ const WF = ['NEW','ALLOCATED','PICKING','PACKING','STAGED','SHIPPED'];
 // can add a denormalized severity_tier column later as a cache.
 // =============================================================================
 
+// NOTE: the tier emoji were removed — severity now reads as a coloured chip
+// (see .sev-chip in app.css), which is legible on a warehouse tablet in a way a
+// coloured circle glyph is not (it renders differently on every device, and at
+// a glance orange and red dots are hard to tell apart). The TIER is what the
+// picker acts on, so the tier is what the chip says.
 function severityFor(sku){
-  if(!sku) return { tier:'standard', label:'STANDARD', emoji:'🟢', color:'#3a8a3a', reason:'' };
+  if(!sku) return { tier:'standard', label:'STANDARD', color:'#3a8a3a', reason:'' };
 
   const isHaz = !!(sku.is_hazmat ?? sku.is_hazardous);
   const cls   = String(sku.hazard_class || sku.transport_hazard_class || '').trim();
@@ -110,47 +115,44 @@ function severityFor(sku){
     const why = pg === 'I'
       ? `Packing Group I${cls ? ' (Class ' + cls + ')' : ''} — highest danger`
       : `Class ${cls} — high-stakes hazmat`;
-    return { tier:'critical', label:'CRITICAL', emoji:'🔴', color:'#cc1f1f', reason: why };
+    return { tier:'critical', label:'CRITICAL', color:'#cc1f1f', reason: why };
   }
 
   // HIGH: any other hazmat. Marine pollutants also high even if not
   // otherwise classified.
   if(isHaz){
     return {
-      tier:'high', label:'HIGH', emoji:'🟠', color:'#cc6600',
+      tier:'high', label:'HIGH', color:'#cc6600',
       reason: `Class ${cls || '—'}${pg ? ' PG ' + pg : ''}`,
     };
   }
   if(marin){
-    return { tier:'high', label:'HIGH', emoji:'🟠', color:'#cc6600',
-             reason:'Marine pollutant' };
+    return { tier:'high', label:'HIGH', color:'#cc6600', reason:'Marine pollutant' };
   }
 
   // MODERATE: non-hazmat that still needs care
   if(sh){
-    return { tier:'moderate', label:'MODERATE', emoji:'🟡', color:'#d6a700',
+    return { tier:'moderate', label:'MODERATE', color:'#d6a700',
              reason:'Special handling required' };
   }
   if(grnd){
-    return { tier:'moderate', label:'MODERATE', emoji:'🟡', color:'#d6a700',
+    return { tier:'moderate', label:'MODERATE', color:'#d6a700',
              reason:'Ground transport only' };
   }
 
-  return { tier:'standard', label:'STANDARD', emoji:'🟢', color:'#3a8a3a', reason:'' };
+  return { tier:'standard', label:'STANDARD', color:'#3a8a3a', reason:'' };
 }
 
-// Render a chip for a SKU. Options:
-//   size:          'sm' (default), 'lg' (mobile picker prominent display)
-//   showStandard:  default false — green dot is omitted unless requested
-//   showLabel:     default true  — set false for icon-only (tight rows)
+// Render a severity chip for a SKU. The colour carries the tier; the WORD
+// carries it too, because colour alone fails for a colour-blind picker and in
+// a black-and-white print.
+//   size:         'sm' (default) | 'lg' (picker, prominent)
+//   showStandard: default false — a normal item gets no chip, only exceptions
 function severityChip(sku, opts){
   const o = opts || {};
   const s = severityFor(sku);
   if(s.tier === 'standard' && !o.showStandard) return '';
   const cls = `sev-chip sev-chip-${s.tier} sev-chip-${o.size || 'sm'}`;
   const title = `Severity: ${s.label}${s.reason ? ' — ' + s.reason : ''}`;
-  const text = o.showLabel === false
-    ? s.emoji
-    : `${s.emoji} ${s.label}`;
-  return `<span class="${cls}" title="${esc(title)}">${esc(text)}</span>`;
+  return `<span class="${cls}" title="${esc(title)}">${esc(s.label)}</span>`;
 }

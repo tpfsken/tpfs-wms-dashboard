@@ -404,7 +404,7 @@ function cmpFieldCard(f){
   const actions = !f.reviewer_action && found
     ? `<div style="display:flex;gap:6px;margin-top:8px;">
          <button class="btn btn-success js-cmp-accept" data-id="${esc(f.id)}" style="padding:5px 10px;font-size:11px;">✓ Accept</button>
-         <button class="btn btn-ghost js-cmp-edit"   data-id="${esc(f.id)}" style="padding:5px 10px;font-size:11px;">✏ Edit</button>
+         <button class="btn btn-ghost js-cmp-edit"   data-id="${esc(f.id)}" style="padding:5px 10px;font-size:11px;">Edit</button>
          <button class="btn btn-danger js-cmp-reject" data-id="${esc(f.id)}" style="padding:5px 10px;font-size:11px;">✕ Reject</button>
          <button class="btn btn-ghost js-cmp-defer"   data-id="${esc(f.id)}" style="padding:5px 10px;font-size:11px;color:var(--text2);">⏸ Defer</button>
        </div>`

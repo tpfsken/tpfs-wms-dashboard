@@ -91,7 +91,7 @@ function _printShell(title, bodyHtml) {
   <div class="toolbar">
     <span class="doc-title">${_esc(title)}</span>
     <div style="flex:1"></div>
-    <button class="primary" onclick="window.print()">🖨️ Print</button>
+    <button class="primary" onclick="window.print()">Print</button>
     <button onclick="window.close()">Close</button>
   </div>
   ${bodyHtml}
@@ -233,7 +233,7 @@ function renderPickSlip(order) {
               ? `<span class="hazmat-badge">⚠ HAZMAT${r.un_number ? ' ' + _esc(r.un_number) : ''}</span> `
               : '';
             const handling = r.special_handling_instructions
-              ? `<div class="handling-note">📋 ${_esc(r.special_handling_instructions)}</div>`
+              ? `<div class="handling-note"><strong>SPECIAL HANDLING:</strong> ${_esc(r.special_handling_instructions)}</div>`
               : '';
             const exp = r.expiry_date
               ? new Date(r.expiry_date).toLocaleDateString()

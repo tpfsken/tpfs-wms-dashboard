@@ -1143,7 +1143,7 @@ async function renderHandlingUnits(){
         <div style="width:140px;"><label class="form-label" style="font-size:11px;">NMFC</label><input class="form-input js-hu-nmfc" data-idx="${esc(i)}" value="${esc(hu.nmfc_code || '')}" placeholder="156600"></div>
         <div style="width:90px;"><label class="form-label" style="font-size:11px;">Class</label><input class="form-input js-hu-fc" data-idx="${esc(i)}" value="${esc(hu.freight_class || '')}" placeholder="60"></div>
         <div style="display:flex;flex-direction:column;justify-content:flex-end;gap:2px;">
-          <button type="button" class="btn btn-ghost js-hu-calc" data-idx="${esc(i)}" style="padding:6px 10px;font-size:11px;color:var(--blue);" title="Calc class from density">⚡ Calc</button>
+          <button type="button" class="btn btn-ghost js-hu-calc" data-idx="${esc(i)}" style="padding:6px 10px;font-size:11px;color:var(--blue);" title="Calculate freight class from density">Calc class</button>
           <span class="js-hu-density" data-idx="${esc(i)}" style="font-size:10px;color:var(--text2);text-align:center;"></span>
         </div>
       </div>
@@ -1362,7 +1362,7 @@ async function loadSkuCurrentSds(skuId){
         <div style="font-weight:600;color:var(--text);">${esc(current.original_filename || 'sds.pdf')} <span style="color:var(--muted);font-weight:400;font-size:11px;">v${esc(current.version_number)} · current</span></div>
         <div style="font-size:11px;color:var(--text2);">Uploaded ${esc(uploaded)} by ${esc(by)} ${sizeKb ? '· ' + esc(sizeKb) : ''}</div>
       </div>
-      <button type="button" class="btn btn-ghost" onclick="openSdsDocument('${esc(current.id)}','${esc(current.original_filename || 'sds.pdf')}')" style="padding:4px 10px;font-size:11px;color:var(--blue);">📥 Open</button>
+      <button type="button" class="btn btn-ghost" onclick="openSdsDocument('${esc(current.id)}','${esc(current.original_filename || 'sds.pdf')}')" style="padding:4px 10px;font-size:11px;color:var(--blue);">Open</button>
       ${histCount > 1
         ? `<span style="font-size:11px;color:var(--muted);">${esc(histCount - 1)} prior version${histCount - 1 === 1 ? '' : 's'} on file</span>`
         : ''}
@@ -1402,7 +1402,7 @@ async function runSdsIntelExtract(skuId, file){
   result.style.borderColor = 'var(--blue)';
   result.style.background = 'transparent';
   result.style.color = 'var(--text2)';
-  result.innerHTML = `🤖 Running SDS Intelligence on <strong>${esc(file.name)}</strong>… (typically 10-30 sec for multi-page SDS)`;
+  result.innerHTML = `Running SDS Intelligence on <strong>${esc(file.name)}</strong>… (typically 10-30 sec for multi-page SDS)`;
 
   try {
     const fd = new FormData();
@@ -1416,7 +1416,7 @@ async function runSdsIntelExtract(skuId, file){
     if(!r.ok){
       result.style.borderColor = 'var(--red)';
       result.style.color = 'var(--red)';
-      result.innerHTML = `❌ ${esc(d.error || 'Extraction failed')}`;
+      result.innerHTML = `${esc(d.error || 'Extraction failed')}`;
       return;
     }
 
@@ -1424,7 +1424,7 @@ async function runSdsIntelExtract(skuId, file){
       result.style.borderColor = 'var(--amber)';
       result.style.color = 'var(--amber)';
       result.innerHTML = `
-        <div style="margin-bottom:10px;">📎 This exact PDF (sha256 match) was already uploaded as <strong>version ${esc(d.document.version_number)}</strong>. No re-upload was needed.</div>
+        <div style="margin-bottom:10px;">This exact PDF (sha256 match) was already uploaded as <strong>version ${esc(d.document.version_number)}</strong>. No re-upload was needed.</div>
         <button class="btn btn-primary" id="reExtractExistingBtn" style="padding:6px 14px;font-size:12px;" data-doc-id="${esc(d.document.id)}">↻ Re-extract this version</button>
         <span style="font-size:11px;color:var(--text2);margin-left:10px;">Same PDF, fresh Claude run. Useful when the prompt or model changed since last extraction.</span>
       `;
@@ -1440,7 +1440,7 @@ async function runSdsIntelExtract(skuId, file){
   } catch(err){
     result.style.borderColor = 'var(--red)';
     result.style.color = 'var(--red)';
-    result.innerHTML = `❌ Network error: ${esc(err.message || err)}`;
+    result.innerHTML = `Network error: ${esc(err.message || err)}`;
   }
 }
 
@@ -1453,7 +1453,7 @@ async function reRunExtractionOnExistingDoc(docId){
   result.style.background = 'transparent';
   result.style.borderColor = 'var(--blue)';
   result.style.color = 'var(--text2)';
-  result.innerHTML = `🤖 Re-running extraction on existing SDS… (typically 10-30 sec for multi-page SDS)`;
+  result.innerHTML = `Re-running extraction on existing SDS… (typically 10-30 sec for multi-page SDS)`;
   try {
     const r = await fetch(`${API}/sds-documents/${docId}/extract`, {
       method:'POST', headers:{ 'Authorization': `Bearer ${T}` },
@@ -1462,7 +1462,7 @@ async function reRunExtractionOnExistingDoc(docId){
     if(!r.ok){
       result.style.borderColor = 'var(--red)';
       result.style.color = 'var(--red)';
-      result.innerHTML = `❌ ${esc(d.error || 'Re-extraction failed')}`;
+      result.innerHTML = `${esc(d.error || 'Re-extraction failed')}`;
       return;
     }
     // /sds-documents/:id/extract returns { extractionId, band, weakestRequiredConf }
@@ -1472,7 +1472,7 @@ async function reRunExtractionOnExistingDoc(docId){
   } catch(err){
     result.style.borderColor = 'var(--red)';
     result.style.color = 'var(--red)';
-    result.innerHTML = `❌ Network error: ${esc(err.message || err)}`;
+    result.innerHTML = `Network error: ${esc(err.message || err)}`;
   }
 }
 
@@ -1488,7 +1488,7 @@ function renderSdsExtractResult(ext, doc){
     review_high:  { bg:'#3a2c00', fg:'#ffd591', border:'#d6a700', icon:'⚠', label:'Queued for review (high confidence)' },
     review_low:   { bg:'#3a1c00', fg:'#ffb380', border:'#cc6600', icon:'⚠', label:'Queued for review (low confidence)' },
     rejected:     { bg:'#5a2c2c', fg:'#ffb3b3', border:'#d22',    icon:'✕', label:'Rejected (required fields missing or below threshold)' },
-    error:        { bg:'#5a2c2c', fg:'#ffb3b3', border:'#d22',    icon:'❌', label:'Extraction errored' },
+    error:        { bg:'#5a2c2c', fg:'#ffb3b3', border:'#d22',    icon:'', label:'Extraction errored' },
   }[band] || { bg:'#3a3a3a', fg:'#ddd', border:'#888', icon:'…', label:band };
 
   result.style.background = bandStyle.bg;
@@ -1584,7 +1584,7 @@ function renderItemPendingDocs(){
   const body = document.getElementById('itemDocsBody');
   if(!body) return;
   if(!_itemPendingDocs.length){
-    body.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0;">No documents staged. Click 📎 Attach File to add an SDS, photo, or spec sheet — they\'ll upload after Save. (Or use Read SDS above to also auto-fill hazmat from a PDF.)</div>';
+    body.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0;">No documents staged. Click Attach file to add an SDS, photo, or spec sheet — they\'ll upload after Save. (Or use Read SDS above to also auto-fill hazmat from a PDF.)</div>';
     return;
   }
   body.innerHTML = _itemPendingDocs.map((f, i) => {
@@ -1627,7 +1627,7 @@ async function loadItemAttachmentsList(skuId){
   updateSdsReuseButton(skuId, latestSds);
 
   if(!rows.length){
-    body.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0;">No documents yet — click 📎 Attach File to add an SDS, photo, or spec sheet</div>';
+    body.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0;">No documents yet — click Attach file to add an SDS, photo, or spec sheet</div>';
     return;
   }
   body.innerHTML = rows.map(r => {
@@ -1646,7 +1646,7 @@ async function loadItemAttachmentsList(skuId){
           <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.filename || '')} ${tag}</div>
           <div style="font-size:11px;color:var(--text2);">${esc(sizeLabel)} · ${esc(r.uploaded_by || '')}</div>
         </div>
-        <button class="btn btn-ghost js-item-att-dl" data-att-id="${esc(r.id)}" style="padding:3px 10px;font-size:12px;">⬇ Open</button>
+        <button class="btn btn-ghost js-item-att-dl" data-att-id="${esc(r.id)}" style="padding:3px 10px;font-size:12px;">Open</button>
         <button class="btn btn-ghost js-item-att-rm" data-att-id="${esc(r.id)}" style="padding:3px 8px;font-size:12px;color:var(--red);">✕</button>
       </div>`;
   }).join('');

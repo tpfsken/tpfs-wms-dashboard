@@ -807,7 +807,7 @@ const CLI_ITEM_COLS = [
   { key: '_name', label: 'Description', sortValue: r => r.name, render: r =>
       `<div>${esc(r.name || '')}</div>` +
       (r.special_handling_instructions
-        ? `<div class="eo-line-lock">📋 ${esc(r.special_handling_instructions)}</div>` : '') },
+        ? `<div class="eo-line-lock"><strong>Special handling:</strong> ${esc(r.special_handling_instructions)}</div>` : '') },
   { key: 'sku_type', label: 'Type', render: r =>
       `<span class="ui-chip ui-chip-neutral">${esc(r.sku_type || '')}</span>` },
   { key: 'uom', label: 'UOM' },
@@ -817,7 +817,7 @@ const CLI_ITEM_COLS = [
       if(r.is_lot_tracked)    f.push('<span class="ui-chip ui-chip-info">LOT</span>');
       if(r.is_expiry_tracked) f.push('<span class="ui-chip ui-chip-info">EXP</span>');
       if(r.is_hazmat) f.push(`<span class="ui-chip ui-chip-danger">⚠ HAZMAT${r.un_number ? ' ' + esc(r.un_number) : ''}${r.hazard_class ? ' · Cl ' + esc(r.hazard_class) : ''}</span>`);
-      if(r.attachment_count > 0) f.push(`<span class="ui-chip ui-chip-neutral">📎 ${esc(r.attachment_count)}</span>`);
+      if(r.attachment_count > 0) f.push(`<span class="ui-chip ui-chip-neutral">${esc(r.attachment_count)} DOC${Number(r.attachment_count) === 1 ? '' : 'S'}</span>`);
       return f.join(' ') || '<span class="ui-muted">—</span>';
     } },
 ];

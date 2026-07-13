@@ -236,6 +236,20 @@ body.portal-mode .portal-banner{
   text-transform:uppercase;color:var(--muted);padding:8px 12px 4px;
   border-top:1px solid var(--border);margin-top:4px;}
 
+/* ---- Severity chips (hazmat handling tier) ----
+   These classes were referenced by severityChip() but NEVER DEFINED — the badge
+   was legible only because it carried an emoji. A hazmat tier is not decoration:
+   it tells a picker what PPE to wear. Colour AND word, so it survives a
+   colour-blind picker and a black-and-white pick slip. */
+.sev-chip{display:inline-flex;align-items:center;padding:1px 7px;border-radius:99px;
+  font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  border:1px solid;white-space:nowrap;vertical-align:middle;}
+.sev-chip-critical{background:rgba(204,31,31,.14);color:#ff7b7b;border-color:#cc1f1f;}
+.sev-chip-high    {background:rgba(204,102,0,.14);color:#ffab5e;border-color:#cc6600;}
+.sev-chip-moderate{background:rgba(214,167,0,.14);color:#e8c14a;border-color:#d6a700;}
+.sev-chip-standard{background:rgba(58,138,58,.14);color:#7fd07f;border-color:#3a8a3a;}
+.sev-chip-lg{font-size:13px;padding:3px 12px;letter-spacing:.06em;}
+
 /* ---- Reports (D6b / R-B) ----
    The catalog is a working index: grouped rows, dense, no decoration. You come
    here to run a report, not to look at it. */
@@ -393,7 +407,7 @@ body.portal-mode .portal-banner{
   background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px;
   font-family:var(--font);cursor:pointer;transition:border-color .15s,transform .15s;}
 .portal-card:hover{border-color:var(--blue);transform:translateY(-1px);}
-.portal-card-icon{font-size:30px;line-height:1;margin-bottom:6px;}
+.portal-card-go{margin-top:10px;font-size:var(--fs-body);font-weight:600;color:var(--blue);}
 .portal-card-title{font-size:16px;font-weight:700;color:var(--text);}
 .portal-card-desc{font-size:13px;color:var(--text2);line-height:1.5;}
 

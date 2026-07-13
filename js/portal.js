@@ -82,28 +82,30 @@ function bootPortal() {
 /* ---------------------------------------------------------------------------
  * PORTAL HOME — KPI tiles, SLA terms, card hub
  * ------------------------------------------------------------------------- */
+// No icons. This is a warehouse system a customer runs their business on, not
+// an app store — the words carry the meaning.
 const PORTAL_CARDS = [
-  { id: 'portalNewOrder', icon: '➕', title: 'Place an Order',
-    desc: 'Manual outbound order — choose SKUs, quantities, and a ship-to.' },
-  { id: 'portalIntake', icon: '📄', title: 'Upload Documents',
-    desc: 'Drop a PDF (PO, BOL, ASN, packing slip) — AI extracts it and creates the order.' },
-  { id: 'inventory', icon: '📦', title: 'My Inventory',
-    desc: 'On-hand SKUs, lots, and license plates at the warehouse.' },
-  { id: 'orders', icon: '📋', title: 'My Orders',
-    desc: 'Status of every order you placed — open, picking, shipped.' },
-  { id: 'billing', icon: '💵', title: 'My Billing',
-    desc: 'Charges accrued on your account, by period.' },
-  { id: 'reports', icon: '🔎', title: 'Reports',
-    desc: 'Item history and full LP traceability for compliance / recall.' },
+  { id: 'portalNewOrder', title: 'Place an order',
+    desc: 'Manual outbound order — choose SKUs, quantities and a ship-to.' },
+  { id: 'portalIntake', title: 'Upload documents',
+    desc: 'Drop a PDF (PO, BOL, ASN, packing slip). It is read automatically and turned into an order.' },
+  { id: 'inventory', title: 'Inventory',
+    desc: 'On-hand SKUs, lots and licence plates held at the warehouse.' },
+  { id: 'orders', title: 'Orders',
+    desc: 'Status of every order placed — open, picking, shipped.' },
+  { id: 'billing', title: 'Billing',
+    desc: 'Charges accrued on the account, by period.' },
+  { id: 'reports', title: 'Reports',
+    desc: 'Activity, receiving, shipments and full lot traceability.' },
 ];
 
 async function loadPortalHome() {
   const grid = document.getElementById('portalHomeGrid');
   grid.innerHTML = PORTAL_CARDS.map(c => `
     <button class="portal-card" data-target="${esc(c.id)}">
-      <span class="portal-card-icon">${esc(c.icon)}</span>
       <span class="portal-card-title">${esc(c.title)}</span>
       <span class="portal-card-desc">${esc(c.desc)}</span>
+      <span class="portal-card-go">Open →</span>
     </button>`).join('');
   grid.querySelectorAll('.portal-card').forEach(card =>
     card.addEventListener('click', () => navigateTo(card.dataset.target)));

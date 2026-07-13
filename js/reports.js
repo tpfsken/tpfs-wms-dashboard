@@ -162,7 +162,8 @@ async function openReport(id){
     }).join('') +
     `<button class="ui-btn ui-btn-primary" onclick="runGenericReport()">Run</button>
      <div style="flex:1"></div>
-     <button class="ui-btn" onclick="exportGenericReport()">Export CSV</button>`;
+     <button class="ui-btn" onclick="exportGenericReport('csv')">Export CSV</button>
+     <button class="ui-btn" onclick="exportGenericReport('pdf')">Export PDF</button>`;
 
   runGenericReport();
 }
@@ -218,24 +219,36 @@ async function runGenericReport(){
   });
 }
 
-// The CSV comes from the SAME definition as the screen — it cannot disagree
-// with what the user was just looking at.
-async function exportGenericReport(){
+/* Both exports run the SAME definition as the screen, so a CSV someone works
+ * from and a PDF a client files away can never disagree with what ops saw.
+ * CSV downloads; PDF opens for review before it's sent to anyone. */
+async function exportGenericReport(fmt){
   if(!_reportDef) return;
   _reportParams = collectReportParams();
+
+  const missing = _reportDef.params.filter(p => p.required && !_reportParams[p.key]);
+  if(missing.length) return uiToast(`${missing.map(m => m.label).join(' and ')} required`, 'error');
+
   uiToast('Building the export…');
-  const r = await fetch(`${API}/reports/export/${_reportDef.id}.csv?${reportQuery()}`, {
+  const r = await fetch(`${API}/reports/export/${_reportDef.id}.${fmt}?${reportQuery()}`, {
     headers: { Authorization: `Bearer ${T}` },
   });
   if(!r.ok) return uiToast('Export failed', 'error');
+
   const blob = await r.blob();
   const url  = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${_reportDef.id}-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
-  uiToast('CSV downloaded');
+  const name = `${_reportDef.id}-${new Date().toISOString().slice(0, 10)}.${fmt}`;
+
+  if(fmt === 'pdf'){
+    // Open it — nobody should email a client a report they haven't looked at.
+    if(!window.open(url, '_blank', 'noopener')) uiToast('Pop-up blocked — allow pop-ups to view the PDF', 'error');
+  } else {
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    a.click();
+    uiToast('CSV downloaded');
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 function backToReportsIndex(){

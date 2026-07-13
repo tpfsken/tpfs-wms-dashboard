@@ -163,7 +163,7 @@ async function openOrderDetail(id){
   if(lockedByOther){
     const elapsed = Math.round((Date.now() - lockedAt.getTime()) / 60000);
     banners.innerHTML += `<div class="ui-banner ui-banner-warn">
-      🔒 Being picked by <strong>${esc(d.picking_user_name || 'another user')}</strong> — started
+      Being picked by <strong>${esc(d.picking_user_name || 'another user')}</strong> — started
       ${esc(elapsed)}m ago. Wait for them to finish, or the lock auto-releases at 30m.</div>`;
   }
   document.querySelectorAll('button[onclick*="openMobilePicker"]').forEach(b => {
@@ -299,7 +299,7 @@ async function openOrderDetail(id){
         const allocCount = (d.allocations || []).filter(a => a.status === 'PENDING').length;
         showDestructiveEdit({
           title: '↺ Unallocate Entire Order',
-          description: `Release all <strong>${allocCount}</strong> allocation${allocCount === 1 ? '' : 's'} on order <strong>${esc(d.order_number || '')}</strong> back to inventory and demote the order to <strong>NEW</strong>?<br><br>This is the right move when you need to <em>edit lines</em> (change qty, swap lots, add/remove SKUs) on an already-allocated order. After unallocating you can edit freely, then click 🎯 Allocate again to re-allocate fresh.<br><br><span style="color:var(--amber);">Inventory returns to available at the same lot/LP/location it came from. The cancelled allocations stay in history with reason and your name.</span>`,
+          description: `Release all <strong>${allocCount}</strong> allocation${allocCount === 1 ? '' : 's'} on order <strong>${esc(d.order_number || '')}</strong> back to inventory and demote the order to <strong>NEW</strong>?<br><br>This is the right move when you need to <em>edit lines</em> (change qty, swap lots, add/remove SKUs) on an already-allocated order. After unallocating you can edit freely, then click Allocate again to re-allocate fresh.<br><br><span style="color:var(--amber);">Inventory returns to available at the same lot/LP/location it came from. The cancelled allocations stay in history with reason and your name.</span>`,
           url: `${API}/orders/${d.id}/unallocate-all`,
         });
       })
@@ -490,7 +490,7 @@ function renderPickList(d, isPickable){
       { key: '_desc', label: 'Description', render: a =>
           `${hazBadge(a)}${esc(a.sku_name || '')}` +
           (a.special_handling_instructions
-            ? `<div class="ui-banner ui-banner-warn ord-pick-handling">📋 ${esc(a.special_handling_instructions)}</div>`
+            ? `<div class="ui-banner ui-banner-warn ord-pick-handling"><strong>Special handling:</strong> ${esc(a.special_handling_instructions)}</div>`
             : '') },
       { key: 'quantity', label: 'Qty', num: true },
       { key: '_act', label: 'Action', render: a => {

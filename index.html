@@ -288,7 +288,6 @@
       </div>
 
       <div id="intakeDropZone" class="ui-drop" onclick="document.getElementById('intakeUploadInput').click()">
-        <div class="ui-drop-icon">⬆</div>
         <div class="ui-drop-title">Drop PDFs here, or click to browse</div>
         <div class="ui-hint">PO, ASN, sales order, BOL · 25MB max · Claude classifies and extracts</div>
         <div id="intakeUploadStatus"></div>
@@ -575,7 +574,6 @@
 
     <!-- Drop zone -->
     <div id="portalIntakeDrop" class="ui-drop" onclick="document.getElementById('portalIntakeUpload').click()">
-      <div class="ui-drop-icon">⬆</div>
       <div class="ui-drop-title">Drop PDFs here, or click to browse</div>
       <div class="ui-hint">PO, ASN, BOL, packing slips · 25MB max · our AI classifies and extracts them</div>
       <div id="portalIntakeStatus"></div>
@@ -887,7 +885,7 @@
     <div id="itemHistoryView">
       <div class="card">
         <div class="card-head">
-          <div class="card-title">🔎 Item History</div>
+          <div class="card-title">Item history</div>
           <div style="flex:1"></div>
           <div style="font-size:12px;color:var(--muted);">search SKU or lot · click row to follow LPs</div>
         </div>
@@ -922,12 +920,12 @@
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
         <button class="btn btn-ghost" onclick="backToItemHistory()">← Back to Item History</button>
         <div style="flex:1"></div>
-        <button class="btn btn-ghost" onclick="exportRecallCsv()">⬇ Export CSV</button>
+        <button class="ui-btn" onclick="exportRecallCsv()">Export CSV</button>
       </div>
 
       <div class="card" style="margin-bottom:16px;">
         <div class="card-head">
-          <div class="card-title">📦 LP Trace</div>
+          <div class="card-title">Licence plate trace</div>
           <div style="margin-left:16px;font-size:13px;" id="traceContextLabel"></div>
           <div style="flex:1"></div>
           <div style="display:flex;align-items:center;gap:8px;">
@@ -958,7 +956,7 @@
 
       <!-- LP family -->
       <div id="lpFamilyCard" class="card" style="margin-top:16px;">
-        <div class="card-head"><div class="card-title">📦 LP Family</div><div style="flex:1"></div><div style="font-size:11px;color:var(--muted);">parent → children, indented by case-break lineage</div></div>
+        <div class="card-head"><div class="card-title">LP family</div><div style="flex:1"></div><div style="font-size:11px;color:var(--muted);">parent → children, indented by case-break lineage</div></div>
         <div style="overflow:auto;">
           <table class="data-table">
             <thead><tr><th>LP</th><th>SKU</th><th>Lot</th><th>Location</th><th class="right">Qty</th><th>Status</th><th>Received</th></tr></thead>
@@ -969,7 +967,7 @@
 
       <!-- Receiving — where it came from -->
       <div id="traceReceivingCard" class="card" style="margin-top:16px;">
-        <div class="card-head"><div class="card-title">📥 Where It Came From</div><div style="flex:1"></div><div style="font-size:11px;color:var(--muted);">PO / receipt for every original LP in the family</div></div>
+        <div class="card-head"><div class="card-title">Where it came from</div><div style="flex:1"></div><div style="font-size:11px;color:var(--muted);">PO / receipt for every original LP in the family</div></div>
         <div style="overflow:auto;">
           <table class="data-table">
             <thead><tr><th>PO #</th><th>Supplier</th><th class="right">Received Qty</th><th>Condition</th><th>Received By</th><th>When</th></tr></thead>
@@ -980,7 +978,7 @@
 
       <!-- Allocations — where pieces went -->
       <div id="traceAllocCard" class="card" style="margin-top:16px;">
-        <div class="card-head"><div class="card-title">📤 Where It Went</div><div style="flex:1"></div><div style="font-size:11px;color:var(--muted);">every allocation → customer / order / shipment</div></div>
+        <div class="card-head"><div class="card-title">Where it went</div><divstyle="flex:1"></div><div style="font-size:11px;color:var(--muted);">every allocation → customer / order / shipment</div></div>
         <div style="overflow:auto;">
           <table class="data-table">
             <thead><tr>
@@ -1021,7 +1019,7 @@
   <div id="complianceListView">
     <div class="page-header">
       <button class="btn btn-ghost portal-only" onclick="navigateTo('portalHome')" style="padding:6px 12px;">← Home</button>
-      <div><div class="page-title">🛡 Compliance</div><div class="page-subtitle">SDS Intelligence reviewer queue · per-field confidence + audit log</div></div>
+      <div><div class="page-title">Compliance</div><div class="page-subtitle">SDS Intelligence reviewer queue · per-field confidence + audit log</div></div>
     </div>
     <!-- Tab strip — uiTabs (the one tab system); populated by cmpSwitchTab() -->
     <div id="cmpTabs"></div>
@@ -1072,7 +1070,7 @@
         <div style="flex:1"></div>
         <span class="chip" id="cmpReviewerBand"></span>
         <button class="btn btn-success" id="cmpAcceptAllGreenBtn" style="display:none;" title="Accept every field that's already auto-eligible (≥95% confidence, no diff). Yellow/orange/red items still need individual review.">✓ Accept all green</button>
-        <button class="btn btn-danger" id="cmpWithdrawBtn" onclick="cmpWithdrawSds()" title="Wrong file uploaded? Withdraw this SDS before any field is applied to the SKU master. Soft delete — record stays for audit but the doc is removed from the queue and the prior version (if any) is restored.">🗑 Withdraw SDS</button>
+        <button class="btn btn-danger" id="cmpWithdrawBtn" onclick="cmpWithdrawSds()" title="Wrong file uploaded? Withdraw this SDS before any field is applied to the SKU master. Soft delete — record stays for audit but the doc is removed from the queue and the prior version (if any) is restored.">Withdraw SDS</button>
       </div>
     </div>
     <div id="cmpReviewerSplit" style="display:grid;grid-template-columns:1fr 460px;gap:18px;align-items:start;">
