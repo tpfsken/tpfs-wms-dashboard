@@ -76,6 +76,7 @@ const loaders = {
   dashboard:      loadDashboard,
   inventory:      loadInventory,
   orders:         loadOrders,
+  quotes:         loadQuotes,
   inbound:        loadInbound,
   intake:         loadIntake,
   clients:        loadClients,

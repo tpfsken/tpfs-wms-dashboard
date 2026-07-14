@@ -85,6 +85,15 @@ grep -P '[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE0F}]' -rn .
 Grep **every file type**, not just `.js` — the emoji that survived the last sweep
 were in `index.html`, which everyone had stopped looking at.
 
+**5. A CSS class nobody defined styles NOTHING — silently.** Four shipped bugs of
+the same shape: `.sev-chip`, `.btn-link`, `.ui-mono`, `.picker-ov-err` — markup
+referencing a class `app.css` never defines. The element renders, unstyled, and
+nobody notices until a hazmat badge turns out to be legible only because of an
+emoji. **Run `node scripts/class-census.mjs` before every commit** — it checks
+every class referenced in `js/*.js` + `index.html` against `app.css`, carries an
+allowlist for the known-benign cases (printDocs' own stylesheet, JS hooks), and
+must exit 0. Adding to its allowlist is a review decision, not a reflex.
+
 ## XSS / HTML interpolation — NON-NEGOTIABLE
 
 Every value coming from the API, the user, or any other untrusted source MUST go through `esc()` before being placed in `innerHTML` or an HTML attribute. No exceptions. `esc(undefined)` and `esc(null)` are safe; they return `''`.
