@@ -64,10 +64,19 @@ function pkSyncPrimary(){
   }
 }
 
-function pkPrimaryAction(){
+async function pkPrimaryAction(){
   // Dispatch on what the button currently MEANS.
-  if(PK_NEW.selectedRateId) return pkCreateWithLabel();
-  return pkComplete();
+  //
+  // The `return false` is load-bearing: uiModal closes the dialog unless the
+  // handler returns false. Without it, buying the labels succeeded and then the
+  // panel politely shut itself, dropping ops back on the order page — so they had
+  // to re-open Packages just to press Complete shipment. Buying a label is a step
+  // IN the flow, not the end of it.
+  if(PK_NEW.selectedRateId){
+    await pkCreateWithLabel();
+    return false;
+  }
+  return pkComplete();   // pkComplete closes the modal itself on success
 }
 
 // Markup is OURS. The client is billed cost + markup; they never see the cost.
@@ -256,17 +265,17 @@ function pkRenderNewRates(){
             <strong>${uiMoney(client)}</strong>
           </label>`;
       }).join('')}
-    </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:8px;">
-      <button class="ui-btn ui-btn-primary" id="pkCreateBtn">Create label</button>
     </div>`;
+  // No inline "Create label" button here on purpose. The footer's primary button
+  // IS the create action once a service is picked — two buttons firing the same
+  // purchase is clutter at best, and a double-click across the pair buying the
+  // labels twice at worst.
 
   el.querySelectorAll('input[name="pknewrate"]').forEach(inp =>
     inp.addEventListener('change', () => {
       PK_NEW.selectedRateId = inp.value;
-      pkSyncPrimary();   // the footer button now means "Create label"
+      pkSyncPrimary();   // the footer button now reads "Create label"
     }));
-  el.querySelector('#pkCreateBtn').addEventListener('click', pkCreateWithLabel);
 }
 
 // Creates the box AND buys its label in one call. There is no intermediate box.
@@ -296,11 +305,12 @@ async function pkCreateWithLabel(){
   });
   if(!ok) return;
 
-  const btn = PK_M.el.querySelector('#pkCreateBtn');
-  if(btn){ btn.disabled = true; btn.textContent = qty > 1 ? `Buying ${qty} labels…` : 'Buying…'; }
-  // The footer button fires the same action — disable it too, or a double-click
-  // across the two buttons buys the labels twice. That is real money.
-  if(PK_PRIMARY){ PK_PRIMARY.disabled = true; }
+  // Buying N labels takes a few seconds (N round-trips to EasyPost). Say so, and
+  // lock the button — a second click here spends real postage twice.
+  if(PK_PRIMARY){
+    PK_PRIMARY.disabled    = true;
+    PK_PRIMARY.textContent = qty > 1 ? `Buying ${qty} labels…` : 'Buying label…';
+  }
 
   const r = await fetch(`${API}/orders/${COI}/packages/label`, {
     method:'POST',
@@ -319,12 +329,11 @@ async function pkCreateWithLabel(){
     }),
   });
   const d = await r.json().catch(() => ({}));
+  if(PK_PRIMARY) PK_PRIMARY.disabled = false;
   if(!r.ok){
-    if(btn){ btn.disabled = false; btn.textContent = 'Create label'; }
-    if(PK_PRIMARY){ PK_PRIMARY.disabled = false; }
+    pkSyncPrimary();   // restore the button's wording
     return uiToast(d.error || 'Could not create the label', 'error');
   }
-  if(PK_PRIMARY){ PK_PRIMARY.disabled = false; }
 
   // Partial failure is REAL here: some labels are bought, some aren't. Never
   // report "done" over the top of it — those boxes have no postage and someone
