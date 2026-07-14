@@ -197,7 +197,7 @@ function renderPortalSlaTerms(rules) {
  * PORTAL NEW ORDER
  * ------------------------------------------------------------------------- */
 const PNO_FIELDS = ['pnoCustName', 'pnoCustEmail', 'pnoAddr1', 'pnoAddr2', 'pnoCity',
-                    'pnoState', 'pnoPostal', 'pnoShipDate', 'pnoSkuSearch'];
+                    'pnoState', 'pnoPostal', 'pnoPhone', 'pnoShipDate', 'pnoSkuSearch'];
 
 async function loadPortalNewOrder() {
   _portalNewOrderLines = [];
@@ -252,6 +252,7 @@ async function loadPortalNewOrder() {
         set('pnoState',     a.ship_to_state);
         set('pnoPostal',    a.ship_to_postal);
         set('pnoCountry',   a.ship_to_country || 'US');
+        set('pnoPhone',     a.ship_to_phone);
         uiToast('Ship-to filled in');
       },
     });
@@ -510,6 +511,7 @@ async function submitPortalNewOrder() {
       state: val('pnoState'),
       postal: val('pnoPostal'),
       country: val('pnoCountry') || 'US',
+      phone: val('pnoPhone') || null,
     },
     lines: _portalNewOrderLines.map(l => ({
       skuId: l.skuId, qty: Number(l.qty), uom: l.uom || 'EACH',

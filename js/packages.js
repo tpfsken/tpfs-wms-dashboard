@@ -310,6 +310,11 @@ async function pkCreateWithLabel(){
       qty,
       epShipmentId: PK_NEW.epShipmentId,
       rateId:       PK_NEW.selectedRateId,
+      // Boxes 2..N are re-rated server-side and matched on carrier+service. Send
+      // what was actually CHOSEN — the server used to infer it from box 1's
+      // purchase, so when box 1 failed the rest went looking for "null null".
+      carrier:      rate ? rate.carrier : null,   // raw EasyPost name, not the display name
+      service:      rate ? rate.service : null,
       markupPct:    pkMarkup(),
     }),
   });

@@ -989,6 +989,8 @@ async function showNewOrderModal(){
           ${uiField({ id: 'noPostal', label: 'Postal *' })}
           ${uiField({ id: 'noCountry', label: 'Country', value: 'US' })}
         </div>
+        ${uiField({ id: 'noShipPhone', label: 'Ship-to phone', type: 'tel',
+                    hint: 'FedEx and UPS require a destination phone on the label. Left blank, the carrier gets the warehouse number.' })}
       </div>
 
       <div class="no-row-3">
@@ -1073,6 +1075,7 @@ function fillPriorAddress(idx){
   document.getElementById('noState').value     = a.ship_to_state || '';
   document.getElementById('noPostal').value    = a.ship_to_postal || '';
   document.getElementById('noCountry').value   = a.ship_to_country || 'US';
+  document.getElementById('noShipPhone').value = a.ship_to_phone || '';
   if(a.carrier_code) cbSet('noCarrierWrap', a.carrier_code, a.carrier_code);
   if(a.ship_method)  document.getElementById('noShipMethod').value = a.ship_method;
 }
@@ -1324,6 +1327,7 @@ async function submitNewOrder(m){
         line1: v('noAddr1'), line2: v('noAddr2'),
         city: v('noCity'), state: v('noState'), postal: v('noPostal'),
         country: v('noCountry') || 'US',
+        phone: v('noShipPhone') || null,
       },
       lines: orderLines.map(l => ({ skuId: l.skuId, qty: l.qty, uom: l.uom })),
     }),
@@ -1610,6 +1614,8 @@ function openEditOrderModal(){
           ${uiField({ id: 'eoPostal', label: 'Postal', value: v(COD.ship_to_postal) })}
           ${uiField({ id: 'eoCountry', label: 'Country', value: COD.ship_to_country || 'US' })}
         </div>
+        ${uiField({ id: 'eoShipPhone', label: 'Ship-to phone', type: 'tel', value: v(COD.ship_to_phone),
+                    hint: 'FedEx and UPS require a destination phone on the label. Left blank, the carrier gets the warehouse number.' })}
       </div>
       ${uiField({ id: 'eoNotes', label: 'Notes', value: v(COD.notes) })}
 
@@ -1869,6 +1875,7 @@ async function submitEditOrder(){
     shipToState:         v('eoState')       || null,
     shipToPostal:        v('eoPostal')      || null,
     shipToCountry:       v('eoCountry')     || null,
+    shipToPhone:         v('eoShipPhone')   || null,
     notes:               v('eoNotes')       || null,
   };
   const r = await fetch(`${API}/orders/${COI}`, {
