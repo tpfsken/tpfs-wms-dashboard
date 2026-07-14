@@ -23,6 +23,52 @@ let PK_MARKUP   = 0;      // % applied to carrier cost when buying
 // written to the database at the moment its label is bought, so this is the one
 // piece of state that lives purely in the browser.
 let PK_NEW      = { epShipmentId: null, rates: [], selectedRateId: null };
+let PK_PRIMARY  = null;   // the footer's primary button — its job changes with the step
+let PK_PRINTALL = null;   // footer "Print all labels" — hidden until there's more than one
+
+// One PDF, every label on the order. Ten boxes must not mean ten print dialogs.
+// Fetched as a blob (not window.open) so the JWT rides in the Authorization
+// header rather than the URL — a token in a URL ends up in browser history and
+// server logs.
+async function pkPrintAll(){
+  uiToast('Building the label sheet…');
+  const r = await fetch(`${API}/orders/${COI}/packages/labels.pdf`, {
+    headers: { 'Authorization': `Bearer ${T}` },
+  });
+  if(!r.ok){
+    const d = await r.json().catch(() => ({}));
+    return uiToast(d.error || 'Could not build the label sheet', 'error');
+  }
+  const url = URL.createObjectURL(await r.blob());
+  if(!window.open(url, '_blank', 'noopener')){
+    // A blocked pop-up looks identical to "nothing happened" — say so, or ops
+    // concludes the button is broken and goes back to printing one at a time.
+    uiToast('Pop-up blocked — allow pop-ups to print labels', 'error');
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+// The footer's primary button is always the NEXT action:
+//   a service is picked  -> "Create label"   (buy it)
+//   otherwise            -> "Complete shipment" (ship the order)
+// One primary action on screen at a time. The alternative — a permanent
+// "Complete shipment" primary sitting under a half-finished box — is what made
+// ops press the wrong button and get told there was nothing to ship.
+function pkSyncPrimary(){
+  if(!PK_PRIMARY) return;
+  const qty = PK_M ? pkQty() : 1;
+  if(PK_NEW.selectedRateId){
+    PK_PRIMARY.textContent = qty > 1 ? `Create ${qty} labels` : 'Create label';
+  } else {
+    PK_PRIMARY.textContent = 'Complete shipment';
+  }
+}
+
+function pkPrimaryAction(){
+  // Dispatch on what the button currently MEANS.
+  if(PK_NEW.selectedRateId) return pkCreateWithLabel();
+  return pkComplete();
+}
 
 // Markup is OURS. The client is billed cost + markup; they never see the cost.
 // Persisted per-session only — it's typed per shipment on purpose, because the
@@ -62,9 +108,6 @@ async function openPackagesModal(){
       <div class="item-sec-head" style="margin-top:6px;">
         <div class="ui-label">Boxes</div>
         <span style="flex:1"></span>
-        <!-- 20 boxes must not mean 20 trips to the printer. Merges every live
-             label on the order into one PDF. -->
-        <button class="ui-btn" id="pkPrintAllBtn" style="display:none;">Print all labels</button>
       </div>
       <div id="pkList"></div>
 
@@ -96,10 +139,24 @@ async function openPackagesModal(){
       // Kept for LTL/FTL and any carrier we don't buy postage for. A pallet is
       // not a parcel; do not route it through rate-shopping.
       { label: 'Ship without label (LTL / manual)', onClick: () => { PK_M.close(); showShipOrderModal(); return false; } },
-      { label: 'Complete shipment', primary: true, onClick: pkComplete },
+      // IN THE FOOTER, not above the box list. With 10 boxes on screen the list
+      // header is scrolled far out of view, so a "Print all" button up there is
+      // invisible exactly when it becomes useful — and ops starts printing labels
+      // one at a time. The footer is always on screen.
+      { label: 'Print all labels', onClick: () => { pkPrintAll(); return false; } },
+      // ONE primary button, and it is always the NEXT action — not the last one.
+      // Previously the footer's primary was permanently "Complete shipment" (the
+      // final step), while the actual next step ("Create label") sat below the
+      // rate list, off the fold. So at every stage the most prominent button in
+      // the dialog was the wrong one, and ops got told off for pressing it.
+      { label: 'Complete shipment', primary: true, onClick: pkPrimaryAction },
     ],
-    onClose: () => { PK_M = null; PK_ROWS = []; },
+    onClose: () => { PK_M = null; PK_ROWS = []; PK_PRIMARY = null; PK_PRINTALL = null; },
   });
+
+  const _acts = [...PK_M.el.querySelectorAll('.ui-dialog-actions button')];
+  PK_PRIMARY  = _acts.find(b => b.classList.contains('ui-btn-primary')) || null;
+  PK_PRINTALL = _acts.find(b => b.textContent.startsWith('Print all')) || null;
 
   PK_M.el.querySelector('#pkMarkupPct').addEventListener('input', e => {
     PK_MARKUP = parseFloat(e.target.value) || 0;
@@ -107,6 +164,9 @@ async function openPackagesModal(){
     pkRenderNewRates();   // ...and so do the prices in the rate list being chosen from
   });
   PK_M.el.querySelector('#pkRateBtn').addEventListener('click', pkRateNew);
+  // Qty changes the button's wording ("Create 20 labels"), so keep it in sync.
+  PK_M.el.querySelector('#pkQty').addEventListener('input', pkSyncPrimary);
+  pkSyncPrimary();
 
   // Changing the weight or dims invalidates the quote — those rates were for a
   // different parcel. Throw them away rather than let someone buy a label priced
@@ -123,6 +183,7 @@ async function openPackagesModal(){
 function pkResetNewRates(){
   PK_NEW = { epShipmentId: null, rates: [], selectedRateId: null };
   pkRenderNewRates();
+  pkSyncPrimary();
 }
 
 function pkNewBoxInput(){
@@ -201,7 +262,10 @@ function pkRenderNewRates(){
     </div>`;
 
   el.querySelectorAll('input[name="pknewrate"]').forEach(inp =>
-    inp.addEventListener('change', () => { PK_NEW.selectedRateId = inp.value; }));
+    inp.addEventListener('change', () => {
+      PK_NEW.selectedRateId = inp.value;
+      pkSyncPrimary();   // the footer button now means "Create label"
+    }));
   el.querySelector('#pkCreateBtn').addEventListener('click', pkCreateWithLabel);
 }
 
@@ -234,6 +298,9 @@ async function pkCreateWithLabel(){
 
   const btn = PK_M.el.querySelector('#pkCreateBtn');
   if(btn){ btn.disabled = true; btn.textContent = qty > 1 ? `Buying ${qty} labels…` : 'Buying…'; }
+  // The footer button fires the same action — disable it too, or a double-click
+  // across the two buttons buys the labels twice. That is real money.
+  if(PK_PRIMARY){ PK_PRIMARY.disabled = true; }
 
   const r = await fetch(`${API}/orders/${COI}/packages/label`, {
     method:'POST',
@@ -249,8 +316,10 @@ async function pkCreateWithLabel(){
   const d = await r.json().catch(() => ({}));
   if(!r.ok){
     if(btn){ btn.disabled = false; btn.textContent = 'Create label'; }
+    if(PK_PRIMARY){ PK_PRIMARY.disabled = false; }
     return uiToast(d.error || 'Could not create the label', 'error');
   }
+  if(PK_PRIMARY){ PK_PRIMARY.disabled = false; }
 
   // Partial failure is REAL here: some labels are bought, some aren't. Never
   // report "done" over the top of it — those boxes have no postage and someone
@@ -317,9 +386,12 @@ function pkRenderList(){
             <div class="ui-hint" style="margin-top:4px;">${esc(p.carrier_code || '')} ${esc(p.service_level || '')}</div>
             <div class="ui-mono">${esc(p.tracking_number || '')}</div>
             <div style="margin-top:6px;">Client pays ${billed}</div>
-            <div style="margin-top:6px;display:flex;gap:6px;justify-content:flex-end;">
-              ${p.label_url ? `<a class="ui-btn" href="${esc(p.label_url)}" target="_blank" rel="noopener">Print label</a>` : ''}
-              <button class="ui-btn ui-btn-danger js-pk-void" data-id="${esc(p.id)}">Void</button>
+            <!-- Quiet. With 20 boxes on screen, 20 red Void buttons scream while the
+                 action ops actually wants (print them all) is in the footer. Void is
+                 the exception, not the routine — it should look like it. -->
+            <div style="margin-top:6px;display:flex;gap:10px;justify-content:flex-end;align-items:center;">
+              ${p.label_url ? `<a class="btn-link" href="${esc(p.label_url)}" target="_blank" rel="noopener">Print</a>` : ''}
+              <button class="btn-link js-pk-void" data-id="${esc(p.id)}" style="color:var(--red);">Void</button>
             </div>
           </div>
         </div>
@@ -329,30 +401,13 @@ function pkRenderList(){
   el.querySelectorAll('.js-pk-void').forEach(b =>
     b.addEventListener('click', () => pkVoid(b.dataset.id)));
 
-  // Only worth showing once there's more than one label to print.
-  const printAll = PK_M.el.querySelector('#pkPrintAllBtn');
-  if(printAll){
+  // Footer "Print all" — only meaningful once there's more than one label, and it
+  // lives in the FOOTER because at 10+ boxes the list header is scrolled miles out
+  // of view, which is exactly when printing them all becomes the thing you want.
+  if(PK_PRINTALL){
     const withLabels = live.filter(p => p.label_url).length;
-    printAll.style.display = withLabels > 1 ? '' : 'none';
-    printAll.textContent = `Print all ${withLabels} labels`;
-    if(!printAll._wired){
-      printAll._wired = true;
-      printAll.addEventListener('click', async () => {
-        // (P2e review) This was written as window.open(...?token=T) — but the API
-        // has NO query-token auth path, on purpose, and adding one would leak the
-        // JWT into browser history and server logs. Fetch with the Bearer header
-        // and open the blob, the same pattern as every other PDF in the app.
-        uiToast('Building the label sheet…');
-        const r = await fetch(`${API}/orders/${COI}/packages/labels.pdf`, {
-          headers: { 'Authorization': `Bearer ${T}` },
-        });
-        if(!r.ok) return uiToast('Could not build the label sheet', 'error');
-        const url = URL.createObjectURL(await r.blob());
-        if(!window.open(url, '_blank', 'noopener')){
-          uiToast('Pop-up blocked — allow pop-ups to print labels', 'error');
-        }
-      });
-    }
+    PK_PRINTALL.style.display = withLabels > 1 ? '' : 'none';
+    PK_PRINTALL.textContent   = `Print all ${withLabels} labels`;
   }
 }
 
