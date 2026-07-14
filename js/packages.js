@@ -62,6 +62,9 @@ async function openPackagesModal(){
       <div class="item-sec-head" style="margin-top:6px;">
         <div class="ui-label">Boxes</div>
         <span style="flex:1"></span>
+        <!-- 20 boxes must not mean 20 trips to the printer. Merges every live
+             label on the order into one PDF. -->
+        <button class="ui-btn" id="pkPrintAllBtn" style="display:none;">Print all labels</button>
       </div>
       <div id="pkList"></div>
 
@@ -74,6 +77,10 @@ async function openPackagesModal(){
         ${uiField({ id: 'pkLength', label: 'Length (in)',    type: 'number' })}
         ${uiField({ id: 'pkWidth',  label: 'Width (in)',     type: 'number' })}
         ${uiField({ id: 'pkHeight', label: 'Height (in)',    type: 'number' })}
+        <!-- 20 identical cartons is a normal order. Typing the same weight and dims
+             twenty times isn't shipping, it's data entry. Rate once, buy 20. -->
+        ${uiField({ id: 'pkQty', label: 'Qty', type: 'number', value: '1',
+                    hint: 'Identical boxes' })}
       </div>
       <div class="ship-rates-bar">
         <button class="ui-btn ui-btn-primary" id="pkRateBtn">Get rates</button>
@@ -126,6 +133,11 @@ function pkNewBoxInput(){
     widthIn:   num('pkWidth'),
     heightIn:  num('pkHeight'),
   };
+}
+
+function pkQty(){
+  const v = Math.floor(parseFloat((PK_M.el.querySelector('#pkQty') || {}).value) || 1);
+  return Math.max(1, v);
 }
 
 async function pkRateNew(){
@@ -198,40 +210,71 @@ async function pkCreateWithLabel(){
   if(!PK_NEW.selectedRateId) return uiToast('Pick a service first', 'error');
 
   const box  = pkNewBoxInput();
+  const qty  = pkQty();
   const rate = PK_NEW.rates.find(r => r.rateId === PK_NEW.selectedRateId);
-  const client = rate ? Math.round(rate.rate * (1 + pkMarkup()/100) * 100) / 100 : null;
+  const each   = rate ? Math.round(rate.rate * (1 + pkMarkup()/100) * 100) / 100 : null;
+  const cost   = rate ? Math.round(rate.rate * qty * 100) / 100 : null;
+  const billed = each ? Math.round(each * qty * 100) / 100 : null;
 
+  // 20 x $7.91 is real money. Show the TOTAL, not just the per-box price — the
+  // per-box figure is what makes a 20-label purchase feel small.
   const ok = await uiConfirm({
-    title: 'Buy this label?',
+    title: qty === 1 ? 'Buy this label?' : `Buy ${qty} labels?`,
     body: rate
-      ? `<strong>${esc(rate.carrierDisplay || rate.carrier)} ${esc(rate.service)}</strong><br><br>`
-        + `Postage cost: <strong>${uiMoney(rate.rate)}</strong><br>`
+      ? `<strong>${esc(rate.carrierDisplay || rate.carrier)} ${esc(rate.service)}</strong>`
+        + ` — ${esc(qty)} × ${esc(box.weightLbs)} lb`
+        + `<br><br>`
+        + `Postage cost: <strong>${uiMoney(cost)}</strong>${qty > 1 ? ` <span class="ui-hint">(${uiMoney(rate.rate)} each)</span>` : ''}<br>`
         + `Markup: ${esc(pkMarkup())}%<br>`
-        + `Client is billed: <strong>${uiMoney(client)}</strong>`
+        + `Client is billed: <strong>${uiMoney(billed)}</strong>${qty > 1 ? ` <span class="ui-hint">(${uiMoney(each)} each)</span>` : ''}`
       : 'This buys postage.',
-    confirmText: 'Buy label',
+    confirmText: qty === 1 ? 'Buy label' : `Buy ${qty} labels`,
   });
   if(!ok) return;
+
+  const btn = PK_M.el.querySelector('#pkCreateBtn');
+  if(btn){ btn.disabled = true; btn.textContent = qty > 1 ? `Buying ${qty} labels…` : 'Buying…'; }
 
   const r = await fetch(`${API}/orders/${COI}/packages/label`, {
     method:'POST',
     headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
     body: JSON.stringify({
       ...box,
+      qty,
       epShipmentId: PK_NEW.epShipmentId,
       rateId:       PK_NEW.selectedRateId,
       markupPct:    pkMarkup(),
     }),
   });
   const d = await r.json().catch(() => ({}));
-  if(!r.ok) return uiToast(d.error || 'Could not create the label', 'error');
+  if(!r.ok){
+    if(btn){ btn.disabled = false; btn.textContent = 'Create label'; }
+    return uiToast(d.error || 'Could not create the label', 'error');
+  }
 
-  // Clear the form for the next box — ops packs several in a row.
+  // Partial failure is REAL here: some labels are bought, some aren't. Never
+  // report "done" over the top of it — those boxes have no postage and someone
+  // has to know before the truck leaves.
+  const made = (d.created || []).length;
+  const bad  = d.failed || [];
+  if(bad.length){
+    await uiAlert({
+      title: `${made} of ${d.requested} labels bought`,
+      body: `<strong>${esc(bad.length)} box${bad.length === 1 ? '' : 'es'} did NOT get a label.</strong>`
+          + ` The ones that succeeded are on the order and their postage is paid.`
+          + `<br><br>` + bad.map(f => `Box ${esc(f.index)}: ${esc(f.error)}`).join('<br>')
+          + `<br><br>Re-enter the missing boxes and buy their labels.`,
+    });
+  } else {
+    uiToast(made === 1 ? 'Box labelled' : `${made} boxes labelled`, 'success');
+  }
+
+  // Clear the form for the next size — ops does "20 of A, then 20 of B".
   ['pkWeight','pkLength','pkWidth','pkHeight'].forEach(id => { PK_M.el.querySelector('#' + id).value = ''; });
+  PK_M.el.querySelector('#pkQty').value = '1';
   PK_M.el.querySelector('#pkAddHint').textContent = '';
   pkResetNewRates();
 
-  uiToast(`Box ${d.package_seq} labelled`, 'success');
   await pkLoad();
 }
 
@@ -285,6 +328,32 @@ function pkRenderList(){
 
   el.querySelectorAll('.js-pk-void').forEach(b =>
     b.addEventListener('click', () => pkVoid(b.dataset.id)));
+
+  // Only worth showing once there's more than one label to print.
+  const printAll = PK_M.el.querySelector('#pkPrintAllBtn');
+  if(printAll){
+    const withLabels = live.filter(p => p.label_url).length;
+    printAll.style.display = withLabels > 1 ? '' : 'none';
+    printAll.textContent = `Print all ${withLabels} labels`;
+    if(!printAll._wired){
+      printAll._wired = true;
+      printAll.addEventListener('click', async () => {
+        // (P2e review) This was written as window.open(...?token=T) — but the API
+        // has NO query-token auth path, on purpose, and adding one would leak the
+        // JWT into browser history and server logs. Fetch with the Bearer header
+        // and open the blob, the same pattern as every other PDF in the app.
+        uiToast('Building the label sheet…');
+        const r = await fetch(`${API}/orders/${COI}/packages/labels.pdf`, {
+          headers: { 'Authorization': `Bearer ${T}` },
+        });
+        if(!r.ok) return uiToast('Could not build the label sheet', 'error');
+        const url = URL.createObjectURL(await r.blob());
+        if(!window.open(url, '_blank', 'noopener')){
+          uiToast('Pop-up blocked — allow pop-ups to print labels', 'error');
+        }
+      });
+    }
+  }
 }
 
 async function pkVoid(pkgId){
