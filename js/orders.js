@@ -291,8 +291,13 @@ async function openOrderDetail(id){
         transitionOrder(id, btn.dataset.target);
       })
     );
+    // Ship now opens the PACKAGES panel, not the old single-parcel modal.
+    // A parcel order is one or more boxes, each with its own label — the old
+    // modal bought one label and shipped the order in the same click, which made
+    // a second box impossible. The manual/LTL path still lives inside the panel
+    // ("Ship without label"), because a pallet is not a parcel.
     transBtns.querySelectorAll('.js-ship-btn').forEach(btn =>
-      btn.addEventListener('click', () => showShipOrderModal())
+      btn.addEventListener('click', () => openPackagesModal())
     );
     transBtns.querySelectorAll('.js-unallocate-all-btn').forEach(btn =>
       btn.addEventListener('click', () => {

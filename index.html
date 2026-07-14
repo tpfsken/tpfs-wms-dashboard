@@ -1372,6 +1372,9 @@
 <!-- Before app.js: app.js's DOMContentLoaded wiring calls pwOpenForgot /
      pwOpenResetFromUrl, and doLogin() calls pwForcedChange(). -->
 <script src="js/password.js"></script>
+<!-- packages.js reads COI/COD and calls openShipModal(), all owned by orders.js —
+     so it must load after it. -->
+<script src="js/packages.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

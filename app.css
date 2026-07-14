@@ -966,6 +966,26 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .ui-modal .ui-dialog-actions{padding:var(--sp-3) var(--sp-5) var(--sp-4);margin-top:0;
   border-top:1px solid var(--border);}
 
+/* Override-form validation error, inside the picker shell (#pickerOvErr).
+   Added in D6d and never styled — the fourth referenced-but-undefined class.
+   It sits on the picker's dark takeover, so it needs to read as an ERROR at
+   arm's length on a tablet, not as more body text. Sized for the picker's
+   larger type, not the desktop's. */
+.picker-ov-err{background:rgba(220,60,60,.14);border:1px solid rgba(220,60,60,.45);
+  color:#ff9c9c;border-radius:8px;padding:10px 12px;margin-bottom:12px;
+  font-size:14px;font-weight:600;line-height:1.4;}
+
+/* Monospace inline text — tracking numbers, LP/lot codes, supervisor PINs, IDs.
+   THIS CLASS WAS REFERENCED BY FIVE SHIPPED MODULES AND NEVER DEFINED
+   (picker.js x7, compliance.js, password.js, printDocs.js, users.js). Every
+   identifier that was supposed to be monospace has been rendering in the UI's
+   proportional font since those batches shipped — which is precisely where a
+   picker misreads 1/l and 0/O off a carrier label. Same class of bug as
+   .sev-chip and .btn-link: markup pointing at a rule nobody ever wrote.
+   Tabular figures so digits line up when stacked in a list. */
+.ui-mono{font-family:var(--mono);font-variant-numeric:tabular-nums;
+  font-size:12.5px;letter-spacing:.01em;}
+
 /* Text-button. Looks like a link, is a <button> (so it's keyboard- and
    screen-reader-correct, and can't be middle-clicked into a dead tab). */
 .btn-link{background:none;border:none;padding:4px;cursor:pointer;
