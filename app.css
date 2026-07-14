@@ -966,6 +966,17 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .ui-modal .ui-dialog-actions{padding:var(--sp-3) var(--sp-5) var(--sp-4);margin-top:0;
   border-top:1px solid var(--border);}
 
+/* Packages panel — markup row. A percentage is 1-3 characters; a full-width
+   input for it looks like we're expecting an essay and it dwarfs the box list.
+   NOTE the `.ui-input` in the width selector: `.ui-input{width:100%}` lives in
+   the design-system block with the same specificity, so a bare `.pk-markup-input`
+   loses on source order and the field stretches anyway. Same trap that made the
+   pick-qty input swallow its neighbours. */
+.pk-markup-row{display:flex;align-items:flex-end;gap:var(--sp-4);margin-bottom:var(--sp-2);}
+.pk-markup{flex:0 0 auto;margin-bottom:0;}
+.ui-input.pk-markup-input{width:110px;}
+.pk-markup-hint{flex:1;padding-bottom:8px;}
+
 /* Override-form validation error, inside the picker shell (#pickerOvErr).
    Added in D6d and never styled — the fourth referenced-but-undefined class.
    It sits on the picker's dark takeover, so it needs to read as an ERROR at

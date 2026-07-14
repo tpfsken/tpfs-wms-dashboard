@@ -40,11 +40,17 @@ async function openPackagesModal(){
         boxes have labels.
       </div>
 
-      <div class="ui-field-row" style="align-items:flex-end;">
-        ${uiField({ id: 'pkMarkupPct', label: 'Markup %', type: 'number',
-                    value: String(pkMarkup()),
-                    hint: 'Applied to the carrier cost. Internal — the client never sees the raw rate.' })}
-        <div style="flex:2"></div>
+      <!-- A percentage is 1-3 characters. A full-width input for it reads as if we
+           expect a paragraph, and it dwarfs the boxes list underneath. -->
+      <div class="pk-markup-row">
+        <div class="ui-field pk-markup" data-field="pkMarkupPct">
+          <label class="ui-label" for="pkMarkupPct">Markup %</label>
+          <input class="ui-input pk-markup-input" id="pkMarkupPct" type="number" value="${esc(String(pkMarkup()))}" step="0.5">
+          <div class="ui-field-err" style="display:none;"></div>
+        </div>
+        <div class="ui-hint pk-markup-hint">
+          Applied to the carrier cost. Internal — the client never sees the raw rate.
+        </div>
       </div>
 
       <div class="item-sec-head" style="margin-top:6px;">
@@ -64,8 +70,12 @@ async function openPackagesModal(){
         ${uiField({ id: 'pkHeight', label: 'Height (in)',    type: 'number' })}
       </div>
       <div class="ship-rates-bar">
-        <button class="ui-btn" id="pkAddBtn">Add box</button>
-        <span class="ui-hint" id="pkAddHint"></span>
+        <!-- Primary-styled ON PURPOSE. Filling the fields above does not create a
+             box — this button does. Ops filled the four fields and reached for
+             "Complete shipment" (the other blue button), got told there were no
+             boxes, and reasonably thought the screen was broken. -->
+        <button class="ui-btn ui-btn-primary" id="pkAddBtn">Add box</button>
+        <span class="ui-hint" id="pkAddHint">Adds the box above to this order. You'll rate and label it next.</span>
       </div>`,
     actions: [
       { label: 'Close' },
@@ -284,7 +294,24 @@ async function pkVoid(pkgId){
 
 async function pkComplete(){
   const live = PK_ROWS.filter(p => !p.voided_at);
-  if(!live.length) { uiToast('Add at least one box first', 'error'); return false; }
+
+  if(!live.length){
+    // The trap: ops types the weight and dims, then hits the big blue button.
+    // The fields LOOK like a box. Saying "add at least one box" while they stare
+    // at a filled-in box form is gaslighting them. Say what actually happened.
+    const typed = ['pkWeight','pkLength','pkWidth','pkHeight']
+      .some(id => (PK_M.el.querySelector('#' + id) || {}).value);
+    if(typed){
+      await uiAlert({
+        title: 'That box hasn\'t been added yet',
+        body: 'You\'ve filled in the box details, but they haven\'t been added to the order.'
+            + '<br><br>Press <strong>Add box</strong> first, then rate it and buy its label.',
+      });
+    } else {
+      uiToast('Add at least one box first', 'error');
+    }
+    return false;
+  }
 
   const unlabelled = live.filter(p => !p.tracking_number);
   if(unlabelled.length){
