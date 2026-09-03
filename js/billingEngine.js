@@ -522,6 +522,7 @@ async function beSaveCardLines() {
  * ------------------------------------------------------------------------- */
 function loadSettingsPage() {
   loadChargeCodesTab();
+  if (typeof spMountTemplates === 'function') spMountTemplates();   // js/scanProfiles.js
 }
 
 async function loadChargeCodesTab() {

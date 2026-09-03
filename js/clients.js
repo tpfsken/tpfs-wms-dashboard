@@ -100,6 +100,7 @@ const CLI_TABS = [
   { id: 'kpi',         label: 'KPI / SLA targets' },
   { id: 'rules',       label: 'SLA rules' },
   { id: 'performance', label: 'Performance' },
+  { id: 'scanning',    label: 'Scanning' },
 ];
 
 function wireClientTabs(){
@@ -127,6 +128,7 @@ function switchClientTab(tab){
   else if(tab === 'rules')       loadClientRulesTab();
   else if(tab === 'ratecard')    loadClientRateCardTab();
   else if(tab === 'performance') loadClientPerformanceTab();
+  else if(tab === 'scanning')    spMountClientTab();
 }
 
 // ----- PROFILE TAB -----

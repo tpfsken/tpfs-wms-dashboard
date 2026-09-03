@@ -1134,3 +1134,65 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
   background:linear-gradient(90deg,var(--border) 25%,var(--border-h) 50%,var(--border) 75%);
   background-size:200% 100%;animation:uiSkel 1.2s infinite;}
 @keyframes uiSkel{to{background-position:-200% 0}}
+
+/* ============================================================================
+   SCAN INPUT + CAMERA (js/scan.js) and PROFILE BUILDER (js/scanProfiles.js)
+   Layering: .scan-cam sits above .ui-overlay (10050) so a modal may host a
+   ScanInput, and below #uiToastHost (10100). Fixed + scrollable (rule 3).
+   ============================================================================ */
+.scan-input{display:flex;flex-direction:column;gap:var(--sp-1);}
+.scan-input-row{display:flex;gap:var(--sp-2);align-items:center;}
+.scan-input-field{flex:1;font-family:var(--mono);font-size:var(--fs-emph);min-height:40px;}
+.scan-input-cam{flex-shrink:0;}
+.scan-input-flash{font-size:var(--fs-caps);text-transform:uppercase;letter-spacing:.04em;font-weight:600;
+  min-height:14px;opacity:0;transition:opacity .15s;}
+.scan-input-flash-on{opacity:1;}
+.scan-input-flash-ok{color:var(--st-ok);}
+.scan-input-flash-warn{color:var(--st-warn);}
+.scan-input-flash-danger{color:var(--st-danger);}
+
+.scan-cam{position:fixed;inset:0;z-index:10060;background:#000;color:#fff;display:flex;flex-direction:column;
+  overflow-y:auto;}
+.scan-cam-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);
+  padding:var(--sp-3) var(--sp-4);background:rgba(0,0,0,.6);flex-shrink:0;}
+.scan-cam-title{font-size:var(--fs-emph);font-weight:600;}
+.scan-cam-close{flex-shrink:0;}
+.scan-cam-stage{position:relative;flex:1;min-height:240px;display:flex;align-items:center;justify-content:center;}
+.scan-cam-video{width:100%;height:100%;max-height:calc(100vh - 120px);object-fit:cover;}
+.scan-cam-reticle{position:absolute;left:50%;top:50%;width:min(70vw,360px);height:min(40vh,240px);
+  transform:translate(-50%,-50%);border:2px solid rgba(255,255,255,.85);border-radius:var(--radius);
+  box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none;}
+.scan-cam-status{padding:var(--sp-3) var(--sp-4);text-align:center;flex-shrink:0;}
+
+.sp-host{padding:var(--sp-3) var(--sp-4) var(--sp-4);}
+.sp-toolbar{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--sp-3);margin-bottom:var(--sp-3);}
+.sp-toolbar-actions{display:flex;gap:var(--sp-2);flex-shrink:0;}
+.sp-list{margin-bottom:var(--sp-4);}
+.sp-editor-wrap{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:var(--sp-4);}
+.sp-editor-wrap[hidden]{display:none;}
+.sp-editor{min-width:0;}
+.sp-map-field{min-width:0;}
+.sp-editor-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);
+  padding:var(--sp-3);border-bottom:1px solid var(--border);}
+.sp-scope{display:flex;flex-wrap:wrap;gap:var(--sp-3);padding:var(--sp-1) 0;}
+.sp-row-3{grid-template-columns:1fr 1fr 1fr;}
+.sp-map{display:flex;flex-direction:column;gap:var(--sp-2);margin-bottom:var(--sp-2);}
+.sp-map-row{display:grid;grid-template-columns:90px auto 1fr auto;align-items:center;gap:var(--sp-2);}
+.sp-map-key{font-family:var(--mono);}
+.sp-tester .scan-input{margin-bottom:var(--sp-3);}
+.sp-trace{display:flex;flex-direction:column;gap:var(--sp-2);}
+.sp-trace-head{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-body);}
+.sp-step{display:grid;grid-template-columns:96px 1fr;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);
+  border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);}
+.sp-step-name{font-size:var(--fs-caps);text-transform:uppercase;letter-spacing:.04em;color:var(--text2);
+  font-weight:600;padding-top:2px;}
+.sp-step-out{margin:0;white-space:pre-wrap;word-break:break-all;font-size:var(--fs-body);}
+.sp-step-bad{border-color:var(--st-danger);}
+.sp-step-bad .sp-step-out{color:var(--st-danger);}
+.sp-step-final{font-weight:600;font-size:var(--fs-emph);}
+.sp-step-ok{border-color:var(--st-ok);background:var(--st-ok-bg);}
+.sp-step-ok .sp-step-out{color:var(--st-ok);}
+.sp-step-final.sp-step-bad{background:var(--st-danger-bg);}
+.sp-step-sub{font-size:var(--fs-body);font-weight:500;color:var(--st-warn);margin-top:var(--sp-1);}
+.sp-errors{margin:var(--sp-2) 0 0;padding-left:var(--sp-4);}
+@media (max-width:900px){.sp-editor-wrap{grid-template-columns:1fr;}.sp-row-3{grid-template-columns:1fr;}}
