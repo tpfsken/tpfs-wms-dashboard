@@ -68,7 +68,7 @@ const titles = {
   portalHome:'Customer Portal', portalNewOrder:'Place an Order', portalIntake:'Upload Documents',
   // Floor mode (phone-first ops shell)
   floorHome:'Warehouse Floor', floorPickList:'Orders to Pick',
-  floorInbound:'Receive Inbound', floorMove:'Move Inventory', floorScanTest:'Scan test', floorPick:'Pick',
+  floorInbound:'Receive Inbound', floorMove:'Move Inventory', floorScanTest:'Scan test', floorPick:'Pick', floorShip:'Pack & Ship',
 };
 
 // FIX: clients was missing from this map, so the Clients tab never auto-loaded.
@@ -96,6 +96,7 @@ const loaders = {
   floorMove:      loadFloorMove,
   floorScanTest:  loadFloorScanTest,
   floorPick:      loadFloorPick,
+  floorShip:      loadFloorShip,
 };
 
 function navigateTo(p){

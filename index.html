@@ -183,6 +183,10 @@
           </div>
           <!-- ORDER LINES -->
           <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Order lines</div></div><div id="ordLinesWrap"></div></div>
+          <div class="card" style="margin-bottom:16px;" id="ordPackCard">
+            <div class="card-head"><div class="card-title">Packages &amp; shipment verification</div><div style="flex:1"></div><div class="ui-hint" id="ordPackCount"></div></div>
+            <div id="ordPackBody" class="ord-pack-body"></div>
+          </div>
           <!-- ALLOCATE INVENTORY -->
           <div id="allocPanel" class="card" style="margin-bottom:16px;display:none;">
             <div class="card-head">
@@ -365,6 +369,13 @@
         </div>
         <div style="font-size:22px;color:var(--text2);">›</div>
       </button>
+      <button class="floor-card floor-card-flat" data-target="floorShip">
+        <div class="floor-card-main">
+          <div class="floor-card-title">Pack &amp; Ship</div>
+          <div class="floor-card-sub">Scan an order, package, pallet or unit</div>
+        </div>
+        <div class="floor-card-chev">›</div>
+      </button>
       <button class="floor-card floor-card-flat" data-target="floorScanTest">
         <div class="floor-card-main">
           <div class="floor-card-title">Scan test</div>
@@ -399,6 +410,15 @@
   </div>
 
   <!-- Move Inventory — LP source + destination scan/select -->
+  <!-- Pack & ship station (js/ship.js) -->
+  <div class="page" id="page-floorShip">
+    <div class="floor-page-head">
+      <button class="floor-back js-floor-home" type="button">← Home</button>
+      <div class="floor-page-title">Pack &amp; Ship</div>
+    </div>
+    <div id="floorShipBody" class="floor-page-body"></div>
+  </div>
+
   <!-- Scan-to-pick: directed pick, every gate server-side (js/pick.js) -->
   <div class="page" id="page-floorPick">
     <div class="floor-page-head">
@@ -1443,6 +1463,7 @@
 <script src="js/scan.js"></script>
 <script src="js/scanProfiles.js"></script>
 <script src="js/pick.js"></script>
+<script src="js/ship.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -131,6 +131,7 @@ async function openOrderDetail(id){
   document.getElementById('ordDetailView').style.display = 'block';
 
   const d = await apiGet(`/orders/${id}`);
+  loadOrderPackagesCard(id);
   if(!d){ uiToast('Could not load that order', 'error'); closeOrderDetail(); return; }
   COD = d;
 
@@ -1354,6 +1355,36 @@ async function submitNewOrder(m){
 // =============================================================================
 
 const ORD_ATTACH_MAX = 25 * 1024 * 1024;   // matches the API's multer limit
+
+// Step 5: packages, contents, tracking and the ship_verification snapshot.
+async function loadOrderPackagesCard(orderId){
+  const body = document.getElementById('ordPackBody');
+  const count = document.getElementById('ordPackCount');
+  if(!body) return;
+  body.innerHTML = uiSpinner('Loading packages…');
+  const d = await apiGet(`/orders/${orderId}/pack`);
+  if(!d){ body.innerHTML = uiError('Could not load packages'); return; }
+  const pkgs = d.packages || [];
+  count.textContent = `${d.counts.verified} / ${d.counts.expected} verified · ${pkgs.length} package${pkgs.length === 1 ? '' : 's'}`;
+  if(!pkgs.length && !d.verification){ body.innerHTML = uiEmpty('No packages yet.'); return; }
+  const chip = (p) => uiChip(p.status === 'open' ? 'NEW' : p.status === 'closed' ? 'PACKED' : p.status === 'labeled' ? 'ALLOCATED' : p.status === 'shipped' ? 'SHIPPED' : 'CANCELLED', p.status.toUpperCase());
+  body.innerHTML = `
+    <div class="ord-pack-list">${pkgs.map(p => `
+      <div class="ord-pack">
+        <div class="ord-pack-head">
+          <span class="ui-id">${esc(p.packageNumber)}</span> ${chip(p)}
+          <span class="ui-muted">${esc(p.unitCount)} unit${p.unitCount === 1 ? '' : 's'}${p.weightLbs ? ` · ${esc(p.weightLbs)} lb` : ''}</span>
+          ${p.trackingNumber ? `<span class="ui-id">${esc(p.carrierCode || '')} ${esc(p.trackingNumber)}</span>` : '<span class="ui-muted">no label</span>'}
+          ${p.packedByName ? `<span class="ui-muted">packed by ${esc(p.packedByName)}</span>` : ''}
+        </div>
+        <div class="ord-pack-contents">${p.contents.map(c => `<span class="ui-id fp-uid">${esc(c.uid || c.skuCode)}${c.qty > 1 ? ' ×' + esc(c.qty) : ''}${c.lotNumber ? ` <span class="ui-muted">lot ${esc(c.lotNumber)}</span>` : ''}</span>`).join('') || '<span class="ui-muted">empty</span>'}</div>
+      </div>`).join('')}</div>
+    ${d.verification ? `
+      <div class="ord-pack-verif">
+        <div class="ui-label">Shipment verification · ${esc(String(d.verification.verifiedAt || '').slice(0, 16).replace('T', ' '))}${d.verification.proNumber ? ` · PRO ${esc(d.verification.proNumber)}` : ''}</div>
+        ${(d.verification.checklist || []).map(i => `<div class="fs-check ${i.pass ? 'fs-check-ok' : 'fs-check-bad'}"><span class="fs-check-mark">${i.pass ? '✓' : '✕'}</span><span>${esc(i.label)}</span></div>`).join('')}
+      </div>` : ''}`;
+}
 
 async function loadOrderAttachments(orderId){
   const list  = document.getElementById('ordAttachList');

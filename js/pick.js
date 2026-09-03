@@ -25,12 +25,14 @@ const FP_EXCEPTION_TYPES = [
   { value: 'uid_unrecognized',       label: 'UID not recognised' },
 ];
 
-const _fp = { orderId: null, tasks: [], idx: 0, input: null, photoCache: {} };
+const _fp = { orderId: null, tasks: [], idx: 0, input: null, photoCache: {}, packMode: false, packageId: null, packageNumber: null };
 
 async function openFloorPick(orderId){
   _fp.orderId = orderId;
   _fp.tasks = [];
   _fp.idx = 0;
+  _fp.packageId = null;
+  _fp.packageNumber = null;
   navigateTo('floorPick');
   const body = document.getElementById('floorPickBody');
   body.innerHTML = uiSpinner('Building pick tasks…');
@@ -79,6 +81,7 @@ function fpRender(){
       <div class="fp-head-order">${uiId(t.orderNumber)} <span class="ui-muted">·</span> ${esc(t.clientCode)}</div>
       <div class="fp-head-n">Task ${esc(t.sequence)} of ${esc(t.taskCount)}</div>
     </div>
+    <label class="ui-check fp-packmode"><input type="checkbox" id="fpPackMode" ${_fp.packMode ? 'checked' : ''}> Pack as you pick${_fp.packageNumber ? ' — <span class="ui-id">' + esc(_fp.packageNumber) + '</span>' : ''}</label>
     <div class="fp-directive ${needLoc ? 'fp-directive-loc' : 'fp-directive-item'}">
       ${needLoc
         ? `<div class="fp-directive-label">GO TO</div><div class="fp-directive-main">${esc(t.locationCode)}</div>
@@ -105,6 +108,7 @@ function fpRender(){
     autofocus: true,
     onScan: (raw, meta) => fpScan(raw, meta),
   });
+  body.querySelector('#fpPackMode').addEventListener('change', (e) => { _fp.packMode = e.target.checked; });
   const hereBtn = body.querySelector('.js-fp-here');
   if(hereBtn) hereBtn.addEventListener('click', fpHere);
   body.querySelector('.js-fp-exception').addEventListener('click', fpOpenException);
@@ -189,15 +193,25 @@ async function fpConfirm(){
   if(!t) return;
   const btn = document.querySelector('#floorPickBody .js-fp-confirm');
   if(btn) btn.disabled = true;
-  const r = await fetch(`${API}/pick-tasks/${t.id}/confirm`, { method: 'POST', headers: { Authorization: `Bearer ${T}` } });
+  // Pack as you pick: open the package on the first confirm, then every
+  // confirmed task lands in it (server-side, via package_id).
+  if(_fp.packMode && !_fp.packageId){
+    const pr = await fetch(`${API}/orders/${_fp.orderId}/packages`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: '{}' });
+    const pd = await pr.json().catch(() => ({}));
+    if(!pr.ok){ fpBanner(pd.error || 'Could not open a package', 'danger'); scanBeep('error'); if(btn) btn.disabled = false; return; }
+    _fp.packageId = pd.id; _fp.packageNumber = pd.packageNumber;
+  }
+  const r = await fetch(`${API}/pick-tasks/${t.id}/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` },
+    body: JSON.stringify(_fp.packMode && _fp.packageId ? { package_id: _fp.packageId } : {}) });
   const d = await r.json().catch(() => ({}));
   if(!r.ok){ fpBanner(d.error || 'Confirm refused', 'danger'); scanBeep('error'); if(btn) btn.disabled = false; return; }
   fpApply(d.task);
-  uiToast(`Task ${t.sequence} picked — ${d.task.qtyPicked} / ${d.task.qtyRequired}`, 'success');
+  uiToast(`Task ${t.sequence} picked — ${d.task.qtyPicked} / ${d.task.qtyRequired}${d.packed ? ' · packed into ' + d.packed.packageNumber : ''}`, 'success');
   if('vibrate' in navigator) navigator.vibrate(40);
-  // Auto-advance to the next open task.
+  // Auto-advance to the next open task; in pack mode the last task jumps to Pack & Ship.
   const next = _fp.tasks.findIndex((x, i) => i > _fp.idx && !['picked', 'short'].includes(x.status));
   _fp.idx = next === -1 ? _fp.tasks.length : next;
+  if(next === -1 && _fp.packMode && _fp.packageId && typeof fsOpenOrder === 'function'){ fsOpenOrder(_fp.orderId); return; }
   fpRender();
 }
 
