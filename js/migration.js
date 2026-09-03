@@ -124,6 +124,8 @@ function mgRenderReport(){
     <div class="sp-editor-head">
       <div class="ui-dialog-title">Run ${esc(String(run.startedAt || '').slice(0, 16).replace('T', ' '))} ${uiChip(run.status === 'previewed' ? 'DRAFT' : run.status === 'committed' ? 'POSTED' : 'RUNNING', run.status.toUpperCase())}</div>
       <div class="sp-toolbar-actions">
+        <button type="button" class="ui-btn js-mg-create-clients">Create all unmapped clients</button>
+        <button type="button" class="ui-btn js-mg-locs-all">Create all unmapped locations</button>
         <button type="button" class="ui-btn js-mg-locs">Create locations for selected</button>
         <button type="button" class="ui-btn js-mg-reconcile">Reconcile</button>
         <button type="button" class="ui-btn ui-btn-primary js-mg-commit">Commit selected</button>
@@ -131,11 +133,16 @@ function mgRenderReport(){
     </div>
     <div class="mg-clients">${rep.clients.map(c => mgClientCard(c, clients)).join('')}</div>`;
   el.querySelectorAll('.js-mg-sel').forEach(cb => cb.addEventListener('change', () => { if(cb.checked) _mg.selected.add(cb.dataset.code); else _mg.selected.delete(cb.dataset.code); }));
-  el.querySelectorAll('.js-mg-client').forEach(sel => sel.addEventListener('change', () => mgSaveMap(sel.dataset.code, { clientId: sel.value || null })));
+  el.querySelectorAll('.js-mg-client').forEach(sel => sel.addEventListener('change', () => {
+    if(sel.value === '__create__'){ sel.value = ''; mgCreateClient(sel.dataset.code); return; }
+    mgSaveMap(sel.dataset.code, { clientId: sel.value || null });
+  }));
   el.querySelectorAll('.js-mg-rule').forEach(sel => sel.addEventListener('change', () => mgSaveMap(sel.dataset.code, { rules: { [sel.dataset.rule]: sel.value } })));
   el.querySelectorAll('.js-mg-pieces').forEach(b => b.addEventListener('click', () => mgPieces(b.dataset.code, b.dataset.decision || null)));
   el.querySelectorAll('.js-mg-loc').forEach(sel => sel.addEventListener('change', () => mgSaveLoc(sel.dataset.bay, sel.dataset.bin, sel.value || null)));
   el.querySelector('.js-mg-locs').addEventListener('click', mgCreateLocations);
+  el.querySelector('.js-mg-locs-all').addEventListener('click', mgCreateAllLocations);
+  el.querySelector('.js-mg-create-clients').addEventListener('click', mgCreateAllClients);
   el.querySelector('.js-mg-commit').addEventListener('click', mgCommit);
   el.querySelector('.js-mg-reconcile').addEventListener('click', mgReconcile);
 }
@@ -154,7 +161,7 @@ function mgClientCard(c, clients){
       <div class="ui-group-body">
         <div class="ui-field-row">
           <div class="ui-field"><label class="ui-label">WMS client</label>
-            <select class="ui-input js-mg-client" data-code="${esc(c.clientCode)}"><option value="">— pick —</option>${clients.map(x => `<option value="${esc(x.id)}" ${c.wmsClientId === x.id ? 'selected' : ''}>${esc(x.code)} — ${esc(x.name)}</option>`).join('')}</select></div>
+            <select class="ui-input js-mg-client" data-code="${esc(c.clientCode)}"><option value="">— pick —</option>${c.mapped ? '' : `<option value="__create__">+ Create WMS client from Excalibur (${esc(c.proposed.code)} → ${esc(c.proposed.name)})</option>`}${clients.map(x => `<option value="${esc(x.id)}" ${c.wmsClientId === x.id ? 'selected' : ''}>${esc(x.code)} — ${esc(x.name)}</option>`).join('')}</select></div>
           <div class="ui-field"><label class="ui-label">Captions from Excalibur</label><div class="mg-caps">${caps || '<span class="ui-muted">none reported</span>'}</div></div>
           <div class="ui-field"><label class="ui-label">Excalibur warehouse</label><div class="mg-caps">${(c.warehouses || []).length ? c.warehouses.map(w => `<span class="ui-chip ui-chip-neutral">${esc(w)}</span>`).join(' ') : '<span class="ui-muted">not reported</span>'}</div></div>
         </div>
@@ -171,6 +178,7 @@ function mgClientCard(c, clients){
           ${uiTile({ label: 'Changed', value: p.changed, tone: p.changed ? 'danger' : null, compact: true })}
           ${uiTile({ label: 'Blocked', value: p.blocked, tone: p.blocked ? 'warn' : null, compact: true })}
         </div>
+        ${c.uidHint ? `<div class="ui-banner ui-banner-info">Every piece is qty 1 with its own ${esc(c.captions.SubLot || 'SubLot')} — defaulted to unit (UID)${c.mapped ? '' : '; the client will be created with unit control required'}. Change the SubLot rule above to override.</div>` : ''}
         ${p.subLotQtyNot1 && c.rules.sublot_as === 'uid' ? `<div class="ui-banner ui-banner-warn">${esc(p.subLotQtyNot1)} piece(s) carry a SubLot with qty ≠ 1 — they will be blocked under "unit ID". Choose another SubLot rule or split them in Excalibur.</div>` : ''}
         ${c.changed.length ? `<div class="ui-banner ui-banner-danger">Changed since commit (not applied): ${c.changed.map(x => `${esc(x.pieceNo)} — ${esc(x.reason)}`).join('; ')}</div>` : ''}
         <div class="ui-label">Bay / bin → location ${c.unmappedLocations ? uiChip('DRAFT', `${c.unmappedLocations} unmapped`) : uiChip('ACTIVE', 'all mapped')}</div>
@@ -193,6 +201,48 @@ async function mgSaveMap(code, body){
   mgOpenRun(_mg.run.id);
 }
 
+async function mgCreateClient(code){
+  const c = (_mg.report.clients || []).find(x => x.clientCode === code);
+  const go = await uiConfirm({ title: `Create WMS client ${c.proposed.code}?`, body: esc(`Code ${c.proposed.code}, name "${c.proposed.name}", B2B, lot tracking ${c.proposed.lotTracking ? 'on' : 'off'}, unit control ${c.proposed.unitControl}, linked to this warehouse. The Excalibur client will be mapped to it.`), confirmLabel: 'Create' });
+  if(!go) return;
+  const r = await fetch(`${API}/migration/excalibur/runs/${_mg.run.id}/clients/${encodeURIComponent(code)}/create`, { method: 'POST', headers: { Authorization: `Bearer ${T}` } });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ uiToast(d.error || 'Could not create the client', 'error'); return; }
+  uiToast(`${d.code} created and mapped`, 'success');
+  if(typeof loadCC === 'function') { try { await loadCC(); } catch(e){} }   // refresh clientsCache for the dropdowns
+  mgOpenRun(_mg.run.id);
+}
+
+async function mgCreateAllClients(){
+  const r = await fetch(`${API}/migration/excalibur/runs/${_mg.run.id}/clients/unmapped`, { headers: { Authorization: `Bearer ${T}` } });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ uiToast(d.error || 'Could not load the unmapped clients', 'error'); return; }
+  const rows = d.rows || [];
+  const will = rows.filter(x => x.willCreate), skip = rows.filter(x => !x.willCreate);
+  if(!will.length){ uiToast(skip.length ? 'Nothing to create — every unmapped client already exists by code or name' : 'No unmapped clients', 'error'); return; }
+  const sheet = `<div class="ui-label">Will create</div><ul class="mg-plan">${will.map(x => `<li><span class="ui-id">${esc(x.code)}</span> → ${esc(x.name)}<span class="ui-muted"> · ${x.lotTracking ? 'lot tracking' : 'no lots'} · unit control ${esc(x.unitControl)}</span></li>`).join('')}</ul>`
+    + (skip.length ? `<div class="ui-label">Skipped</div><ul class="mg-plan">${skip.map(x => `<li><span class="ui-id">${esc(x.code)}</span> → ${esc(x.name)}<span class="ui-muted"> · ${esc(x.skipReason)}</span></li>`).join('')}</ul>` : '');
+  const go = await uiConfirm({ title: `Create ${will.length} WMS client(s)?`, body: sheet, confirmLabel: 'Create all' });
+  if(!go) return;
+  const r2 = await fetch(`${API}/migration/excalibur/runs/${_mg.run.id}/clients/create-all`, { method: 'POST', headers: { Authorization: `Bearer ${T}` } });
+  const d2 = await r2.json().catch(() => ({}));
+  if(!r2.ok){ uiToast(d2.error || 'Bulk create failed', 'error'); return; }
+  uiToast(`${d2.created.length} client(s) created, ${d2.skipped.length} skipped`, 'success');
+  if(typeof loadCC === 'function') { try { await loadCC(); } catch(e){} }
+  mgOpenRun(_mg.run.id);
+}
+
+async function mgCreateAllLocations(){
+  const go = await uiConfirm({ title: 'Create all unmapped locations?', body: esc('Every unmapped bay/bin in this run, across all clients, becomes a bulk location in zone MIGR named bay-bin.'), confirmLabel: 'Create' });
+  if(!go) return;
+  const r = await fetch(`${API}/migration/excalibur/runs/${_mg.run.id}/locations/create`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({}) });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ uiToast(d.error || 'Could not create locations', 'error'); return; }
+  uiToast(`${d.created} location(s) created, ${d.mapped} mapped`, 'success');
+  await mgLoadLocations();
+  mgOpenRun(_mg.run.id);
+}
+
 async function mgSaveLoc(bay, bin, locationId){
   const r = await fetch(`${API}/migration/excalibur/locations`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ bay, bin, locationId }) });
   const d = await r.json().catch(() => ({}));
@@ -203,7 +253,7 @@ async function mgSaveLoc(bay, bin, locationId){
 async function mgCreateLocations(){
   const codes = [..._mg.selected];
   if(!codes.length) return uiToast('Select at least one client', 'error');
-  const go = await uiConfirm({ title: 'Create locations?', message: `Every unmapped bay/bin for ${codes.join(', ')} becomes a bulk location in zone MIGR, named bay-bin.`, confirmLabel: 'Create' });
+  const go = await uiConfirm({ title: 'Create locations?', body: esc(`Every unmapped bay/bin for ${codes.join(', ')} becomes a bulk location in zone MIGR, named bay-bin.`), confirmLabel: 'Create' });
   if(!go) return;
   const r = await fetch(`${API}/migration/excalibur/runs/${_mg.run.id}/locations/create`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ clientCodes: codes }) });
   const d = await r.json().catch(() => ({}));
@@ -215,7 +265,7 @@ async function mgCreateLocations(){
 async function mgCommit(){
   const codes = [..._mg.selected];
   if(!codes.length) return uiToast('Select at least one mapped client', 'error');
-  const go = await uiConfirm({ title: `Commit ${codes.join(', ')}?`, message: 'Creates SKUs, locations, LPs, lots, inventory and units for every piece marked Create, under a MIGRATION receipt. Pieces already migrated are skipped; changed pieces are reported, not applied.', confirmLabel: 'Commit', danger: true });
+  const go = await uiConfirm({ title: `Commit ${codes.join(', ')}?`, body: esc('Creates SKUs, locations, LPs, lots, inventory and units for every piece marked Create, under a MIGRATION receipt. Pieces already migrated are skipped; changed pieces are reported, not applied.'), confirmLabel: 'Commit', danger: true });
   if(!go) return;
   mgStatus('Committing…');
   const r = await fetch(`${API}/migration/excalibur/runs/${_mg.run.id}/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ clientCodes: codes }) });
