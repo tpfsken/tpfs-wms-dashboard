@@ -1210,3 +1210,18 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .floor-page-body{padding:18px;display:flex;flex-direction:column;gap:var(--sp-3);}
 .scan-cam-decoder{position:absolute;right:10px;bottom:10px;font-family:var(--mono);font-size:var(--fs-caps);
   color:rgba(255,255,255,.75);background:rgba(0,0,0,.5);padding:2px 6px;border-radius:var(--radius-sm);pointer-events:none;}
+
+/* ---- camera scanner controls (capture-first) ---- */
+.scan-cam-controls{display:flex;align-items:center;justify-content:center;gap:var(--sp-4);
+  padding:var(--sp-3) var(--sp-4);background:rgba(0,0,0,.6);flex-shrink:0;flex-wrap:wrap;}
+.scan-cam-capture{width:84px;height:84px;border-radius:50%;border:4px solid #fff;background:var(--blue);color:#fff;
+  font-weight:800;font-size:var(--fs-caps);letter-spacing:.06em;cursor:pointer;flex-shrink:0;
+  box-shadow:0 0 0 6px rgba(255,255,255,.25);}
+.scan-cam-capture:disabled{opacity:.5;cursor:default;}
+.scan-cam-capture:active{transform:scale(.96);}
+.scan-cam-torch{color:#fff;border-color:rgba(255,255,255,.5);background:transparent;}
+.scan-cam-torch-on{background:var(--amber);border-color:var(--amber);color:#000;}
+.scan-cam-zoom{display:flex;align-items:center;gap:var(--sp-2);color:#fff;min-width:140px;flex:1;max-width:260px;}
+.scan-cam-zoom-range{flex:1;}
+.scan-cam-status-ok{color:var(--st-ok);font-weight:600;}
+.scan-cam-status-bad{color:var(--st-warn);font-weight:600;}

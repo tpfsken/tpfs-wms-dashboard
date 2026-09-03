@@ -351,6 +351,7 @@ function spRenderTrace(box, d, meta){
       <pre class="sp-step-out ui-mono">${esc(spFmtOut(s.out))}</pre></div>`;
   });
   const head = `<div class="sp-trace-head"><span class="ui-muted">source</span> ${uiChip(meta && meta.source === 'wedge' ? 'ACTIVE' : 'NEW', meta ? meta.source : '—')}
+                ${meta && meta.format ? `<span class="ui-muted">format</span> ${uiId(meta.format)}` : ''}
                 ${res.ok ? uiChip('PICKED', 'RESOLVED') : uiChip('FAILED', 'NO MATCH')}</div>`;
   box.innerHTML = head + rows.join('');
 }
