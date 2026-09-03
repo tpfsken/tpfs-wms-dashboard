@@ -143,6 +143,7 @@ function mgClientCard(c, clients){
           <div class="ui-field"><label class="ui-label">WMS client</label>
             <select class="ui-input js-mg-client" data-code="${esc(c.clientCode)}"><option value="">— pick —</option>${clients.map(x => `<option value="${esc(x.id)}" ${c.wmsClientId === x.id ? 'selected' : ''}>${esc(x.code)} — ${esc(x.name)}</option>`).join('')}</select></div>
           <div class="ui-field"><label class="ui-label">Captions from Excalibur</label><div class="mg-caps">${caps || '<span class="ui-muted">none reported</span>'}</div></div>
+          <div class="ui-field"><label class="ui-label">Excalibur warehouse</label><div class="mg-caps">${(c.warehouses || []).length ? c.warehouses.map(w => `<span class="ui-chip ui-chip-neutral">${esc(w)}</span>`).join(' ') : '<span class="ui-muted">not reported</span>'}</div></div>
         </div>
         <div class="mg-rules">${rule('lot_as')}${rule('sublot_as')}${rule('tagid_as')}${rule('groupid_as')}</div>
         <div class="ui-tiles">
