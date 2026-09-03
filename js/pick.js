@@ -71,7 +71,8 @@ function fpRender(){
     body.querySelector('.js-fp-back').addEventListener('click', () => navigateTo('floorPickList'));
     return;
   }
-  const needLoc = t.rules.require_location_scan && !t.locationConfirmed;
+  const needLoc = !t.locationConfirmed;
+  const tapMode = t.rules.location_mode !== 'scan';
   const closed = ['picked', 'short'].includes(t.status);
   body.innerHTML = `
     <div class="fp-head">
@@ -80,7 +81,8 @@ function fpRender(){
     </div>
     <div class="fp-directive ${needLoc ? 'fp-directive-loc' : 'fp-directive-item'}">
       ${needLoc
-        ? `<div class="fp-directive-label">GO TO</div><div class="fp-directive-main">${esc(t.locationCode)}</div>`
+        ? `<div class="fp-directive-label">GO TO</div><div class="fp-directive-main">${esc(t.locationCode)}</div>
+           ${tapMode ? '<button type="button" class="ui-btn ui-btn-primary fp-here js-fp-here">I\'M HERE</button>' : '<div class="ui-hint">Scan the bin label</div>'}`
         : `<div class="fp-directive-label">PICK <span class="fp-directive-loc-ok">✓ ${esc(t.locationCode)}</span></div>
            <div class="fp-directive-main">${esc(t.skuCode)}</div>
            <div class="fp-directive-sub">${esc(t.skuName || '')}${t.lotNumber ? ` · LOT ${esc(t.lotNumber)}${t.lotConfirmed ? ' ✓' : ''}` : ''}${t.lpNumber ? ` · ${esc(t.lpNumber)}` : ''}</div>
@@ -90,7 +92,7 @@ function fpRender(){
     <div class="fp-counter ${t.complete ? 'fp-counter-done' : ''}">SCANNED ${esc(t.qtyPicked)} / ${esc(t.qtyRequired)}${t.openShort ? ' <span class="ui-chip ui-chip-warn">SHORT</span>' : ''}${t.openExceptions ? ' <span class="ui-chip ui-chip-danger">EXCEPTION</span>' : ''}</div>
     ${t.unitControl !== 'none' ? `<div class="fp-uids">${t.uids.length ? t.uids.map(u => `<span class="ui-id fp-uid">${esc(u)}</span>`).join('') : '<span class="ui-muted">No units scanned yet</span>'}</div>` : ''}
     <div class="fp-banner" id="fpBanner" hidden></div>
-    <div id="fpScan"></div>
+    <div id="fpScan" ${needLoc && tapMode ? 'hidden' : ''}></div>
     <div class="fp-actions">
       <button type="button" class="ui-btn js-fp-exception" ${closed ? 'disabled' : ''}>Exception</button>
       ${!t.rules.require_item_scan && !needLoc && !closed ? '<button type="button" class="ui-btn js-fp-count">Count</button>' : ''}
@@ -99,10 +101,12 @@ function fpRender(){
 
   if(_fp.input) _fp.input.destroy();
   _fp.input = scanInputMount(document.getElementById('fpScan'), {
-    placeholder: needLoc ? `Scan location ${t.locationCode}` : (t.unitControl !== 'none' ? 'Scan unit label' : 'Scan item'),
+    placeholder: needLoc ? `Scan bin label ${t.locationCode}` : (t.unitControl !== 'none' ? 'Scan unit label' : 'Scan item'),
     autofocus: true,
     onScan: (raw, meta) => fpScan(raw, meta),
   });
+  const hereBtn = body.querySelector('.js-fp-here');
+  if(hereBtn) hereBtn.addEventListener('click', fpHere);
   body.querySelector('.js-fp-exception').addEventListener('click', fpOpenException);
   const cnt = body.querySelector('.js-fp-count');
   if(cnt) cnt.addEventListener('click', fpCount);
@@ -152,6 +156,20 @@ async function fpScan(raw, meta){
   } finally {
     if(_fp.input){ _fp.input.setBusy(false); _fp.input.focus(); }
   }
+}
+
+// Tap mode's location step. The server records the tap and opens the item
+// step; every later unit / carton scan is still checked against its recorded
+// location server-side.
+async function fpHere(){
+  const t = fpTask();
+  if(!t) return;
+  const r = await fetch(`${API}/pick-tasks/${t.id}/here`, { method: 'POST', headers: { Authorization: `Bearer ${T}` } });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ fpBanner(d.error || 'Could not confirm location', 'danger'); scanBeep('error'); return; }
+  fpApply(d);
+  if('vibrate' in navigator) navigator.vibrate(30);
+  fpRender();
 }
 
 async function fpCount(){
