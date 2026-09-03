@@ -37,7 +37,7 @@ async function mgTest(){
   mgStatus('Testing connection…');
   const r = await fetch(`${API}/migration/excalibur/test`, { method: 'POST', headers: { Authorization: `Bearer ${T}` } });
   const d = await r.json().catch(() => ({}));
-  if(!r.ok){ mgStatus(d.error || 'Connection failed', 'danger'); return; }
+  if(!r.ok){ mgStatus((d.error || 'Connection failed') + (d.config ? ' | ' + d.config : ''), 'danger'); return; }
   mgStatus(`Connected — ${d.name} (${d.ms} ms)`, 'info');
   uiToast('Excalibur reachable', 'success');
 }
