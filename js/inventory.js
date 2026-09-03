@@ -435,11 +435,8 @@ function itemFormBody(){
       <div class="cb-wrap" id="itemClientWrap"></div>
       <div class="ui-field-err" style="display:none;"></div>
     </div>
-    <div class="ui-field-row">
-      ${uiField({ id: 'itemCode', label: 'Base SKU code *',
-                  placeholder: 'ACM-1234', hint: 'Auto-fills the level codes below' })}
-      ${uiField({ id: 'itemUpc', label: 'UPC / barcode', placeholder: '012345678905' })}
-    </div>
+    ${uiField({ id: 'itemCode', label: 'Base SKU code *',
+                placeholder: 'ACM-1234', hint: 'Auto-fills the level codes below. Barcodes are entered per level in the Levels table.' })}
     ${uiField({ id: 'itemName', label: 'Name *', placeholder: 'e.g. Vitamin C 500mg, 60-count bottle' })}
     ${uiField({ id: 'itemDescription', label: 'Description', placeholder: 'Long-form description (optional)' })}
     <div class="ui-field">
@@ -450,7 +447,7 @@ function itemFormBody(){
     <div class="eo-section">
       <div class="item-sec-head">
         <div class="ui-label">Handling units</div>
-        <span class="ui-hint">One level per unit you stock — each with its own dimensions, weight, NMFC and freight class</span>
+        <span class="ui-hint">One row per level you stock. Each level has its OWN barcode — a case code never doubles as the each UPC — plus dimensions, weight, NMFC and freight class.</span>
         <span style="flex:1"></span>
         <button type="button" class="ui-btn" id="itemHuAddBtn">+ Add level</button>
       </div>
@@ -725,7 +722,6 @@ async function openItemFormModal(skuId){
     cbSet('itemClientWrap', String(sku.client_id),
       (clientsCache.find(c => c.id === sku.client_id)?.code || '') + ' — ' +
       (clientsCache.find(c => c.id === sku.client_id)?.name || ''));
-    document.getElementById('itemUpc').value          = sku.upc || '';
     document.getElementById('itemName').value         = sku.name || '';
     document.getElementById('itemDescription').value  = sku.description || '';
     cbSet('itemUomWrap',  sku.uom || 'EA');
@@ -757,13 +753,25 @@ async function openItemFormModal(skuId){
     // descendants) so ops can see all handling-unit levels of the item
     // and add new ones if needed (e.g. SKU was created as EACH but
     // arrives in cases of 12, so they need to add a CASE level above).
-    const family = await apiGet(`/skus/${skuId}/family`);
-    const members = family?.members && family.members.length ? family.members : [sku];
+    // 078: /levels returns every level with its own barcode + identifiers.
+    const lv = await apiGet(`/skus/${skuId}/levels`);
+    const family = lv?.rows && lv.rows.length ? null : await apiGet(`/skus/${skuId}/family`);
+    const members = lv?.rows && lv.rows.length
+      ? lv.rows.map(l => ({ id: l.id, sku_type: l.skuType, sku_code: l.skuCode, units_per_case: l.packQty, upc: l.upc, _identifiers: l.identifiers,
+                            length_in: l.length_in, width_in: l.width_in, height_in: l.height_in, weight_lbs: l.weight_lbs, nmfc_code: l.nmfc_code, freight_class: l.freight_class }))
+      : (family?.members && family.members.length ? family.members : [sku]);
+    // dims / freight live on the full sku rows — merge them in from the family call when /levels was used
+    if(lv?.rows && lv.rows.length){
+      const fam2 = await apiGet(`/skus/${skuId}/family`);
+      for(const m of members){ const full = (fam2?.members || []).find(x => x.id === m.id) || (m.id === sku.id ? sku : null); if(full){ m.length_in = full.length_in; m.width_in = full.width_in; m.height_in = full.height_in; m.weight_lbs = full.weight_lbs; m.nmfc_code = full.nmfc_code; m.freight_class = full.freight_class; } }
+    }
     for (const m of members) {
       _itemHandlingUnits.push({
         _id:           m.id,                // existing SKU id
         _isNew:        false,
         _autoSync:     m.id === sku.id,     // only the anchor's code follows the base field
+        _identifiers:  m._identifiers || [],
+        upc:           m.upc || '',
         sku_type:      m.sku_type || 'EACH',
         sku_code:      m.sku_code || '',
         pack_qty:      m.units_per_case ?? null,
@@ -869,7 +877,6 @@ async function submitItemForm(m){
     clientId,
     name,
     description:     document.getElementById('itemDescription').value.trim() || null,
-    upc:             document.getElementById('itemUpc').value.trim() || null,
     uom:             cbVal('itemUomWrap') || 'EA',
     unitCost:        numOrNull('itemUnitCost'),
     unitPrice:       numOrNull('itemUnitPrice'),
@@ -917,6 +924,7 @@ async function submitItemForm(m){
           {
             skuCode:      hu.sku_code.trim().toUpperCase(),
             skuType:      hu.sku_type,
+            upc:          (hu.upc || '').trim() || null,
             unitsPerCase: hu.pack_qty,
             lengthIn:     hu.length_in,
             widthIn:      hu.width_in,
@@ -945,6 +953,7 @@ async function submitItemForm(m){
         const newBody = {
           sku_type:      hu.sku_type,
           sku_code:      hu.sku_code.trim().toUpperCase(),
+          upc:           (hu.upc || '').trim() || null,
           pack_qty:      hu.pack_qty,
           length_in:     hu.length_in,
           width_in:      hu.width_in,
@@ -974,6 +983,7 @@ async function submitItemForm(m){
         handlingUnits: _itemHandlingUnits.map(hu => ({
           sku_type:      hu.sku_type,
           sku_code:      hu.sku_code.trim().toUpperCase(),
+          upc:           (hu.upc || '').trim() || null,
           pack_qty:      hu.pack_qty,
           length_in:     hu.length_in,
           width_in:      hu.width_in,
@@ -1130,8 +1140,12 @@ async function renderHandlingUnits(){
           <input class="form-input js-hu-code" data-idx="${esc(i)}" value="${esc(hu.sku_code || '')}" placeholder="auto-filled from base code">
         </div>
         <div style="width:110px;">
-          <label class="form-label" title="Number of EACH inside this level. e.g. a Case of 12 means pack qty 12 on the Case level (and 1 on the Each level).">Pack Qty <span style="color:var(--muted);font-weight:400;font-size:10px;">(qty inside)</span></label>
+          <label class="form-label" title="Number of EACH inside this level. e.g. a Case of 12 means pack qty 12 on the Case level (and 1 on the Each level).">Qty per parent <span style="color:var(--muted);font-weight:400;font-size:10px;">(qty inside)</span></label>
           <input class="form-input js-hu-pack" data-idx="${esc(i)}" type="number" min="0" step="1" value="${hu.pack_qty == null ? '' : esc(hu.pack_qty)}" placeholder="${hu.sku_type === 'EACH' ? '1' : 'e.g. 12'}">
+        </div>
+        <div style="min-width:170px;">
+          <label class="form-label">Barcode <span style="color:var(--muted);font-weight:400;font-size:10px;">(UPC / EAN / GTIN)</span></label>
+          <input class="form-input ui-mono js-hu-upc" data-idx="${esc(i)}" value="${esc(hu.upc || '')}" placeholder="${hu.sku_type === 'CASE' ? 'case code' : '012345678905'}">
         </div>
         ${(!editing || hu._isNew) ? `<button type="button" class="btn btn-ghost js-hu-rm" data-idx="${esc(i)}" style="color:var(--red);padding:6px 10px;font-size:14px;" title="${editing ? 'Remove this new level — existing levels cannot be removed here' : 'Remove this level'}">✕</button>` : ''}
       </div>
@@ -1146,6 +1160,17 @@ async function renderHandlingUnits(){
           <button type="button" class="btn btn-ghost js-hu-calc" data-idx="${esc(i)}" style="padding:6px 10px;font-size:11px;color:var(--blue);" title="Calculate freight class from density">Calc class</button>
           <span class="js-hu-density" data-idx="${esc(i)}" style="font-size:10px;color:var(--text2);text-align:center;"></span>
         </div>
+      </div>
+      <div class="hu-codes">
+        <span class="ui-label">Other codes</span>
+        ${(hu._identifiers || []).filter(x => x.source === 'manual').map(x => `<span class="ui-chip ui-chip-neutral hu-code">${esc(x.type)} · <span class="ui-mono">${esc(x.value)}</span> <button type="button" class="hu-code-rm js-hu-code-rm" data-idx="${esc(i)}" data-ident="${esc(x.id)}" aria-label="Remove">✕</button></span>`).join('')}
+        ${hu._id ? `<span class="hu-code-add">
+            <select class="form-input js-hu-code-type" data-idx="${esc(i)}">
+              <option value="carton_barcode">case code</option><option value="alias">alt</option><option value="customer_barcode">customer barcode</option><option value="customer_sku">customer SKU</option><option value="gtin">GTIN</option>
+            </select>
+            <input class="form-input ui-mono js-hu-code-val" data-idx="${esc(i)}" placeholder="code">
+            <button type="button" class="btn btn-ghost js-hu-code-add" data-idx="${esc(i)}">+ Add</button>
+          </span>` : '<span class="ui-hint">Save the item to add other codes to this level</span>'}
       </div>
     </div>
   `).join('');
@@ -1183,6 +1208,31 @@ async function renderHandlingUnits(){
     const i = +e.target.dataset.idx;
     _itemHandlingUnits[i].sku_code = e.target.value;
     _itemHandlingUnits[i]._autoSync = false;
+  }));
+  wrap.querySelectorAll('.js-hu-upc').forEach(inp => inp.addEventListener('input', e => {
+    _itemHandlingUnits[+e.target.dataset.idx].upc = e.target.value.trim();
+  }));
+  // Other codes: written straight to sku_identifiers for that level (edit mode).
+  wrap.querySelectorAll('.js-hu-code-add').forEach(b => b.addEventListener('click', async () => {
+    const i = +b.dataset.idx, hu = _itemHandlingUnits[i];
+    const type = wrap.querySelector(`.js-hu-code-type[data-idx="${i}"]`).value;
+    const value = wrap.querySelector(`.js-hu-code-val[data-idx="${i}"]`).value.trim();
+    if(!value) return uiToast('Enter a code', 'error');
+    const r = await fetch(`${API}/skus/${hu._id}/identifiers`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ type, value }) });
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok) return uiToast(d.error || 'Could not add that code', 'error');
+    hu._identifiers = (hu._identifiers || []).concat([{ id: d.id, type: d.identifier_type, value: d.value, source: d.source }]);
+    uiToast(`${value} added to ${hu.sku_code} (${hu.sku_type})`, 'success');
+    renderHandlingUnits();
+  }));
+  wrap.querySelectorAll('.js-hu-code-rm').forEach(b => b.addEventListener('click', async () => {
+    const i = +b.dataset.idx, hu = _itemHandlingUnits[i];
+    const r = await fetch(`${API}/skus/${hu._id}/identifiers/${b.dataset.ident}`, { method: 'DELETE', headers: { Authorization: `Bearer ${T}` } });
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok) return uiToast(d.error || 'Could not remove that code', 'error');
+    hu._identifiers = (hu._identifiers || []).filter(x => x.id !== b.dataset.ident);
+    uiToast('Code removed', 'success');
+    renderHandlingUnits();
   }));
   wrap.querySelectorAll('.js-hu-pack').forEach(inp => inp.addEventListener('input', e => {
     const v = e.target.value.trim();
