@@ -365,6 +365,13 @@
         </div>
         <div style="font-size:22px;color:var(--text2);">›</div>
       </button>
+      <button class="floor-card floor-card-flat" data-target="floorScanTest">
+        <div class="floor-card-main">
+          <div class="floor-card-title">Scan test</div>
+          <div class="floor-card-sub">Prove a label scans. Nothing is changed.</div>
+        </div>
+        <div class="floor-card-chev">›</div>
+      </button>
     </div>
     <div style="margin-top:auto;padding:14px 18px;border-top:1px solid var(--border);text-align:center;">
       <button onclick="exitFloorMode()" style="background:none;border:none;color:var(--text2);font-size:13px;text-decoration:underline;cursor:pointer;padding:6px;">Switch to desktop view</button>
@@ -392,6 +399,15 @@
   </div>
 
   <!-- Move Inventory — LP source + destination scan/select -->
+  <!-- Scan test: read-only, resolve a label against the scan engine -->
+  <div class="page" id="page-floorScanTest">
+    <div class="floor-page-head">
+      <button class="floor-back js-floor-home" type="button">← Home</button>
+      <div class="floor-page-title">Scan test</div>
+    </div>
+    <div id="floorScanTestBody" class="floor-page-body"></div>
+  </div>
+
   <div class="page" id="page-floorMove">
     <div style="padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);">
       <button onclick="navigateTo('floorHome')" style="background:#3a3a3a;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:14px;cursor:pointer;">← Home</button>

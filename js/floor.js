@@ -245,3 +245,73 @@ function loadFloorMove(){
       </div>
     </div>`;
 }
+
+// =============================================================================
+// SCAN TEST — read-only. A floor user proves a label resolves, nothing else.
+// ScanInput (js/scan.js) -> POST /scan/resolve with the user's client
+// context (portal users are pinned server-side; ops pick a client) -> the
+// same trace display the profile builder uses (spRenderTrace).
+// =============================================================================
+let _fstInput = null;
+
+async function loadFloorScanTest(){
+  const body = document.getElementById('floorScanTestBody');
+  const isOps = !U || U.userType !== 'client';
+  body.innerHTML = `
+    ${isOps ? `<div class="ui-field"><label class="ui-label">Client</label><div class="cb-wrap" id="fstClientWrap"></div>
+                 <div class="ui-hint">Optional. Without a client only tenant-wide profiles and exact LP / location lookups apply.</div></div>` : ''}
+    <div id="fstInput"></div>
+    <div class="sp-trace" id="fstTrace">${uiEmpty('Scan a label to see how it resolves.')}</div>`;
+
+  document.querySelectorAll('#page-floorScanTest .js-floor-home').forEach(b => {
+    if(b._wired) return;
+    b._wired = true;
+    b.addEventListener('click', () => navigateTo('floorHome'));
+  });
+
+  if(isOps){
+    let clients = [];
+    try {
+      const d = await apiGet('/clients');
+      clients = (d?.rows || d?.data || d || []).filter(c => c.is_active !== false);
+    } catch(_) { /* combo stays empty */ }
+    initCombo('fstClientWrap', clients.map(c => ({ value: c.id, label: `${c.code} — ${c.name}` })), { placeholder: 'Any client' });
+  }
+
+  if(_fstInput) _fstInput.destroy();
+  _fstInput = scanInputMount(document.getElementById('fstInput'), {
+    placeholder: 'Scan a label',
+    autofocus: true,
+    onScan: (raw, meta) => floorScanTestRun(raw, meta),
+  });
+}
+
+async function floorScanTestRun(raw, meta){
+  const box = document.getElementById('fstTrace');
+  const clientId = (U && U.userType === 'client') ? U.clientId : (cbVal('fstClientWrap') || null);
+  box.innerHTML = uiSpinner('Resolving…');
+  _fstInput.setBusy(true);
+  try {
+    const r = await fetch(`${API}/scan/resolve`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` },
+      body: JSON.stringify({ raw, clientId, workflow: 'pick' }),
+    });
+    const d = await r.json();
+    if(!r.ok){ box.innerHTML = uiError(d.error || 'Scan failed'); return; }
+    // /scan/resolve returns the result, not the builder's step trace; build
+    // the same shape from what it does return so the display is identical.
+    const trace = [{ step: 'raw', ok: true, out: d.raw }];
+    if(d.via) trace.push({ step: 'matched by', ok: true, out: d.via === 'profile' ? `profile ${d.profileId}` : d.via });
+    if(d.parsed && Object.keys(d.parsed).length) trace.push({ step: 'map', ok: true, out: d.parsed });
+    trace.push(d.ok
+      ? { step: 'resolve', ok: true, out: { type: d.type, entity: d.entity, validation: d.validation } }
+      : { step: 'resolve', ok: false, out: d.detail ? `${d.reason}: ${d.detail}` : (d.reason || 'no match') });
+    spRenderTrace(box, { trace, result: d }, meta);
+    if(!d.ok && typeof scanBeep === 'function') scanBeep('error');
+  } catch(_) {
+    box.innerHTML = uiError('Network error');
+  } finally {
+    _fstInput.setBusy(false);
+    _fstInput.focus();
+  }
+}

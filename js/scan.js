@@ -147,7 +147,11 @@ function scanInputMount(container, opts = {}){
 // Layering: above .ui-overlay (10050) so a modal can host a ScanInput; below
 // toasts (10100). Fixed + scrollable per CLAUDE.md rule 3.
 // =============================================================================
-const SCAN_FORMATS_NATIVE = ['qr_code', 'code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'data_matrix', 'code_39'];
+const SCAN_FORMATS_NATIVE   = ['qr_code', 'code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'data_matrix', 'code_39'];
+// The native detector is trusted only if it reports all of these; anything
+// less and ZXing (which decodes all of them) is used from the start.
+const SCAN_FORMATS_REQUIRED = ['qr_code', 'code_128', 'ean_13', 'upc_a', 'data_matrix'];
+const NATIVE_FALLBACK_MS    = 3000;   // native produced nothing in this long -> ZXing takes over
 
 let _zxingLoading = null;
 function scanLoadZXing(){
@@ -180,16 +184,19 @@ async function scanOpenCamera({ onResult, onError }){
       <video class="scan-cam-video" playsinline muted autoplay></video>
       <div class="scan-cam-reticle"></div>
     </div>
-    <div class="scan-cam-status ui-muted">Starting camera…</div>`;
+    <div class="scan-cam-status ui-muted">Starting camera…</div>
+    <div class="scan-cam-decoder" aria-label="Decoder">—</div>`;
   document.body.appendChild(ov);
   const video  = ov.querySelector('.scan-cam-video');
   const status = ov.querySelector('.scan-cam-status');
+  const label  = ov.querySelector('.scan-cam-decoder');
   let stream = null, raf = 0, zxReader = null, closed = false;
 
   function close(){
     if(closed) return;
     closed = true;
     cancelAnimationFrame(raf);
+    clearTimeout(nativeTimer);
     try { if(zxReader) zxReader.reset(); } catch { /* already stopped */ }
     if(stream) stream.getTracks().forEach(t => t.stop());
     ov.remove();
@@ -215,49 +222,70 @@ async function scanOpenCamera({ onResult, onError }){
     return;
   }
 
-  // Path A: native BarcodeDetector (Chrome / Android / recent Safari).
-  if('BarcodeDetector' in window){
+  // ---- decoder selection ---------------------------------------------------
+  // Native BarcodeDetector only when it reports EVERY format we rely on;
+  // Windows Chrome advertises the API but decodes nothing, so a native run
+  // that produces no result within NATIVE_FALLBACK_MS hands over to ZXing
+  // on its own. The corner label says which decoder is live.
+  let nativeTimer = 0, decoder = null;
+  function setDecoder(name){ decoder = name; label.textContent = name; }
+
+  async function startZXing(reasonNote){
+    if(closed) return;
+    cancelAnimationFrame(raf);
+    clearTimeout(nativeTimer);
+    setDecoder(reasonNote ? 'zxing (' + reasonNote + ')' : 'zxing');
+    status.textContent = 'Loading barcode library…';
+    let ZX;
+    try { ZX = await scanLoadZXing(); } catch(e) { close(); onError && onError(e.message); return; }
+    if(closed) return;
     try {
-      const supported = await window.BarcodeDetector.getSupportedFormats();
-      const formats = SCAN_FORMATS_NATIVE.filter(f => supported.includes(f));
-      if(formats.length){
-        const det = new window.BarcodeDetector({ formats });
-        status.textContent = 'Scanning…';
-        const tick = async () => {
-          if(closed) return;
-          try {
-            if(video.readyState >= 2){
-              const codes = await det.detect(video);
-              if(codes && codes.length && codes[0].rawValue){ found(codes[0].rawValue); return; }
-            }
-          } catch { /* a frame failed; keep going */ }
-          raf = requestAnimationFrame(tick);
-        };
-        raf = requestAnimationFrame(tick);
-        return;
-      }
-    } catch { /* fall through to ZXing */ }
+      const hints = new Map();
+      hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [
+        ZX.BarcodeFormat.QR_CODE, ZX.BarcodeFormat.CODE_128, ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.EAN_8,
+        ZX.BarcodeFormat.UPC_A, ZX.BarcodeFormat.UPC_E, ZX.BarcodeFormat.DATA_MATRIX, ZX.BarcodeFormat.CODE_39,
+      ]);
+      hints.set(ZX.DecodeHintType.ASSUME_GS1, true);     // FNC1 comes through as GS (0x1D)
+      hints.set(ZX.DecodeHintType.TRY_HARDER, true);
+      zxReader = new ZX.BrowserMultiFormatReader(hints, 300);
+      status.textContent = 'Scanning…';
+      await zxReader.decodeFromStream(stream, video, (result) => {
+        if(result && result.getText) found(result.getText());
+      });
+    } catch(e) {
+      close();
+      onError && onError('Barcode library failed to start');
+    }
   }
 
-  // Path B: ZXing from the CDN.
-  status.textContent = 'Loading barcode library…';
-  let ZX;
-  try { ZX = await scanLoadZXing(); } catch(e) { close(); onError && onError(e.message); return; }
-  try {
-    const hints = new Map();
-    hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [
-      ZX.BarcodeFormat.QR_CODE, ZX.BarcodeFormat.CODE_128, ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.EAN_8,
-      ZX.BarcodeFormat.UPC_A, ZX.BarcodeFormat.UPC_E, ZX.BarcodeFormat.DATA_MATRIX, ZX.BarcodeFormat.CODE_39,
-    ]);
-    hints.set(ZX.DecodeHintType.ASSUME_GS1, true);     // FNC1 comes through as GS (0x1D)
-    hints.set(ZX.DecodeHintType.TRY_HARDER, true);
-    zxReader = new ZX.BrowserMultiFormatReader(hints, 300);
-    status.textContent = 'Scanning…';
-    await zxReader.decodeFromStream(stream, video, (result) => {
-      if(result && result.getText) found(result.getText());
-    });
-  } catch(e) {
-    close();
-    onError && onError('Barcode library failed to start');
+  async function nativeUsable(){
+    if(!('BarcodeDetector' in window) || typeof window.BarcodeDetector.getSupportedFormats !== 'function') return null;
+    try {
+      const supported = await window.BarcodeDetector.getSupportedFormats();
+      const missing = SCAN_FORMATS_REQUIRED.filter(f => !supported.includes(f));
+      if(missing.length) return null;
+      return SCAN_FORMATS_NATIVE.filter(f => supported.includes(f));
+    } catch { return null; }
   }
+
+  const formats = await nativeUsable();
+  if(!formats){ await startZXing(); return; }
+
+  // Path A: native, with the timed hand-over.
+  let det;
+  try { det = new window.BarcodeDetector({ formats }); } catch { await startZXing(); return; }
+  setDecoder('native');
+  status.textContent = 'Scanning…';
+  nativeTimer = setTimeout(() => { if(!closed && decoder === 'native') startZXing('fallback'); }, NATIVE_FALLBACK_MS);
+  const tick = async () => {
+    if(closed || decoder !== 'native') return;
+    try {
+      if(video.readyState >= 2){
+        const codes = await det.detect(video);
+        if(codes && codes.length && codes[0].rawValue){ clearTimeout(nativeTimer); found(codes[0].rawValue); return; }
+      }
+    } catch { /* a frame failed; keep going */ }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
 }
