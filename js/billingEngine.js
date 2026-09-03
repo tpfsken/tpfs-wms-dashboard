@@ -523,7 +523,7 @@ async function beSaveCardLines() {
 function loadSettingsPage() {
   loadChargeCodesTab();
   if (typeof spMountTemplates === 'function') spMountTemplates();   // js/scanProfiles.js
-  if (typeof mgMount === 'function') { mgLoadLocations().then(mgMount); }  // js/migration.js
+  if (typeof mgMount === 'function') { mgLoadLocations().finally(mgMount); }  // js/migration.js — mount even if /locations fails
 }
 
 async function loadChargeCodesTab() {

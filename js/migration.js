@@ -43,10 +43,16 @@ async function mgTest(){
 }
 
 async function mgLoadRuns(){
-  const d = await apiGet('/migration/excalibur/runs');
-  const rows = d?.rows || [];
   const el = document.getElementById('mgRuns');
   if(!el) return;
+  let r, d;
+  try {
+    r = await fetch(`${API}/migration/excalibur/runs`, { headers: { Authorization: `Bearer ${T}` } });
+    d = await r.json().catch(() => ({}));
+  } catch(e){ el.innerHTML = uiError('Could not reach the API to list runs: ' + e.message); return; }
+  if(r.status === 401){ sessionStorage.clear(); location.reload(); return; }
+  if(!r.ok){ el.innerHTML = uiError(`Could not list runs (HTTP ${r.status}): ${d.error || 'no detail'}`); return; }
+  const rows = d.rows || [];
   if(!rows.length){ el.innerHTML = uiEmpty('No runs yet — Run preview to fetch Excalibur into staging.'); return; }
   uiTable(el, {
     columns: [
@@ -66,6 +72,7 @@ async function mgRun(){
   const d = await r.json().catch(() => ({}));
   if(!r.ok){ mgStatus(d.error || 'Could not start a run', 'danger'); return; }
   mgStatus('Preview running — fetching clients…');
+  await mgLoadRuns();          // the run is listed as RUNNING right away
   mgPollRun(d.id);
 }
 
@@ -87,8 +94,12 @@ function mgPollRun(runId){
 }
 
 async function mgOpenRun(runId){
-  const d = await apiGet(`/migration/excalibur/runs/${runId}/report`);
-  if(!d){ mgStatus('Could not load the report', 'danger'); return; }
+  let r, d;
+  try {
+    r = await fetch(`${API}/migration/excalibur/runs/${runId}/report`, { headers: { Authorization: `Bearer ${T}` } });
+    d = await r.json().catch(() => ({}));
+  } catch(e){ mgStatus('Could not reach the API for the report: ' + e.message, 'danger'); return; }
+  if(!r.ok){ mgStatus(`Could not load the report (HTTP ${r.status}): ${d.error || 'no detail'}`, 'danger'); return; }
   _mg.run = d.run; _mg.report = d; _mg.selected = new Set();
   mgRenderReport();
   document.getElementById('mgReconcile').innerHTML = '';
@@ -255,6 +266,9 @@ async function mgReconcile(){
 }
 
 async function mgLoadLocations(){
-  const d = await apiGet('/locations');
-  _mg.locations = (d?.rows || d?.data || d || []).map(l => ({ id: l.id, code: l.code }));
+  try {
+    const d = await apiGet('/locations');
+    const list = Array.isArray(d) ? d : (d?.rows || d?.data || d?.locations || []);
+    _mg.locations = (Array.isArray(list) ? list : []).map(l => ({ id: l.id, code: l.code }));
+  } catch(e){ _mg.locations = []; }
 }
