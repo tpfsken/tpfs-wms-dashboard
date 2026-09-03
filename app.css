@@ -1312,3 +1312,15 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .hu-code-rm{border:none;background:transparent;color:inherit;cursor:pointer;padding:0 2px;font-size:11px;}
 .hu-code-add{display:inline-flex;gap:var(--sp-1);align-items:center;}
 .hu-code-add .form-input{width:auto;min-width:120px;padding:4px 8px;font-size:12px;}
+
+/* ---- Excalibur migration (js/migration.js) ---- */
+.mg-status{margin-bottom:var(--sp-3);}
+.mg-clients{display:flex;flex-direction:column;gap:var(--sp-3);}
+.mg-client{margin-top:var(--sp-2);}
+.mg-client-unmapped{border-color:var(--st-danger);}
+.mg-caps{display:flex;flex-wrap:wrap;gap:var(--sp-1);padding-top:6px;}
+.mg-rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--sp-2);margin:var(--sp-2) 0 var(--sp-3);}
+.mg-rule{display:flex;flex-direction:column;gap:2px;font-size:var(--fs-body);}
+.mg-locs{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--sp-2);margin-bottom:var(--sp-3);}
+.mg-loc{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-body);}
+.mg-loc .ui-input{flex:1;min-width:0;}
