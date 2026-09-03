@@ -82,7 +82,9 @@ function mgPollRun(runId){
     const d = await apiGet(`/migration/excalibur/runs/${runId}`);
     if(!d) return;
     const f = d.counts && d.counts.fetched || {};
-    mgStatus(`Preview ${d.counts && d.counts.phase || d.status} — clients ${f.clients || 0} · items ${f.items || 0} · pieces ${f.pieces || 0} · lots ${f.lots || 0}`);
+    const c = d.counts || {};
+    const extra = c.phase === 'staging' && c.batch ? ` · staged ${c.staged || 0}/${c.of || '?'} (batch ${c.batch})` : c.phase === 'deciding' ? ` · deciding ${c.decided || ''}` : '';
+    mgStatus(`Preview ${c.phase || d.status} — clients ${f.clients || 0} · items ${f.items || 0} · pieces ${f.pieces || 0} · lots ${f.lots || 0}${extra}`);
     if(['previewed', 'failed', 'committed'].includes(d.status)){
       clearInterval(_mg.poll);
       if(d.status === 'failed'){ mgStatus(d.error || 'Preview failed', 'danger'); }
