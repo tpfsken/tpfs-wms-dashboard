@@ -149,6 +149,8 @@ function mgClientCard(c, clients){
         <div class="ui-tiles">
           ${uiTile({ label: 'Items to create', value: c.items.toCreate, compact: true })}
           ${uiTile({ label: 'Items existing', value: c.items.existing, compact: true })}
+          ${uiTile({ label: 'Items inactive', value: c.items.inactive || 0, sub: 'closed / qty 0, not created', compact: true })}
+          ${uiTile({ label: 'Piece-only items', value: c.items.pieceOnly || 0, sub: 'built from piece rows', tone: c.items.pieceOnly ? 'warn' : null, compact: true })}
           ${uiTile({ label: 'Pieces', value: p.total, sub: `qty ${p.qty}`, compact: true })}
           ${uiTile({ label: 'Flagged', value: p.flagged, sub: 'InvStatus / InvCondition', tone: p.flagged ? 'warn' : null, compact: true })}
           ${uiTile({ label: 'Create', value: p.create, compact: true })}
