@@ -399,6 +399,15 @@
   </div>
 
   <!-- Move Inventory — LP source + destination scan/select -->
+  <!-- Scan-to-pick: directed pick, every gate server-side (js/pick.js) -->
+  <div class="page" id="page-floorPick">
+    <div class="floor-page-head">
+      <button class="floor-back js-floor-back" type="button">← Orders</button>
+      <div class="floor-page-title">Pick</div>
+    </div>
+    <div id="floorPickBody" class="floor-page-body"></div>
+  </div>
+
   <!-- Scan test: read-only, resolve a label against the scan engine -->
   <div class="page" id="page-floorScanTest">
     <div class="floor-page-head">
@@ -1433,6 +1442,7 @@
 <script src="js/quotes.js"></script>
 <script src="js/scan.js"></script>
 <script src="js/scanProfiles.js"></script>
+<script src="js/pick.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

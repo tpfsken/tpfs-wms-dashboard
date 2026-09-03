@@ -171,8 +171,12 @@ async function loadFloorPickList(){
           ${dueLabel ? `<span>· ${dueLabel}</span>` : ''}
         </div>
         ${lockBanner}
-      </button>`;
+      </button>
+      ${lockedByOther ? '' : `<button type="button" class="ui-btn ui-btn-primary floor-scanpick js-floor-scanpick" data-id="${esc(o.id)}">Scan pick ${esc(o.order_number || '')}</button>`}`;
   }).join('');
+
+  body.querySelectorAll('.js-floor-scanpick').forEach(b =>
+    b.addEventListener('click', (e) => { e.stopPropagation(); openFloorPick(b.dataset.id); }));
 
   body.querySelectorAll('.js-floor-pick-row').forEach(row => {
     row.addEventListener('click', () => {
