@@ -1374,3 +1374,6 @@ body.floor-mode .ui-chip,body.floor-mode .ui-chip *{min-height:0;}
 body.floor-mode button{min-width:44px;}
 .scan-input-row{flex-wrap:wrap;}
 .scan-input-field{flex:1 1 160px;}
+/* type=search without the browser's search chrome */
+.scan-input-field{-webkit-appearance:none;appearance:none;}
+.scan-input-field::-webkit-search-cancel-button,.scan-input-field::-webkit-search-decoration{-webkit-appearance:none;display:none;}

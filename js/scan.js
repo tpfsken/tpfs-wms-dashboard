@@ -68,6 +68,9 @@ function scanClassify(chars, firstTs, lastTs){
   return avg <= WEDGE_MAX_GAP_MS ? 'wedge' : 'typed';
 }
 
+// type="search" + a non-credential name: Chrome's password manager otherwise reads a
+// lone text field as a username box and floats the saved-login bar over it on every focus.
+let _scanInputSeq = 0;
 function scanInputMount(container, opts = {}){
   const el = typeof container === 'string' ? document.getElementById(container) : container;
   // keyboard: 'none' keeps the on-screen keyboard down on handhelds — wedge scans
@@ -78,8 +81,9 @@ function scanInputMount(container, opts = {}){
   el.classList.add('scan-input');
   el.innerHTML = `
     <div class="scan-input-row">
-      <input class="ui-input scan-input-field" type="text" autocomplete="off" autocapitalize="off"
-             spellcheck="false" inputmode="${o.keyboard === 'text' ? 'text' : 'none'}" placeholder="${esc(o.placeholder)}" aria-label="Scan">
+      <input class="ui-input scan-input-field" type="search" name="scan-code" id="scan-code-${++_scanInputSeq}"
+             autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"
+             inputmode="${o.keyboard === 'text' ? 'text' : 'none'}" placeholder="${esc(o.placeholder)}" aria-label="Scan a label">
       ${o.keyboard === 'text' ? '' : '<button type="button" class="ui-btn scan-input-type" aria-label="Type manually">Type</button>'}
       ${o.camera ? '<button type="button" class="ui-btn scan-input-cam">Camera</button>' : ''}
     </div>
