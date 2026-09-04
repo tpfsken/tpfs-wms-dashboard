@@ -22,6 +22,7 @@ async function ssiMount(){
     <div class="mg-status" id="ssiStatus"></div>
     <div class="ui-field-row">
       <div class="ui-field"><label class="ui-label">Connection</label><div id="ssiConn" class="ui-muted">…</div></div>
+      <div class="ui-field"><label class="ui-label">Writes to ShipStation</label><div id="ssiWrites" class="ui-muted">…</div></div>
       <div class="ui-field"><label class="ui-label">Last sync</label><div id="ssiLast" class="ui-muted">…</div></div>
     </div>
     <div class="ui-label">Stores → WMS client</div>
@@ -56,12 +57,37 @@ async function ssiLoad(){
   conn.innerHTML = `${c.configured ? uiChip('ACTIVE', 'CONFIGURED') : uiChip('FAILED', 'NOT CONFIGURED')} ${c.config ? uiChip(c.config.active ? 'ACTIVE' : 'FAILED', c.config.active ? 'SYNCING THIS WAREHOUSE' : 'PAUSED') : `<button type="button" class="ui-btn js-ssi-connect">Sync into this warehouse</button>`}
     <div class="ui-hint">${esc(c.summary || '')}${c.missing && c.missing.length ? ' — set ' + esc(c.missing.join(', ')) + ' in Railway' : ''} · poll every ${esc(c.pollMinutes)} min</div>`;
   const cb = conn.querySelector('.js-ssi-connect'); if(cb) cb.addEventListener('click', async () => { const r = await ssiFetch('PUT', '/shipstation/config', {}); if(!r.ok) return uiToast(r.d.error || 'Could not connect', 'error'); uiToast('ShipStation will sync into this warehouse', 'success'); ssiLoad(); });
+  ssiRenderWrites(c);
   const last = _ssi.runs[0];
   document.getElementById('ssiLast').innerHTML = last
     ? `${uiChip(last.status === 'ok' ? 'ACTIVE' : last.status === 'failed' ? 'FAILED' : 'DRAFT', last.status.toUpperCase())} <span class="ui-muted">${esc(String(last.started_at || '').slice(0, 16).replace('T', ' '))} · ${esc(last.trigger)}</span>
        ${last.counts ? `<div class="ui-hint">seen ${esc(last.counts.ordersSeen ?? 0)} · created ${esc(last.counts.created ?? 0)} · updated ${esc(last.counts.updated ?? 0)} · pre-labeled ${esc(last.counts.preLabeled ?? 0)} · waves ${esc(last.counts.waves ?? 0)} · allocated ${esc(last.counts.allocated ?? 0)}${last.counts.errors ? ` · <span class="ui-err-text">errors ${esc(last.counts.errors)}</span>` : ''}</div>` : ''}${last.error ? `<div class="ui-err-text">${esc(last.error)}</div>` : ''}`
     : '<span class="ui-muted">never</span>';
   ssiRenderStores(); ssiRenderSvc(); ssiRenderReview(); ssiRenderRuns();
+}
+
+// Write lock: while OFF nothing non-GET (labels, voids, webhook subscriptions) reaches ShipStation.
+function ssiRenderWrites(c){
+  const el = document.getElementById('ssiWrites');
+  if(!el) return;
+  if(!c.config){ el.innerHTML = '<span class="ui-muted">Connect a warehouse first</span>'; return; }
+  const on = c.writesEnabled === true;
+  el.innerHTML = `${on ? uiChip('BACKORDERED', 'WRITES ENABLED') : uiChip('DRAFT', 'WRITE LOCK ON')}
+    <button type="button" class="ui-btn js-ssi-writes">${on ? 'Lock writes' : 'Enable writes'}</button>
+    <div class="ui-hint">${on ? 'Labels, voids and webhook subscriptions are sent to ShipStation.' : 'Read-only: orders and labels sync in, but no label, void or webhook subscription is sent. Pack & Ship shows why.'}</div>`;
+  el.querySelector('.js-ssi-writes').addEventListener('click', async () => {
+    const ok = await uiConfirm({
+      title: on ? 'Turn the ShipStation write lock on?' : 'Enable writes to ShipStation?',
+      body: on ? '<p>Pack &amp; Ship will refuse to create or void labels and no webhook can be subscribed until writes are enabled again.</p>'
+               : '<p>Pack &amp; Ship will create real labels (charged to the ShipStation account) and void labels in ShipStation. Make sure store mapping and the service map are right first.</p>',
+      confirmLabel: on ? 'Lock writes' : 'Enable writes', danger: !on,
+    });
+    if(!ok) return;
+    const r = await ssiFetch('PUT', '/shipstation/writes', { enabled: !on });
+    if(!r.ok) return uiToast(r.d.error || 'Could not change the write lock', 'error');
+    uiToast(r.d.writesEnabled ? 'ShipStation writes enabled' : 'ShipStation write lock is on', 'success');
+    ssiLoad();
+  });
 }
 
 function ssiRenderStores(){

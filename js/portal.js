@@ -67,7 +67,7 @@ function bootPortal() {
     { value: 'NEW', label: 'New' }, { value: 'ALLOCATED', label: 'Allocated' },
     { value: 'PICKING', label: 'Picking' }, { value: 'PICKED', label: 'Picked' },
     { value: 'PACKING', label: 'Packing' }, { value: 'PACKED', label: 'Packed' },
-    { value: 'SHIPPED', label: 'Shipped' }, { value: 'CANCELLED', label: 'Cancelled' },
+    { value: 'SHIPPED', label: 'Shipped' }, { value: 'SHIPPED_EXTERNALLY', label: 'Shipped externally' }, { value: 'CANCELLED', label: 'Cancelled' },
   ], { placeholder: 'All statuses', onChange: () => loadOrders() });
 
   // Pre-stub the Billing client filter so loadBilling() skips its first-run

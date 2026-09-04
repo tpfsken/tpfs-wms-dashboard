@@ -67,6 +67,7 @@ const SM = {
   PACKING:    {c:'chip-active',  l:'Packing'},
   STAGED:     {c:'chip-warning', l:'Staged'},
   SHIPPED:    {c:'chip-success', l:'Shipped'},
+  SHIPPED_EXTERNALLY: {c:'chip-success', l:'Shipped externally'},
   CANCELLED:  {c:'chip-danger',  l:'Cancelled'},
   BACKORDERED:{c:'chip-warning', l:'Backordered'},
   // Legacy fallbacks

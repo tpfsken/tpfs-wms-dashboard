@@ -25,9 +25,80 @@ const FP_EXCEPTION_TYPES = [
   { value: 'uid_unrecognized',       label: 'UID not recognised' },
 ];
 
-const _fp = { orderId: null, tasks: [], idx: 0, input: null, photoCache: {}, packMode: false, packageId: null, packageNumber: null };
+const _fp = { orderId: null, tasks: [], idx: 0, input: null, photoCache: {}, packMode: false, packageId: null, packageNumber: null,
+  // continuous picking: the server hands out one task at a time (GET /pick-queue/next) and claims it
+  queue: { active: false, next: null, remaining: null, source: null } };
+const FP_DONE_FLASH_MS = 2000;
+
+// Floor home "Start picking": straight into the queue, no order list.
+async function fpStartQueue(){
+  _fp.queue = { active: true, next: null, remaining: null, source: null };
+  _fp.orderId = null; _fp.tasks = []; _fp.idx = 0; _fp.packageId = null; _fp.packageNumber = null;
+  navigateTo('floorPick');
+  document.getElementById('floorPickBody').innerHTML = uiSpinner('Finding your next pick…');
+  const n = await fpFetchNext(null, null);
+  fpApplyNext(n);
+}
+
+async function fpFetchNext(orderId, afterTaskId){
+  const qs = new URLSearchParams();
+  if(orderId) qs.set('order', orderId);
+  if(afterTaskId) qs.set('after', afterTaskId);
+  const r = await fetch(`${API}/pick-queue/next${qs.toString() ? '?' + qs.toString() : ''}`, { headers: { Authorization: `Bearer ${T}` } });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok) return { error: d.error || 'Could not fetch the next pick' };
+  return d;
+}
+
+function fpApplyNext(n){
+  const body = document.getElementById('floorPickBody');
+  if(n.error){ body.innerHTML = uiError(n.error); return; }
+  _fp.queue.active = true;
+  _fp.queue.next = n.next || null;
+  _fp.queue.remaining = n.remaining || null;
+  _fp.queue.source = n.source || null;
+  if(!n.task){
+    _fp.orderId = null; _fp.tasks = []; _fp.idx = 0;
+    body.innerHTML = `
+      <div class="fp-done">
+        <div class="fp-done-mark">✓</div>
+        <div class="fp-done-title">Nothing left to pick</div>
+        <div class="ui-hint">No open pick tasks in your wave or for this warehouse.</div>
+        <button type="button" class="ui-btn ui-btn-primary js-fp-back">Back to orders</button>
+      </div>`;
+    body.querySelector('.js-fp-back').addEventListener('click', () => navigateTo('floorPickList'));
+    return;
+  }
+  if(n.task.orderId !== _fp.orderId){ _fp.packageId = null; _fp.packageNumber = null; }
+  _fp.orderId = n.task.orderId;
+  _fp.tasks = [n.task];
+  _fp.idx = 0;
+  fpRender();
+}
+
+// 2-second "ORDER 105384 DONE ✓" between orders.
+function fpFlashDone(orderNumber){
+  const body = document.getElementById('floorPickBody');
+  if(_fp.input){ _fp.input.destroy(); _fp.input = null; }
+  body.innerHTML = `<div class="fp-flash"><div class="fp-flash-title">ORDER ${esc(orderNumber)} DONE ✓</div><div class="fp-flash-sub">Next pick loading…</div></div>`;
+  if('vibrate' in navigator) navigator.vibrate([40, 60, 40]);
+  return new Promise(res => setTimeout(res, FP_DONE_FLASH_MS));
+}
+
+// Pause: hand the current task back to the queue and return to the list. The
+// queue itself lives on the server — "Start picking" resumes it.
+async function fpPause(){
+  const t = fpTask();
+  if(t && !['picked', 'short'].includes(t.status)){
+    await fetch(`${API}/pick-queue/release`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ taskId: t.id }) }).catch(() => {});
+  }
+  _fp.queue.active = false;
+  if(_fp.input){ _fp.input.destroy(); _fp.input = null; }
+  navigateTo('floorPickList');
+}
 
 async function openFloorPick(orderId){
+  _fp.queue = { active: false, next: null, remaining: null, source: null };
   _fp.orderId = orderId;
   _fp.tasks = [];
   _fp.idx = 0;
@@ -88,15 +159,18 @@ function fpRender(){
            ${tapMode ? '<button type="button" class="ui-btn ui-btn-primary fp-here js-fp-here">I\'M HERE</button>' : '<div class="ui-hint">Scan the bin label</div>'}`
         : `<div class="fp-directive-label">PICK <span class="fp-directive-loc-ok">✓ ${esc(t.locationCode)}</span></div>
            <div class="fp-directive-main">${esc(t.skuCode)}</div>
-           <div class="fp-directive-sub">${esc(t.skuName || '')}${t.lotNumber ? ` · LOT ${esc(t.lotNumber)}${t.lotConfirmed ? ' ✓' : ''}` : ''}${t.lpNumber ? ` · ${esc(t.lpNumber)}` : ''}</div>
+           <div class="fp-directive-sub">${esc(t.skuName || '')}${t.lotNumber ? ` · LOT ${esc(t.lotNumber)}${t.lotConfirmed ? ' ✓' : ''}` : ''}${t.lpNumber && t.cartonCode ? ` · ${esc(t.lpNumber)}` : ''}</div>
+           ${t.cartonCode || t.lpNumber ? `<div class="fp-directive-carton"><span class="fp-directive-carton-label">${t.cartonCode ? 'CARTON' : 'LP'}</span> ${esc(t.cartonCode || t.lpNumber)}</div>` : ''}
            <div class="fp-directive-qty">QTY ${esc(t.qtyRequired)}</div>
            <div class="fp-photo" id="fpPhoto" hidden></div>`}
     </div>
+    ${_fp.queue.active && (_fp.queue.next || _fp.queue.remaining) ? `<div class="fp-queue-next">${_fp.queue.next ? `Next: order ${esc(_fp.queue.next.orderNumber)}` : 'Last order in the queue'}${_fp.queue.remaining ? ` · ${esc(_fp.queue.remaining.orders)} order${_fp.queue.remaining.orders === 1 ? '' : 's'} left` : ''}</div>` : ''}
     <div class="fp-counter ${t.complete ? 'fp-counter-done' : ''}">SCANNED ${esc(t.qtyPicked)} / ${esc(t.qtyRequired)}${t.openShort ? ' <span class="ui-chip ui-chip-warn">SHORT</span>' : ''}${t.openExceptions ? ' <span class="ui-chip ui-chip-danger">EXCEPTION</span>' : ''}</div>
     ${t.unitControl !== 'none' ? `<div class="fp-uids">${t.uids.length ? t.uids.map(u => `<span class="ui-id fp-uid">${esc(u)}</span>`).join('') : '<span class="ui-muted">No units scanned yet</span>'}</div>` : ''}
     <div class="fp-banner" id="fpBanner" hidden></div>
     <div id="fpScan" ${needLoc && tapMode ? 'hidden' : ''}></div>
     <div class="fp-actions">
+      ${_fp.queue.active ? '<button type="button" class="ui-btn js-fp-pause">Pause</button>' : ''}
       <button type="button" class="ui-btn js-fp-exception" ${closed ? 'disabled' : ''}>Exception</button>
       ${!t.rules.require_item_scan && !needLoc && !closed ? '<button type="button" class="ui-btn js-fp-count">Count</button>' : ''}
       <button type="button" class="ui-btn ui-btn-primary fp-confirm js-fp-confirm" ${t.complete && !closed ? '' : 'disabled'}>${closed ? 'Picked' : `Confirm ${esc(t.qtyPicked)} / ${esc(t.qtyRequired)}`}</button>
@@ -112,6 +186,8 @@ function fpRender(){
   const hereBtn = body.querySelector('.js-fp-here');
   if(hereBtn) hereBtn.addEventListener('click', fpHere);
   body.querySelector('.js-fp-exception').addEventListener('click', fpOpenException);
+  const pause = body.querySelector('.js-fp-pause');
+  if(pause) pause.addEventListener('click', fpPause);
   const cnt = body.querySelector('.js-fp-count');
   if(cnt) cnt.addEventListener('click', fpCount);
   body.querySelector('.js-fp-confirm').addEventListener('click', fpConfirm);
@@ -212,7 +288,14 @@ async function fpConfirm(){
   const next = _fp.tasks.findIndex((x, i) => i > _fp.idx && !['picked', 'short'].includes(x.status));
   _fp.idx = next === -1 ? _fp.tasks.length : next;
   if(next === -1 && _fp.packMode && _fp.packageId && typeof fsOpenOrder === 'function'){ fsOpenOrder(_fp.orderId); return; }
-  fpRender();
+  if(next !== -1){ fpRender(); return; }
+  // Last local task done: continuous picking. Ask the server for the next task
+  // (rest of this order first, then the wave / assigned / oldest ready orders).
+  // A different order (or nothing) means this order is done: flash, then GO TO.
+  const n = await fpFetchNext(_fp.orderId, t.id);
+  if(n.error){ fpRender(); fpBanner(n.error, 'danger'); return; }
+  if(!n.task || n.task.orderId !== _fp.orderId) await fpFlashDone(t.orderNumber);
+  fpApplyNext(n);
 }
 
 function fpOpenException(){

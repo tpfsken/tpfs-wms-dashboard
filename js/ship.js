@@ -83,6 +83,7 @@ function fsRender(){
   const pkg = fsPkg();
   const shipTo = [o.shipTo.name, o.shipTo.line1, [o.shipTo.city, o.shipTo.state, o.shipTo.postal].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
   const shipped = o.status === 'SHIPPED';
+  const ssLocked = v.order.labelProvider === 'shipstation' && v.order.shipstationWritesEnabled === false;
   body.innerHTML = `
     <div class="fp-head">
       <div class="fp-head-order">${uiId(o.orderNumber)} <span class="ui-muted">·</span> ${esc(o.clientCode)} ${uiChip(o.status)}</div>
@@ -96,7 +97,7 @@ function fsRender(){
     </div>
     <div class="fs-lines">${v.lines.map(l => `
       <div class="fs-line ${l.packagedQty >= l.pickedQty && l.pickedQty > 0 ? 'fs-line-done' : ''}">
-        <span class="ui-id">${esc(l.skuCode)}</span>${l.lotNumber ? ` <span class="ui-muted">lot ${esc(l.lotNumber)}</span>` : ''}
+        <span class="ui-id">${esc(l.skuCode)}</span>${l.lotNumber ? ` <span class="ui-muted">lot ${esc(l.lotNumber)}</span>` : ''}${l.cartons ? ` <span class="fs-line-carton">${esc(l.cartons)}</span>` : ''}
         <span class="fs-line-n">${esc(l.packagedQty)} / ${esc(l.pickedQty)}${l.pendingAllocations ? ' <span class="ui-chip ui-chip-warn">PICKING</span>' : ''}</span>
       </div>`).join('')}</div>
     <div class="fp-banner" id="fsBanner" hidden></div>
@@ -127,14 +128,14 @@ function fsRender(){
               <button type="button" class="ui-btn js-fs-void">Void</button>
               ${v.order.labelProvider === 'shipstation'
                 ? `<button type="button" class="ui-btn js-fs-attach">Attach printed label</button>
-                   ${v.order.labelMode === 'label_at_pack' ? '<button type="button" class="ui-btn ui-btn-primary fp-confirm js-fs-sslabel">Get label</button>' : ''}`
+                   ${v.order.labelMode === 'label_at_pack' ? `<button type="button" class="ui-btn ui-btn-primary fp-confirm js-fs-sslabel" ${ssLocked ? 'disabled title="ShipStation write lock is on"' : ''}>Get label</button>` : ''}${ssLocked ? '<div class="ui-hint fs-locked">ShipStation write lock is on — enable writes under Settings → Integrations</div>' : ''}`
                 : '<button type="button" class="ui-btn ui-btn-primary fp-confirm js-fs-label">Get label</button>'}
             </div>` : ''}
           ${pkg.status === 'labeled' ? `
             <div class="fp-actions">
               ${pkg.labelProvider === 'shipstation'
                 ? `${pkg.hasPdf ? '<button type="button" class="ui-btn js-fs-reprint">Re-print</button>' : '<span class="ui-hint">Printed in ShipStation — re-print there</span>'}
-                   <button type="button" class="ui-btn js-fs-voidlabel">Void label</button>`
+                   <button type="button" class="ui-btn js-fs-voidlabel" ${ssLocked ? 'disabled title="ShipStation write lock is on"' : ''}>Void label</button>${ssLocked ? '<div class="ui-hint fs-locked">ShipStation write lock is on — enable writes under Settings → Integrations</div>' : ''}`
                 : '<button type="button" class="ui-btn js-fs-void">Void (refund label)</button>'}
             </div>` : ''}
         ` : (shipped ? '<div class="ui-hint">This order has shipped.</div>' : '<div class="ui-hint">Start a package to begin packing.</div>')}

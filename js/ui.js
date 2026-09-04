@@ -27,7 +27,7 @@ const UI_TONE = { OK: 'ok', INFO: 'info', WARN: 'warn', DANGER: 'danger', NEUTRA
 const UI_STATUS_MAP = {
   // order flow
   NEW: 'info', ALLOCATED: 'info', PICKING: 'warn', PACKING: 'warn', STAGED: 'warn',
-  SHIPPED: 'ok', CANCELLED: 'neutral', BACKORDERED: 'danger',
+  SHIPPED: 'ok', SHIPPED_EXTERNALLY: 'ok', CANCELLED: 'neutral', BACKORDERED: 'danger',
   // allocation lifecycle (+ PICKED/PACKED as legacy order-status fallbacks)
   PENDING: 'info', PICKED: 'ok', PACKED: 'warn',
   // billing runs / charges / invoices

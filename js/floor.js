@@ -66,7 +66,7 @@ function bootFloor(){
 
   // Wire the 3 home cards to navigate to their target pages
   document.querySelectorAll('.floor-card').forEach(c => {
-    if(c._wired) return;
+    if(c._wired || !c.dataset.target) return;
     c._wired = true;
     c.addEventListener('click', () => navigateTo(c.dataset.target));
   });

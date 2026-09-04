@@ -13,7 +13,11 @@ let orderLines = [];     // new-order modal: pending lines
 // NOTE: `key` on a sortable column is the API's sortBy value — it must exist in
 // the ORDER_SORTS whitelist in the API's queries/orders.js, or the click sorts
 // nothing. sortDefault sets the FIRST click's direction (dates: newest first).
+// Bulk selection on the list (ids survive a refresh; cleared when the filter changes)
+const _ordSel = new Set();
+const ORD_CLOSABLE = ['NEW', 'ALLOCATED', 'PICKING', 'PACKING'];
 const ORD_COLS = [
+  { key: '_sel', label: '', render: o => ORD_CLOSABLE.includes(o.status) ? `<input type="checkbox" class="js-ord-sel" data-id="${esc(o.id)}" aria-label="Select ${esc(o.order_number)}" ${_ordSel.has(o.id) ? 'checked' : ''}>` : '' },
   { key: 'order_number', label: 'Order #', mono: true },
   { key: 'source', label: 'Source', render: o => o.source === 'shipstation' ? uiChip('ACTIVE', 'SHIPSTATION') + (o.needs_sku_mapping ? ' ' + uiChip('BACKORDERED', 'SKU MAP') : '') : (o.source === 'intake' ? uiChip('NEW', 'INTAKE') : '<span class="ui-muted">manual</span>') },
   { key: 'external_order_number', label: 'Ext #', mono: true, render: o => o.external_order_number ? esc(o.external_order_number) : '<span class="ui-muted">—</span>' },
@@ -68,6 +72,51 @@ function ordSetPage(limit, offset){
   document.getElementById('ordListWrap')?.scrollIntoView({ block: 'start' });
 }
 
+function ordWireSelection(rows){
+  const wrap = document.getElementById('ordListWrap');
+  if(!wrap) return;
+  wrap.querySelectorAll('.js-ord-sel').forEach(cb => {
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', () => { if(cb.checked) _ordSel.add(cb.dataset.id); else _ordSel.delete(cb.dataset.id); ordRenderBulk(rows); });
+  });
+  ordRenderBulk(rows);
+}
+function ordRenderBulk(rows){
+  const host = document.getElementById('ordBulkBar');
+  if(!host) return;
+  const n = _ordSel.size;
+  host.hidden = n === 0;
+  host.innerHTML = n ? `<span class="ord-bulk-count">${esc(n)} selected</span>
+    <button type="button" class="ui-btn js-ord-bulk-clear">Clear</button>
+    <button type="button" class="ui-btn ui-btn-danger js-ord-bulk-ext">Close as shipped externally</button>` : '';
+  if(!n) return;
+  host.querySelector('.js-ord-bulk-clear').addEventListener('click', () => { _ordSel.clear(); loadOrders(); });
+  host.querySelector('.js-ord-bulk-ext').addEventListener('click', () => ordBulkCloseExternally(rows));
+}
+// Close as shipped externally: the order shipped from another system (Excalibur / ShipStation
+// before the inventory migration). Releases pending allocations, drops pending pick tasks,
+// unpicks nothing, keeps tracking. Terminal.
+async function ordBulkCloseExternally(rows){
+  const ids = [...__ordSel()];
+  if(!ids.length) return;
+  const numbers = ids.map(id => (rows || []).find(r => r.id === id)?.order_number || id.slice(0, 8));
+  const ok = await uiConfirm({
+    title: `Close ${ids.length} order${ids.length === 1 ? '' : 's'} as shipped externally?`,
+    body: `<p>${esc(numbers.slice(0, 12).join(', '))}${numbers.length > 12 ? ` and ${esc(numbers.length - 12)} more` : ''}</p>
+      <p class="ui-hint">Releases any pending allocations back to stock, removes pending pick tasks and unpicks nothing. Tracking already on the order is kept. This cannot be undone.</p>`,
+    confirmLabel: 'Close as shipped externally', danger: true,
+  });
+  if(!ok) return;
+  const r = await fetch(`${API}/orders/close-shipped-externally`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ orderIds: ids, reason: 'closed from the Orders list', tag: 'shipped externally' }) });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ uiToast(d.error || 'Could not close the orders', 'error'); return; }
+  _ordSel.clear();
+  const skipped = (d.skipped || []).length;
+  uiToast(`${(d.closed || []).length} closed as shipped externally${skipped ? ` · ${skipped} skipped (${d.skipped.map(x => x.orderNumber + ': ' + x.why).join('; ')})` : ''}`, skipped ? 'warning' : 'success');
+  loadOrders();
+}
+function __ordSel(){ return _ordSel; }
+
 async function loadOrders(){
   document.getElementById('ordDetailView').style.display = 'none';
   document.getElementById('ordListView').style.display = 'block';
@@ -78,7 +127,7 @@ async function loadOrders(){
   // Changing the search or status filter puts you back on page 1 — otherwise
   // you'd land on page 4 of a 2-page result and see an empty table.
   const sig = `${s}|${st}`;
-  if(sig !== ORD_FILTER_SIG){ ORD_FILTER_SIG = sig; ORD_OFFSET = 0; }
+  if(sig !== ORD_FILTER_SIG){ ORD_FILTER_SIG = sig; ORD_OFFSET = 0; _ordSel.clear(); }
 
   const qs = new URLSearchParams({
     limit: ORD_LIMIT, offset: ORD_OFFSET, sortBy: ORD_SORT, sortDir: ORD_DIR,
@@ -106,6 +155,7 @@ async function loadOrders(){
     onRowClick: o => openOrderDetail(o.id),
     empty: s || st ? 'No orders match that filter.' : 'No orders yet.',
   });
+  ordWireSelection(rows);
 
   uiPager('ordPager', {
     total, limit: ORD_LIMIT, offset: ORD_OFFSET,
