@@ -1213,7 +1213,7 @@ async function renderHandlingUnits(){
     _itemHandlingUnits[+e.target.dataset.idx].upc = e.target.value.trim();
   }));
   // Other codes: written straight to sku_identifiers for that level (edit mode).
-  wrap.querySelectorAll('.js-hu-code-add').forEach(b => b.addEventListener('click', async () => {
+  wrap.querySelectorAll('.js-hu-code-add').forEach(b => b.addEventListener('click', uiBusyHandler(async () => {
     const i = +b.dataset.idx, hu = _itemHandlingUnits[i];
     const type = wrap.querySelector(`.js-hu-code-type[data-idx="${i}"]`).value;
     const value = wrap.querySelector(`.js-hu-code-val[data-idx="${i}"]`).value.trim();
@@ -1224,8 +1224,8 @@ async function renderHandlingUnits(){
     hu._identifiers = (hu._identifiers || []).concat([{ id: d.id, type: d.identifier_type, value: d.value, source: d.source }]);
     uiToast(`${value} added to ${hu.sku_code} (${hu.sku_type})`, 'success');
     renderHandlingUnits();
-  }));
-  wrap.querySelectorAll('.js-hu-code-rm').forEach(b => b.addEventListener('click', async () => {
+  })));
+  wrap.querySelectorAll('.js-hu-code-rm').forEach(b => b.addEventListener('click', uiBusyHandler(async () => {
     const i = +b.dataset.idx, hu = _itemHandlingUnits[i];
     const r = await fetch(`${API}/skus/${hu._id}/identifiers/${b.dataset.ident}`, { method: 'DELETE', headers: { Authorization: `Bearer ${T}` } });
     const d = await r.json().catch(() => ({}));
@@ -1233,7 +1233,7 @@ async function renderHandlingUnits(){
     hu._identifiers = (hu._identifiers || []).filter(x => x.id !== b.dataset.ident);
     uiToast('Code removed', 'success');
     renderHandlingUnits();
-  }));
+  })));
   wrap.querySelectorAll('.js-hu-pack').forEach(inp => inp.addEventListener('input', e => {
     const v = e.target.value.trim();
     _itemHandlingUnits[+e.target.dataset.idx].pack_qty = v === '' ? null : Number(v);
@@ -1254,7 +1254,7 @@ async function renderHandlingUnits(){
     _itemHandlingUnits[+e.target.dataset.idx].freight_class = e.target.value));
 
   // Per-row class-from-density button
-  wrap.querySelectorAll('.js-hu-calc').forEach(btn => btn.addEventListener('click', () => {
+  wrap.querySelectorAll('.js-hu-calc').forEach(btn => btn.addEventListener('click', uiBusyHandler(() => {
     const i  = +btn.dataset.idx;
     const hu = _itemHandlingUnits[i];
     const d  = computeDensity(hu.length_in, hu.width_in, hu.height_in, hu.weight_lbs);
@@ -1264,16 +1264,16 @@ async function renderHandlingUnits(){
     hu.freight_class = String(densityToFreightClass(d));
     renderHandlingUnits();
     uiToast(`Density ${d.toFixed(2)} lb/ft³ → freight class ${hu.freight_class}`);
-  }));
+  })));
 
   // Remove button (create mode only — editing locks to one row)
-  wrap.querySelectorAll('.js-hu-rm').forEach(btn => btn.addEventListener('click', () => {
+  wrap.querySelectorAll('.js-hu-rm').forEach(btn => btn.addEventListener('click', uiBusyHandler(() => {
     if(_itemHandlingUnits.length <= 1){
       return uiToast('An item needs at least one handling unit', 'error');
     }
     _itemHandlingUnits.splice(+btn.dataset.idx, 1);
     renderHandlingUnits();
-  }));
+  })));
 
   // Initial density readouts
   for(let i = 0; i < _itemHandlingUnits.length; i++) updateHuDensity(i);
@@ -1412,7 +1412,7 @@ async function loadSkuCurrentSds(skuId){
         <div style="font-weight:600;color:var(--text);">${esc(current.original_filename || 'sds.pdf')} <span style="color:var(--muted);font-weight:400;font-size:11px;">v${esc(current.version_number)} · current</span></div>
         <div style="font-size:11px;color:var(--text2);">Uploaded ${esc(uploaded)} by ${esc(by)} ${sizeKb ? '· ' + esc(sizeKb) : ''}</div>
       </div>
-      <button type="button" class="btn btn-ghost" onclick="openSdsDocument('${esc(current.id)}','${esc(current.original_filename || 'sds.pdf')}')" style="padding:4px 10px;font-size:11px;color:var(--blue);">Open</button>
+      <button type="button" class="btn btn-ghost" onclick="uiRun(this, () => openSdsDocument('${esc(current.id)}','${esc(current.original_filename || 'sds.pdf')}'))" style="padding:4px 10px;font-size:11px;color:var(--blue);">Open</button>
       ${histCount > 1
         ? `<span style="font-size:11px;color:var(--muted);">${esc(histCount - 1)} prior version${histCount - 1 === 1 ? '' : 's'} on file</span>`
         : ''}
@@ -1481,7 +1481,7 @@ async function runSdsIntelExtract(skuId, file){
       // Wire the re-extract button to the existing-doc extraction endpoint
       const reBtn = document.getElementById('reExtractExistingBtn');
       if(reBtn){
-        reBtn.addEventListener('click', () => reRunExtractionOnExistingDoc(reBtn.dataset.docId));
+        reBtn.addEventListener('click', uiBusyHandler(() => reRunExtractionOnExistingDoc(reBtn.dataset.docId)));
       }
       return;
     }
@@ -1701,13 +1701,13 @@ async function loadItemAttachmentsList(skuId){
       </div>`;
   }).join('');
   body.querySelectorAll('.js-item-att-dl').forEach(b =>
-    b.addEventListener('click', async () => {
+    b.addEventListener('click', uiBusyHandler(async () => {
       const d = await apiGet(`/skus/${skuId}/attachments/${b.dataset.attId}/url`);
       if(!d?.url) return uiToast('Could not get a download link for that document', 'error');
       window.open(d.url, '_blank', 'noopener');
-    }));
+    })));
   body.querySelectorAll('.js-item-att-rm').forEach(b =>
-    b.addEventListener('click', async () => {
+    b.addEventListener('click', uiBusyHandler(async () => {
       const ok = await uiConfirm({
         title: 'Remove this document?',
         body: 'It is deleted from the item master. If it is the SDS, the hazmat fields it filled in stay as they are.',
@@ -1720,7 +1720,7 @@ async function loadItemAttachmentsList(skuId){
       if(!r.ok) return uiToast('Could not remove the document', 'error');
       uiToast('Document removed');
       loadItemAttachmentsList(skuId);
-    }));
+    })));
 }
 
 // Show / hide the "Re-read attached SDS" button based on whether the
@@ -1736,7 +1736,7 @@ function updateSdsReuseButton(skuId, sdsAttachment){
   btn.style.display = '';
   btn.title = `Re-extract hazmat info from ${sdsAttachment.filename}`;
   // Replace any prior listener
-  btn.onclick = () => extractFromAttachedSds(skuId, sdsAttachment.id, sdsAttachment.filename);
+  btn.onclick = uiBusyHandler(() => extractFromAttachedSds(skuId, sdsAttachment.id, sdsAttachment.filename));
 }
 
 async function extractFromAttachedSds(skuId, attId, filename){
@@ -1887,9 +1887,9 @@ async function renderLotCoa(lotId, lotNumber){
       : '');
 
   body.querySelectorAll('.js-coa-open').forEach(b =>
-    b.addEventListener('click', () => openLotDocument(b.dataset.id)));
+    b.addEventListener('click', uiBusyHandler(() => openLotDocument(b.dataset.id))));
   body.querySelectorAll('.js-coa-wd').forEach(b =>
-    b.addEventListener('click', () => withdrawLotDocument(b.dataset.id, lotId, lotNumber)));
+    b.addEventListener('click', uiBusyHandler(() => withdrawLotDocument(b.dataset.id, lotId, lotNumber))));
 }
 
 // Streamed through the API with an auth check — no presigned S3 URL is handed
@@ -2126,7 +2126,7 @@ async function openInventoryDetail(invId){
       const edit = document.createElement('button');
       edit.className = 'ui-btn';
       edit.textContent = 'Edit item master';
-      edit.addEventListener('click', () => { m.close(); openItemFormModal(inv.sku_id); });
+      edit.addEventListener('click', uiBusyHandler(() => { m.close(); openItemFormModal(inv.sku_id); }));
       acts.insertBefore(edit, acts.firstChild);
     }
   }

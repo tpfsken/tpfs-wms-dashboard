@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Login
-  document.getElementById('loginBtn').addEventListener('click', doLogin);
+  document.getElementById('loginBtn').addEventListener('click', uiBusyHandler(doLogin));
   ['loginPassword','loginEmail'].forEach(id => {
     document.getElementById(id).addEventListener('keydown', e => {
       if(e.key === 'Enter') doLogin();

@@ -16,7 +16,7 @@ async function loadWaves(){
       <div class="sp-toolbar-actions"><button type="button" class="ui-btn ui-btn-primary js-wave-new">New manual wave</button></div>
     </div>
     <div id="wavesTable"></div>`;
-  host.querySelector('.js-wave-new').addEventListener('click', waveNew);
+  host.querySelector('.js-wave-new').addEventListener('click', uiBusyHandler(waveNew));
   const d = await apiGet('/waves');
   const rows = d?.rows || [];
   const el = host.querySelector('#wavesTable');
@@ -73,9 +73,9 @@ async function waveOpen(id){
     uiToast(`Wave ${w.wave_number} ${status.toLowerCase().replace('_', ' ')}`, 'success');
     m.close(); loadWaves();
   };
-  const rl = m.el.querySelector('.js-wave-release'); if(rl) rl.addEventListener('click', () => set('RELEASED'));
-  const cp = m.el.querySelector('.js-wave-complete'); if(cp) cp.addEventListener('click', () => set('COMPLETED'));
-  const cn = m.el.querySelector('.js-wave-cancel'); if(cn) cn.addEventListener('click', () => set('CANCELLED'));
+  const rl = m.el.querySelector('.js-wave-release'); if(rl) rl.addEventListener('click', uiBusyHandler(() => set('RELEASED')));
+  const cp = m.el.querySelector('.js-wave-complete'); if(cp) cp.addEventListener('click', uiBusyHandler(() => set('COMPLETED')));
+  const cn = m.el.querySelector('.js-wave-cancel'); if(cn) cn.addEventListener('click', uiBusyHandler(() => set('CANCELLED')));
 }
 
 async function waveNew(){

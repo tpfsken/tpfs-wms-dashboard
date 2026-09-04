@@ -172,7 +172,7 @@ async function openPackagesModal(){
     pkRenderList();       // billed figures on existing boxes move with the markup
     pkRenderNewRates();   // ...and so do the prices in the rate list being chosen from
   });
-  PK_M.el.querySelector('#pkRateBtn').addEventListener('click', pkRateNew);
+  PK_M.el.querySelector('#pkRateBtn').addEventListener('click', uiBusyHandler(pkRateNew));
   // Qty changes the button's wording ("Create 20 labels"), so keep it in sync.
   PK_M.el.querySelector('#pkQty').addEventListener('input', pkSyncPrimary);
   pkSyncPrimary();
@@ -413,7 +413,7 @@ function pkRenderList(){
   }).join('');
 
   el.querySelectorAll('.js-pk-void').forEach(b =>
-    b.addEventListener('click', () => pkVoid(b.dataset.id)));
+    b.addEventListener('click', uiBusyHandler(() => pkVoid(b.dataset.id))));
 
   // Footer "Print all" — only meaningful once there's more than one label, and it
   // lives in the FOOTER because at 10+ boxes the list header is scrolled miles out

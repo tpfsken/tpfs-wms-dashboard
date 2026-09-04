@@ -183,12 +183,12 @@ async function openAccrualReview(id) {
       rows: unpriced, rowKey: 'lp_number',
     });
     up.querySelectorAll('.js-fix-card').forEach(b =>
-      b.addEventListener('click', async (e) => {
+      b.addEventListener('click', uiBusyHandler(async (e) => {
         e.stopPropagation();
         navigateTo('clients');
         await openClientDetail(b.dataset.client);
         switchClientTab('ratecard');
-      }));
+      })));
   }
 
   // Charges grouped client -> charge code (uiTable per code group).
@@ -243,12 +243,12 @@ async function openAccrualReview(id) {
       <button class="ui-btn" id="beRerunBtn">Re-run period</button>
       <button class="ui-btn ui-btn-danger" id="beDiscardBtn">Discard</button>
       <button class="ui-btn ui-btn-primary" id="bePostBtn">Post run — make invoiceable</button>`;
-    document.getElementById('bePostBtn').addEventListener('click', () => bePostRun(d.id));
-    document.getElementById('beDiscardBtn').addEventListener('click', () => beDiscardRun(d.id));
-    document.getElementById('beRerunBtn').addEventListener('click', async () => {
+    document.getElementById('bePostBtn').addEventListener('click', uiBusyHandler(() => bePostRun(d.id)));
+    document.getElementById('beDiscardBtn').addEventListener('click', uiBusyHandler(() => beDiscardRun(d.id)));
+    document.getElementById('beRerunBtn').addEventListener('click', uiBusyHandler(async () => {
       document.getElementById('beRunPeriod').value = String(d.as_of_date).slice(0, 7);
       await beRunAccrual();
-    });
+    }));
   } else if (d.status === 'POSTED') {
     acts.innerHTML = `<span style="color:var(--text2);font-size:13px;">Posted — charges are invoiceable. Corrections are credits.</span>
       <button class="ui-btn ui-btn-primary" id="beGoInvoices">Generate invoices →</button>`;
@@ -409,9 +409,9 @@ async function openRateCard(id) {
              <button class="ui-btn ui-btn-primary" id="beCardActivate">Activate</button>`;
   }
   acts.innerHTML = html;
-  document.getElementById('beCardBack').addEventListener('click', loadClientRateCardTab);
+  document.getElementById('beCardBack').addEventListener('click', uiBusyHandler(loadClientRateCardTab));
   if (editable) {
-    document.getElementById('beCardActivate').addEventListener('click', async () => {
+    document.getElementById('beCardActivate').addEventListener('click', uiBusyHandler(async () => {
       const ok = await uiConfirm({
         title: `Activate "${d.name}"?`,
         body: `It becomes this client's live pricing as of <strong>${esc(String(d.effective_from).slice(0, 10))}</strong> and supersedes the current ACTIVE card. Activated cards are frozen — price changes need a new card.`,
@@ -424,8 +424,8 @@ async function openRateCard(id) {
       if (!r.ok) return uiToast(j.error || 'Activate failed', 'error');
       uiToast('Rate card activated — this is now the live pricing');
       openRateCard(d.id);
-    });
-    document.getElementById('beCardArchive').addEventListener('click', async () => {
+    }));
+    document.getElementById('beCardArchive').addEventListener('click', uiBusyHandler(async () => {
       const ok = await uiConfirm({ title: 'Archive this draft?', confirmLabel: 'Archive', danger: true });
       if (!ok) return;
       const r = await fetch(`${API}/billing/rate-cards/${d.id}/archive`, {
@@ -434,8 +434,8 @@ async function openRateCard(id) {
       if (!r.ok) return uiToast(j.error || 'Archive failed', 'error');
       uiToast('Draft archived');
       loadClientRateCardTab();
-    });
-    document.getElementById('beCardEdit').addEventListener('click', () => beEditCardLines(d));
+    }));
+    document.getElementById('beCardEdit').addEventListener('click', uiBusyHandler(() => beEditCardLines(d)));
   }
   document.getElementById('beCardEditor').style.display = 'none';
 }

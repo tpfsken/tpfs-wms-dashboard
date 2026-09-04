@@ -86,9 +86,9 @@ function qtRenderForm() {
     QT_RESULT = null;          // the rates no longer match the lines
     qtRenderForm();
   });
-  document.getElementById('qtGetPrices').addEventListener('click', qtGetPrices);
-  document.getElementById('qtSave').addEventListener('click', qtSaveQuote);
-  document.getElementById('qtPdf').addEventListener('click', () => QT_SAVED && qtOpenPdf(QT_SAVED.id, QT_SAVED.quote_number));
+  document.getElementById('qtGetPrices').addEventListener('click', uiBusyHandler(qtGetPrices));
+  document.getElementById('qtSave').addEventListener('click', uiBusyHandler(qtSaveQuote));
+  document.getElementById('qtPdf').addEventListener('click', uiBusyHandler(() => QT_SAVED && qtOpenPdf(QT_SAVED.id, QT_SAVED.quote_number)));
 
   host.querySelectorAll('[data-qt-remove]').forEach(b =>
     b.addEventListener('click', () => {

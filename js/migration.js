@@ -22,8 +22,8 @@ async function mgMount(){
     <div id="mgRuns"></div>
     <div id="mgReport"></div>
     <div id="mgReconcile"></div>`;
-  host.querySelector('.js-mg-test').addEventListener('click', mgTest);
-  host.querySelector('.js-mg-run').addEventListener('click', mgRun);
+  host.querySelector('.js-mg-test').addEventListener('click', uiBusyHandler(mgTest));
+  host.querySelector('.js-mg-run').addEventListener('click', uiBusyHandler(mgRun));
   await mgLoadRuns();
 }
 
@@ -138,13 +138,13 @@ function mgRenderReport(){
     mgSaveMap(sel.dataset.code, { clientId: sel.value || null });
   }));
   el.querySelectorAll('.js-mg-rule').forEach(sel => sel.addEventListener('change', () => mgSaveMap(sel.dataset.code, { rules: { [sel.dataset.rule]: sel.value } })));
-  el.querySelectorAll('.js-mg-pieces').forEach(b => b.addEventListener('click', () => mgPieces(b.dataset.code, b.dataset.decision || null)));
+  el.querySelectorAll('.js-mg-pieces').forEach(b => b.addEventListener('click', uiBusyHandler(() => mgPieces(b.dataset.code, b.dataset.decision || null))));
   el.querySelectorAll('.js-mg-loc').forEach(sel => sel.addEventListener('change', () => mgSaveLoc(sel.dataset.bay, sel.dataset.bin, sel.value || null)));
-  el.querySelector('.js-mg-locs').addEventListener('click', mgCreateLocations);
-  el.querySelector('.js-mg-locs-all').addEventListener('click', mgCreateAllLocations);
-  el.querySelector('.js-mg-create-clients').addEventListener('click', mgCreateAllClients);
-  el.querySelector('.js-mg-commit').addEventListener('click', mgCommit);
-  el.querySelector('.js-mg-reconcile').addEventListener('click', mgReconcile);
+  el.querySelector('.js-mg-locs').addEventListener('click', uiBusyHandler(mgCreateLocations));
+  el.querySelector('.js-mg-locs-all').addEventListener('click', uiBusyHandler(mgCreateAllLocations));
+  el.querySelector('.js-mg-create-clients').addEventListener('click', uiBusyHandler(mgCreateAllClients));
+  el.querySelector('.js-mg-commit').addEventListener('click', uiBusyHandler(mgCommit));
+  el.querySelector('.js-mg-reconcile').addEventListener('click', uiBusyHandler(mgReconcile));
 }
 
 function mgClientCard(c, clients){

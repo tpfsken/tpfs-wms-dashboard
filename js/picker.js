@@ -106,7 +106,7 @@ async function openMobilePicker(orderId){
   const c = document.getElementById('pickerConfirmBtn');
   if(c && !c._wired){
     c._wired = true;
-    c.addEventListener('click', confirmCurrentPick);
+    c.addEventListener('click', uiBusyHandler(confirmCurrentPick));
   }
   const s = document.getElementById('pickerSkipBtn');
   if(s && !s._wired){
@@ -125,7 +125,7 @@ async function openMobilePicker(orderId){
   const v = document.getElementById('pickerVerifyBtn');
   if(v && !v._wired){
     v._wired = true;
-    v.addEventListener('click', () => {
+    v.addEventListener('click', uiBusyHandler(() => {
       if(v.disabled) return;
       const tempInp = document.createElement('input');
       tempInp.type = 'file';
@@ -141,7 +141,7 @@ async function openMobilePicker(orderId){
       };
       document.body.appendChild(tempInp);
       tempInp.click();
-    });
+    }));
   }
 
   // Defensive state reset — clear anything that could bleed from a
@@ -335,7 +335,7 @@ function renderAllDone(){
   else state = 'unknown';   // shouldn't happen — fallback diagnostic
 
   // Shared button helpers — keeps the cards consistent
-  const refreshBtn = `<button onclick="reloadMobilePicker()" style="background:#2c7be5;color:#fff;border:none;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">↻ Refresh</button>`;
+  const refreshBtn = `<button onclick="uiRun(this, () => reloadMobilePicker())" style="background:#2c7be5;color:#fff;border:none;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">↻ Refresh</button>`;
   const exitBtn    = `<button onclick="exitMobilePicker()" style="background:#444;color:#fff;border:none;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Exit Picker</button>`;
   const orderLine  = `<div style="font-size:13px;opacity:.7;margin-bottom:20px;">Order <strong>${esc(orderNum)}</strong> · status <strong>${esc(status)}</strong></div>`;
 
@@ -405,7 +405,7 @@ function renderAllDone(){
         <div style="font-size:24px;font-weight:700;margin-bottom:8px;">All ${esc(counts.picked)} pick${counts.picked === 1 ? '' : 's'} done</div>
         <div style="font-size:13px;opacity:.7;margin-bottom:20px;">Order ${esc(orderNum)} is ready to move to PACKING.</div>
         <div style="display:flex;flex-direction:column;gap:10px;">
-          <button onclick="completePickingFromPicker()" style="background:#28a745;color:#fff;border:none;padding:18px 24px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">✓ Complete Picking → PACKING</button>
+          <button onclick="uiRun(this, () => completePickingFromPicker())" style="background:#28a745;color:#fff;border:none;padding:18px 24px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">✓ Complete Picking → PACKING</button>
           ${exitBtn}
         </div>
       </div>`;
@@ -501,7 +501,7 @@ function renderPostPickComplete(){
         What's next?
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;">
-        <button onclick="pickNextOrder()" style="background:#2c7be5;color:#fff;border:none;padding:18px 24px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">Pick another order</button>
+        <button onclick="uiRun(this, () => pickNextOrder())" style="background:#2c7be5;color:#fff;border:none;padding:18px 24px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">Pick another order</button>
         <button onclick="exitMobilePicker()" style="background:#444;color:#fff;border:none;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">← Back to home</button>
       </div>
       <div style="margin-top:24px;font-size:11px;color:#888;">
@@ -817,7 +817,7 @@ function showPickerOverrideModal(qty, defaultCat){
   const submit = document.getElementById('pickerOvSubmitBtn');
   if(submit && !submit._wired){
     submit._wired = true;
-    submit.addEventListener('click', submitPickerOverride);
+    submit.addEventListener('click', uiBusyHandler(submitPickerOverride));
   }
   const pinInp = document.getElementById('pickerOvPin');
   if(pinInp && !pinInp._wired){

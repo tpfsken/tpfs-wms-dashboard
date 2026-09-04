@@ -33,8 +33,8 @@ async function ssiMount(){
     <div id="ssiReview"></div>
     <div class="ui-label">Recent syncs</div>
     <div id="ssiRuns"></div>`;
-  host.querySelector('.js-ssi-test').addEventListener('click', ssiTest);
-  host.querySelector('.js-ssi-sync').addEventListener('click', ssiSync);
+  host.querySelector('.js-ssi-test').addEventListener('click', uiBusyHandler(ssiTest));
+  host.querySelector('.js-ssi-sync').addEventListener('click', uiBusyHandler(ssiSync));
   await ssiLoad();
 }
 
@@ -56,7 +56,7 @@ async function ssiLoad(){
   const c = cfg.d;
   conn.innerHTML = `${c.configured ? uiChip('ACTIVE', 'CONFIGURED') : uiChip('FAILED', 'NOT CONFIGURED')} ${c.config ? uiChip(c.config.active ? 'ACTIVE' : 'FAILED', c.config.active ? 'SYNCING THIS WAREHOUSE' : 'PAUSED') : `<button type="button" class="ui-btn js-ssi-connect">Sync into this warehouse</button>`}
     <div class="ui-hint">${esc(c.summary || '')}${c.missing && c.missing.length ? ' — set ' + esc(c.missing.join(', ')) + ' in Railway' : ''} · poll every ${esc(c.pollMinutes)} min</div>`;
-  const cb = conn.querySelector('.js-ssi-connect'); if(cb) cb.addEventListener('click', async () => { const r = await ssiFetch('PUT', '/shipstation/config', {}); if(!r.ok) return uiToast(r.d.error || 'Could not connect', 'error'); uiToast('ShipStation will sync into this warehouse', 'success'); ssiLoad(); });
+  const cb = conn.querySelector('.js-ssi-connect'); if(cb) cb.addEventListener('click', uiBusyHandler(async () => { const r = await ssiFetch('PUT', '/shipstation/config', {}); if(!r.ok) return uiToast(r.d.error || 'Could not connect', 'error'); uiToast('ShipStation will sync into this warehouse', 'success'); ssiLoad(); }));
   ssiRenderWrites(c);
   const last = _ssi.runs[0];
   document.getElementById('ssiLast').innerHTML = last
@@ -75,7 +75,7 @@ function ssiRenderWrites(c){
   el.innerHTML = `${on ? uiChip('BACKORDERED', 'WRITES ENABLED') : uiChip('DRAFT', 'WRITE LOCK ON')}
     <button type="button" class="ui-btn js-ssi-writes">${on ? 'Lock writes' : 'Enable writes'}</button>
     <div class="ui-hint">${on ? 'Labels, voids and webhook subscriptions are sent to ShipStation.' : 'Read-only: orders and labels sync in, but no label, void or webhook subscription is sent. Pack & Ship shows why.'}</div>`;
-  el.querySelector('.js-ssi-writes').addEventListener('click', async () => {
+  el.querySelector('.js-ssi-writes').addEventListener('click', uiBusyHandler(async () => {
     const ok = await uiConfirm({
       title: on ? 'Turn the ShipStation write lock on?' : 'Enable writes to ShipStation?',
       body: on ? '<p>Pack &amp; Ship will refuse to create or void labels and no webhook can be subscribed until writes are enabled again.</p>'
@@ -87,7 +87,7 @@ function ssiRenderWrites(c){
     if(!r.ok) return uiToast(r.d.error || 'Could not change the write lock', 'error');
     uiToast(r.d.writesEnabled ? 'ShipStation writes enabled' : 'ShipStation write lock is on', 'success');
     ssiLoad();
-  });
+  }));
 }
 
 function ssiRenderStores(){
@@ -128,8 +128,8 @@ function ssiRenderSvc(){
     ], rows, rowKey: 'id',
   });
   else el.querySelector('#ssiSvcTable').innerHTML = uiEmpty('No mappings. Label-at-pack clients need one per requested service, or a "*" catch-all.');
-  el.querySelectorAll('.js-ssi-svc-del').forEach(b => b.addEventListener('click', async () => { const r = await ssiFetch('DELETE', `/shipstation/service-map/${b.dataset.id}`); if(!r.ok) return uiToast(r.d.error || 'Could not remove', 'error'); uiToast('Mapping removed', 'success'); ssiLoad(); }));
-  el.querySelector('.js-ssi-svc-add').addEventListener('click', async () => {
+  el.querySelectorAll('.js-ssi-svc-del').forEach(b => b.addEventListener('click', uiBusyHandler(async () => { const r = await ssiFetch('DELETE', `/shipstation/service-map/${b.dataset.id}`); if(!r.ok) return uiToast(r.d.error || 'Could not remove', 'error'); uiToast('Mapping removed', 'success'); ssiLoad(); })));
+  el.querySelector('.js-ssi-svc-add').addEventListener('click', uiBusyHandler(async () => {
     if(!_ssi.carriers.length){ const c = await ssiFetch('GET', '/shipstation/carriers'); _ssi.carriers = c.ok ? (c.d.rows || []) : []; }
     const m = uiModal({
       title: 'Map a requested service',
@@ -151,7 +151,7 @@ function ssiRenderSvc(){
       if(!_ssi.services[code]){ const s = await ssiFetch('GET', `/shipstation/carriers/${encodeURIComponent(code)}/services`); _ssi.services[code] = s.ok ? (s.d.rows || []) : []; }
       sel.innerHTML = _ssi.services[code].map(s => `<option value="${esc(s.code)}">${esc(s.name)}</option>`).join('') || '<option value="">no services</option>';
     });
-  });
+  }));
 }
 
 function ssiRenderReview(){
@@ -167,7 +167,7 @@ function ssiRenderReview(){
       { key: '_res', label: '', render: r => `<button type="button" class="ui-btn js-ssi-resolve" data-id="${esc(r.id)}">Resolved</button>` },
     ], rows: _ssi.review, rowKey: 'id',
   });
-  el.querySelectorAll('.js-ssi-resolve').forEach(b => b.addEventListener('click', async () => { const r = await ssiFetch('POST', `/shipstation/review/${b.dataset.id}/resolve`); if(!r.ok) return uiToast(r.d.error || 'Could not resolve', 'error'); uiToast('Marked resolved', 'success'); ssiLoad(); }));
+  el.querySelectorAll('.js-ssi-resolve').forEach(b => b.addEventListener('click', uiBusyHandler(async () => { const r = await ssiFetch('POST', `/shipstation/review/${b.dataset.id}/resolve`); if(!r.ok) return uiToast(r.d.error || 'Could not resolve', 'error'); uiToast('Marked resolved', 'success'); ssiLoad(); })));
 }
 
 function ssiRenderRuns(){

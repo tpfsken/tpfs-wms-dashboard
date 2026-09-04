@@ -184,13 +184,13 @@ function fpRender(){
   });
   body.querySelector('#fpPackMode').addEventListener('change', (e) => { _fp.packMode = e.target.checked; });
   const hereBtn = body.querySelector('.js-fp-here');
-  if(hereBtn) hereBtn.addEventListener('click', fpHere);
+  if(hereBtn) hereBtn.addEventListener('click', uiBusyHandler(fpHere));
   body.querySelector('.js-fp-exception').addEventListener('click', fpOpenException);
   const pause = body.querySelector('.js-fp-pause');
-  if(pause) pause.addEventListener('click', fpPause);
+  if(pause) pause.addEventListener('click', uiBusyHandler(fpPause));
   const cnt = body.querySelector('.js-fp-count');
-  if(cnt) cnt.addEventListener('click', fpCount);
-  body.querySelector('.js-fp-confirm').addEventListener('click', fpConfirm);
+  if(cnt) cnt.addEventListener('click', uiBusyHandler(fpCount));
+  body.querySelector('.js-fp-confirm').addEventListener('click', uiBusyHandler(fpConfirm));
   if(!needLoc) fpLoadPhoto(t.skuId);
 }
 

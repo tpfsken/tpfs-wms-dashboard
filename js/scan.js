@@ -191,10 +191,10 @@ function scanInputMount(container, opts = {}){
     });
   }
   if(camBtn){
-    camBtn.addEventListener('click', () => scanOpenCamera({
+    camBtn.addEventListener('click', uiBusyHandler(() => scanOpenCamera({
       onResult: (raw, format) => emit(raw, 'camera', format),
       onError:  (msg) => { showFlash(msg, 'danger'); if(o.sound) scanBeep('error'); },
-    }));
+    })));
   }
 
   if(o.autofocus) setTimeout(() => input.focus({ preventScroll: true }), 0);
@@ -417,7 +417,7 @@ async function scanOpenCamera({ onResult, onError }){
     gate.reset();
   }
   if(focusModes.includes('continuous')) await applyAdvanced({ focusMode: 'continuous' });
-  video.addEventListener('click', refocus);
+  video.addEventListener('click', uiBusyHandler(refocus));
 
   if(caps.zoom && typeof caps.zoom.min === 'number' && caps.zoom.max > caps.zoom.min){
     zoomWrap.hidden = false;
@@ -429,12 +429,12 @@ async function scanOpenCamera({ onResult, onError }){
   if(caps.torch){
     torchBtn.hidden = false;
     let torchOn = false;
-    torchBtn.addEventListener('click', async () => {
+    torchBtn.addEventListener('click', uiBusyHandler(async () => {
       torchOn = !torchOn;
       if(!(await applyAdvanced({ torch: torchOn }))){ torchOn = !torchOn; setStatus('Torch not available', 'bad'); return; }
       torchBtn.classList.toggle('scan-cam-torch-on', torchOn);
       torchBtn.setAttribute('aria-pressed', String(torchOn));
-    });
+    }));
   }
 
   // ---- ZXing (always loaded: Capture needs it even when native is live) ------
@@ -479,7 +479,7 @@ async function scanOpenCamera({ onResult, onError }){
       captureBtn.disabled = false;
     }
   }
-  captureBtn.addEventListener('click', captureStill);
+  captureBtn.addEventListener('click', uiBusyHandler(captureStill));
 
   // ---- continuous: ZXing frame loop ------------------------------------------
   async function startZXingLive(reasonNote){

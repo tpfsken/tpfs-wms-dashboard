@@ -94,6 +94,18 @@ every class referenced in `js/*.js` + `index.html` against `app.css`, carries an
 allowlist for the known-benign cases (printDocs' own stylesheet, JS hooks), and
 must exit 0. Adding to its allowlist is a review decision, not a reflex.
 
+**6. A second click fires a second request.** Every async click handler goes
+through `uiBusy` (`js/ui.js`): `el.addEventListener('click', uiBusyHandler(async (e) => …))`,
+inline `onclick="uiRun(this, () => loadOrders())"`, modal actions and
+`uiTable` rows are wired already. While the promise runs the control is
+disabled, shows a spinner + "Working…" (icon buttons: spinner only), further
+clicks are ignored; on completion a brief success flash, or the error text
+beside the control (a handler that reported `uiToast(…, 'error')` counts as a
+failure). Pressed state is CSS `:active` via `--press-scale` / `--press-opacity`;
+floor mode adds a vibration on press. **Run `node scripts/busy-census.mjs`
+before every commit** — it flags any async click handler that is not wrapped
+and must exit 0.
+
 ## XSS / HTML interpolation — NON-NEGOTIABLE
 
 Every value coming from the API, the user, or any other untrusted source MUST go through `esc()` before being placed in `innerHTML` or an HTML attribute. No exceptions. `esc(undefined)` and `esc(null)` are safe; they return `''`.

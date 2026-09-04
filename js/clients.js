@@ -109,8 +109,8 @@ function wireClientTabs(){
   // KPI tab buttons (Save / Reset to defaults). Idempotent.
   const saveBtn = document.getElementById('cliKpiSaveBtn');
   const seedBtn = document.getElementById('cliKpiSeedBtn');
-  if(saveBtn && !saveBtn._wired){ saveBtn._wired = true; saveBtn.addEventListener('click', saveClientKpiConfig); }
-  if(seedBtn && !seedBtn._wired){ seedBtn._wired = true; seedBtn.addEventListener('click', resetClientKpiConfig); }
+  if(saveBtn && !saveBtn._wired){ saveBtn._wired = true; saveBtn.addEventListener('click', uiBusyHandler(saveClientKpiConfig)); }
+  if(seedBtn && !seedBtn._wired){ seedBtn._wired = true; seedBtn.addEventListener('click', uiBusyHandler(resetClientKpiConfig)); }
 }
 
 function switchClientTab(tab){
@@ -750,10 +750,10 @@ function renderSlaRulesBody(){
     _slaRules[parseInt(e.target.dataset.idx)].exception_charge_amount = v === '' ? null : Number(v);
   }));
 
-  body.querySelectorAll('.js-sla-save').forEach(btn => btn.addEventListener('click', () =>
-    saveSlaRule(parseInt(btn.dataset.idx))));
-  body.querySelectorAll('.js-sla-rm').forEach(btn => btn.addEventListener('click', () =>
-    deleteSlaRule(parseInt(btn.dataset.idx))));
+  body.querySelectorAll('.js-sla-save').forEach(btn => btn.addEventListener('click', uiBusyHandler(() =>
+    saveSlaRule(parseInt(btn.dataset.idx)))));
+  body.querySelectorAll('.js-sla-rm').forEach(btn => btn.addEventListener('click', uiBusyHandler(() =>
+    deleteSlaRule(parseInt(btn.dataset.idx)))));
 }
 
 async function saveSlaRule(idx){
@@ -817,7 +817,7 @@ async function loadClientItemsTab(){
   const addBtn = document.getElementById('cliItemsAddBtn');
   if(addBtn && !addBtn._wired){
     addBtn._wired = true;
-    addBtn.addEventListener('click', async () => {
+    addBtn.addEventListener('click', uiBusyHandler(async () => {
       // Open the existing New Item modal, then preselect this client.
       // openItemFormModal lives in inventory.js — relies on globals.
       await openItemFormModal();
@@ -826,7 +826,7 @@ async function loadClientItemsTab(){
         `${_currentClient.code || ''} — ${_currentClient.name || ''}`);
       // Trigger the hazmat hint logic
       if(typeof onItemClientChange === 'function') onItemClientChange();
-    });
+    }));
   }
   fetchClientItems(search?.value.trim() || '');
 }

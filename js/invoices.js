@@ -119,8 +119,8 @@ async function openInvoice(id) {
     (next ? `<button class="ui-btn ui-btn-primary" id="invAdvBtn">Mark ${esc(next)}</button>` : '') +
     (d.status !== 'VOID' && d.status !== 'PAID'
       ? '<button class="ui-btn ui-btn-danger" id="invVoidBtn">Void</button>' : '');
-  document.getElementById('invAdvBtn')?.addEventListener('click', () => advanceInvoice(d.id, next));
-  document.getElementById('invVoidBtn')?.addEventListener('click', () => voidInvoice(d.id));
+  document.getElementById('invAdvBtn')?.addEventListener('click', uiBusyHandler(() => advanceInvoice(d.id, next)));
+  document.getElementById('invVoidBtn')?.addEventListener('click', uiBusyHandler(() => voidInvoice(d.id)));
 }
 
 function closeInvoiceDetail() {

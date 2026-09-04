@@ -52,6 +52,7 @@ function toggleFloorTextSize(){
 
 function bootFloor(){
   document.body.classList.add('floor-mode');
+  floorWirePressFeedback();
   applyFloorTextSize(floorTextSize());
   document.querySelectorAll('.js-floor-textsize').forEach(b => {
     if(b._wired) return;
@@ -205,10 +206,10 @@ async function loadFloorPickList(){
   }).join('');
 
   body.querySelectorAll('.js-floor-scanpick').forEach(b =>
-    b.addEventListener('click', (e) => { e.stopPropagation(); openFloorPick(b.dataset.id); }));
+    b.addEventListener('click', uiBusyHandler((e) => { e.stopPropagation(); openFloorPick(b.dataset.id); })));
 
   body.querySelectorAll('.js-floor-pick-row').forEach(row => {
-    row.addEventListener('click', () => {
+    row.addEventListener('click', uiBusyHandler(() => {
       if(row.dataset.locked === '1'){
         // Locked by someone else — bounce with a buzz
         if('vibrate' in navigator) navigator.vibrate([60, 60, 60]);
@@ -216,7 +217,7 @@ async function loadFloorPickList(){
       }
       // Re-uses the existing mobile picker — same UI everyone tested
       openMobilePicker(row.dataset.id);
-    });
+    }));
   });
 }
 
@@ -347,4 +348,18 @@ async function floorScanTestRun(raw, meta){
     _fstInput.setBusy(false);
     _fstInput.focus();
   }
+}
+
+// Floor mode press feedback: a short vibration on every press of a button, card or row
+// (the pressed look itself is CSS :active). Wired once; a no-op where vibrate is missing.
+let _floorPressWired = false;
+function floorWirePressFeedback(){
+  if(_floorPressWired) return;
+  _floorPressWired = true;
+  document.addEventListener('pointerdown', (e) => {
+    if(!document.body.classList.contains('floor-mode')) return;
+    const t = e.target && e.target.closest && e.target.closest('button, .floor-card, .ui-row-click, .ui-btn');
+    if(!t || t.disabled) return;
+    if('vibrate' in navigator){ try { navigator.vibrate(12); } catch(_) {} }
+  }, { passive: true });
 }

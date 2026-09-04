@@ -90,8 +90,8 @@ function ordRenderBulk(rows){
     <button type="button" class="ui-btn js-ord-bulk-clear">Clear</button>
     <button type="button" class="ui-btn ui-btn-danger js-ord-bulk-ext">Close as shipped externally</button>` : '';
   if(!n) return;
-  host.querySelector('.js-ord-bulk-clear').addEventListener('click', () => { _ordSel.clear(); loadOrders(); });
-  host.querySelector('.js-ord-bulk-ext').addEventListener('click', () => ordBulkCloseExternally(rows));
+  host.querySelector('.js-ord-bulk-clear').addEventListener('click', uiBusyHandler(() => { _ordSel.clear(); loadOrders(); }));
+  host.querySelector('.js-ord-bulk-ext').addEventListener('click', uiBusyHandler(() => ordBulkCloseExternally(rows)));
 }
 // Close as shipped externally: the order shipped from another system (Excalibur / ShipStation
 // before the inventory migration). Releases pending allocations, drops pending pick tasks,
@@ -338,12 +338,12 @@ async function openOrderDetail(id){
     if(!html) html = '<div class="ui-hint">Terminal state — no actions available.</div>';
     transBtns.innerHTML = html;
     transBtns.querySelectorAll('.js-trans-btn').forEach(btn =>
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', uiBusyHandler(() => {
         if(btn.dataset.blocked === '1'){
           return uiToast('Some lines aren\'t fully allocated — finish allocating before advancing', 'error');
         }
         transitionOrder(id, btn.dataset.target);
-      })
+      }))
     );
     // Ship now opens the PACKAGES panel, not the old single-parcel modal.
     // A parcel order is one or more boxes, each with its own label — the old
@@ -351,7 +351,7 @@ async function openOrderDetail(id){
     // a second box impossible. The manual/LTL path still lives inside the panel
     // ("Ship without label"), because a pallet is not a parcel.
     transBtns.querySelectorAll('.js-ship-btn').forEach(btn =>
-      btn.addEventListener('click', () => openPackagesModal())
+      btn.addEventListener('click', uiBusyHandler(() => openPackagesModal()))
     );
     transBtns.querySelectorAll('.js-unallocate-all-btn').forEach(btn =>
       btn.addEventListener('click', () => {
@@ -568,18 +568,18 @@ function renderPickList(d, isPickable){
   });
 
   wrap.querySelectorAll('.js-pick-confirm').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', uiBusyHandler(() => {
       const allocId = btn.dataset.id;
       const qty = parseInt(wrap.querySelector(`.js-pick-qty[data-id="${allocId}"]`)?.value) || 0;
       confirmPickAllocation(d.id, allocId, qty, btn);
-    });
+    }));
   });
 
   const completeBtn = document.getElementById('pickListComplete');
   completeBtn.style.display = allDone ? 'inline-flex' : 'none';
   // Complete Picking moves PICKING → PACKING (unified workflow, post-020 —
   // there is no separate PICKED stage anymore).
-  completeBtn.onclick = () => transitionOrder(d.id, 'PACKING');
+  completeBtn.onclick = uiBusyHandler(() => transitionOrder(d.id, 'PACKING'));
 }
 
 // =============================================================================
@@ -634,7 +634,7 @@ function showShipOrderModal(){
         ${uiField({ id: 'shipHeight', label: 'Height (in)', type: 'number' })}
       </div>
       <div class="ship-rates-bar">
-        <button class="ui-btn" id="shipGetRatesBtn" onclick="getShipRates()">Get live rates</button>
+        <button class="ui-btn" id="shipGetRatesBtn" onclick="uiRun(this, () => getShipRates())">Get live rates</button>
         <span class="ui-hint" id="shipRatesHint"></span>
       </div>
       <div id="shipRatesBox" class="ship-rates" style="display:none;"><div id="shipRatesList"></div></div>
@@ -1205,10 +1205,10 @@ async function searchOrderSkus(){
   }).join('');
 
   div.querySelectorAll('.js-sku-row').forEach(row => {
-    row.addEventListener('click', () => {
+    row.addEventListener('click', uiBusyHandler(() => {
       const filter = document.getElementById('noSkuSearch').value;
       expandSkuLots(row, row.dataset.skuId, row.dataset.skuCode, row.dataset.skuName, row.dataset.uom, parseInt(row.dataset.avail) || 0, filter);
-    });
+    }));
   });
 
   if(autoExpand.size > 0){
@@ -1509,9 +1509,9 @@ async function loadOrderAttachments(orderId){
   }).join('');
 
   list.querySelectorAll('.js-ord-att-dl').forEach(btn =>
-    btn.addEventListener('click', () => openOrderAttachment(orderId, btn.dataset.attId)));
+    btn.addEventListener('click', uiBusyHandler(() => openOrderAttachment(orderId, btn.dataset.attId))));
   list.querySelectorAll('.js-ord-att-rm').forEach(btn =>
-    btn.addEventListener('click', () => deleteOrderAttachment(orderId, btn.dataset.attId)));
+    btn.addEventListener('click', uiBusyHandler(() => deleteOrderAttachment(orderId, btn.dataset.attId))));
 }
 
 async function openOrderAttachment(orderId, attId){
@@ -1771,7 +1771,7 @@ function renderEditOrderLines(){
     inp.addEventListener('change', e => saveEditedLineQty(e.target));
   });
   body.querySelectorAll('.js-eo-line-rm').forEach(btn => {
-    btn.addEventListener('click', () => removeOrderLine(btn.dataset.lineId, btn.dataset.hasAlloc === '1'));
+    btn.addEventListener('click', uiBusyHandler(() => removeOrderLine(btn.dataset.lineId, btn.dataset.hasAlloc === '1')));
   });
 }
 
@@ -1799,7 +1799,7 @@ function wireEditOrderLineHandlers(){
   }
   if(saveBtn && !saveBtn._wired){
     saveBtn._wired = true;
-    saveBtn.addEventListener('click', addNewOrderLine);
+    saveBtn.addEventListener('click', uiBusyHandler(addNewOrderLine));
   }
   if(search && !search._wired){
     search._wired = true;

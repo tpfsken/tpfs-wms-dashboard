@@ -168,6 +168,82 @@ function uiToast(msg, type = 'success', timeout) {
   requestAnimationFrame(() => t.classList.add('ui-toast-in'));
   const ms = timeout ?? (type === 'error' ? 6000 : 2800);
   setTimeout(() => { t.classList.remove('ui-toast-in'); setTimeout(() => t.remove(), 250); }, ms);
+  _uiLastToast = { type, msg: String(msg), at: Date.now() };
+}
+let _uiLastToast = null;
+
+/* ---------------------------------------------------------------------------
+ * BUSY — one guard for every async click.
+ *
+ *   uiBusy(el, work)            run `work` (a promise, or a function returning
+ *                               one) on behalf of control `el`: pressed state
+ *                               is CSS (:active); while the promise runs the
+ *                               control is disabled, shows a spinner + "Working…"
+ *                               (buttons) or just dims (rows, cards), and every
+ *                               further click is ignored — a second request can
+ *                               never fire. On completion: a brief success
+ *                               flash, unless the handler reported an error
+ *                               toast meanwhile, in which case that message is
+ *                               shown next to the control. A rejection shows
+ *                               the error next to the control and re-throws.
+ *   uiBusyHandler(fn, opts)     wrap a click handler: el.addEventListener('click', uiBusyHandler(async (e) => …))
+ *   uiRun(el, fn)               for inline onclick: onclick="uiRun(this, () => loadOrders())"
+ *   Floor mode adds a short vibration on press (see floor.js).
+ * ------------------------------------------------------------------------- */
+const UI_BUSY_LABEL = 'Working…';
+const UI_FLASH_MS = 700;
+function uiBusy(el, work, opts = {}) {
+  if (el && el.dataset && el.dataset.uiBusy === '1') return Promise.resolve(undefined);   // already running: ignore
+  let p;
+  try { p = typeof work === 'function' ? work() : work; } catch (e) { p = Promise.reject(e); }
+  if (!p || typeof p.then !== 'function' || !el || !el.classList) return p;               // synchronous: nothing to track
+  const isBtn = el.tagName === 'BUTTON' || el.classList.contains('ui-btn');
+  const wasDisabled = !!el.disabled, html = el.innerHTML, startedAt = Date.now();
+  el.dataset.uiBusy = '1';
+  el.classList.add('ui-busy');
+  el.setAttribute('aria-busy', 'true');
+  if (isBtn) {
+    el.disabled = true;
+    const iconOnly = (el.textContent || '').trim().length <= 2;      // "↻", "×", "+": spinner only, keep the footprint
+    el.innerHTML = `<span class="ui-spin ui-btn-spin" aria-hidden="true"></span>${iconOnly ? '' : `<span>${esc(opts.label || UI_BUSY_LABEL)}</span>`}`;
+  }
+  uiBtnError(el, null);
+  const restore = () => {
+    delete el.dataset.uiBusy;
+    el.classList.remove('ui-busy');
+    el.removeAttribute('aria-busy');
+    if (isBtn) { el.innerHTML = html; el.disabled = wasDisabled; }
+  };
+  return p.then((v) => {
+    restore();
+    const errToast = _uiLastToast && _uiLastToast.type === 'error' && _uiLastToast.at >= startedAt ? _uiLastToast.msg : null;
+    if (errToast) uiBtnError(el, errToast);
+    else if (v !== false) uiFlash(el);
+    return v;
+  }, (err) => {
+    restore();
+    uiBtnError(el, (err && err.message) || 'Something went wrong');
+    throw err;
+  });
+}
+function uiBusyHandler(fn, opts) {
+  return function (e) { return uiBusy((e && e.currentTarget) || this, () => fn.call(this, e), opts); };
+}
+function uiRun(el, fn, opts) { return uiBusy(el, fn, opts); }
+function uiFlash(el, tone = 'ok') {
+  if (!el || !el.isConnected) return;
+  el.classList.add(`ui-flash-${tone}`);
+  setTimeout(() => el.classList.remove(`ui-flash-${tone}`), UI_FLASH_MS);
+}
+/** Error text right after the control (cleared on the next run or after a while). */
+function uiBtnError(el, msg) {
+  if (!el || !el.parentNode) return;
+  let n = el.nextElementSibling && el.nextElementSibling.classList && el.nextElementSibling.classList.contains('ui-btn-err') ? el.nextElementSibling : null;
+  if (!msg) { if (n) n.remove(); return; }
+  if (!n) { n = document.createElement('span'); n.className = 'ui-btn-err ui-err-text'; n.setAttribute('role', 'alert'); el.insertAdjacentElement('afterend', n); }
+  n.textContent = msg;
+  clearTimeout(n._t);
+  n._t = setTimeout(() => n.remove(), 8000);
 }
 
 /* ---------------------------------------------------------------------------
@@ -206,16 +282,17 @@ function uiModal({ title, body = '', actions = [], width = 520, onClose = null }
     const b = document.createElement('button');
     b.className = 'ui-btn' + (a.primary ? ' ui-btn-primary' : '') + (a.danger ? ' ui-btn-danger' : '');
     b.textContent = a.label;
-    b.addEventListener('click', async () => {
+    b.addEventListener('click', uiBusyHandler(async () => {
       if (!a.onClick) return api.close();
-      b.disabled = true;
       try {
         const keep = await a.onClick(api);
         if (keep !== false) api.close();
+        return keep;                       // false = validation failed: no success flash
       } catch (e) {
         uiToast(e.message || 'Something went wrong', 'error');
-      } finally { b.disabled = false; }
-    });
+        return false;
+      }
+    }));
     acts.appendChild(b);
   }
   ov.querySelector('.ui-modal-x').addEventListener('click', api.close);
@@ -378,7 +455,7 @@ function uiTable(container, opts) {
   if (onRowClick) {
     const byKey = Object.fromEntries(view.map(r => [String(r[rowKey]), r]));
     el.querySelectorAll('.ui-row-click').forEach(tr =>
-      tr.addEventListener('click', () => onRowClick(byKey[tr.dataset.key])));
+      tr.addEventListener('click', uiBusyHandler(() => onRowClick(byKey[tr.dataset.key]))));   // rows dim while an async open runs; re-clicks ignored
   }
   wireSort();
 }

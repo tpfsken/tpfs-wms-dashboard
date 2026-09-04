@@ -289,10 +289,10 @@ const searchPortalSkus = debounce(async function () {
     </div>`).join('');
 
   div.querySelectorAll('.js-pno-sku').forEach(row =>
-    row.addEventListener('click', () => {
+    row.addEventListener('click', uiBusyHandler(() => {
       try { expandPortalSkuLots(row, JSON.parse(row.dataset.payload)); }
       catch (e) { uiToast('Could not read that SKU row', 'error'); }
-    }));
+    })));
 }, 250);
 
 // Click a SKU -> show its available lots; click a lot -> add the line.

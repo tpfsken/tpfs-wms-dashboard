@@ -115,14 +115,14 @@
         <div class="card-title">Performance by client</div>
         <div class="ui-hint" style="margin-left:12px;">SLA status across active clients · last 30 days</div>
         <div style="flex:1"></div>
-        <button class="ui-btn" onclick="loadClientsPerformance()">Refresh</button>
+        <button class="ui-btn" onclick="uiRun(this, () => loadClientsPerformance())">Refresh</button>
       </div>
       <div style="overflow:auto;max-height:400px;" id="clientsPerformanceBody"></div>
     </div>
   </div>
 
   <div class="page" id="page-inventory">
-    <div class="page-header"><button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location · add new items from the client's Item Master tab</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><input type="text" class="ui-input" id="invSearch" placeholder="Search SKU, lot, LP, or location…" style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="ui-btn" onclick="loadInventory()">Refresh</button><button class="ui-btn ui-btn-primary ops-only" onclick="showCaseBreakModal()">Case break</button></div>
+    <div class="page-header"><button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location · add new items from the client's Item Master tab</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><input type="text" class="ui-input" id="invSearch" placeholder="Search SKU, lot, LP, or location…" style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="ui-btn" onclick="uiRun(this, () => loadInventory())">Refresh</button><button class="ui-btn ui-btn-primary ops-only" onclick="uiRun(this, () => showCaseBreakModal())">Case break</button></div>
     <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
       <div style="flex:1;overflow:auto;" id="invListWrap"></div>
       <div id="invPager"></div>
@@ -140,7 +140,7 @@
   </div>
 
   <div class="page" id="page-orders">
-    <div class="page-header"><button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button><div><div class="page-title">Orders</div><div class="page-subtitle">Outbound order management</div></div><div style="flex:1"></div><input type="text" class="ui-input" id="ordSearch" placeholder="Search order #…" style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="ordStatusFilterWrap"></div><button class="ui-btn" onclick="loadOrders()">Refresh</button><button class="ui-btn ui-btn-primary ops-only" onclick="showNewOrderModal()">New order</button><button class="ui-btn ui-btn-primary portal-only" onclick="navigateTo('portalNewOrder')">New order</button></div>
+    <div class="page-header"><button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button><div><div class="page-title">Orders</div><div class="page-subtitle">Outbound order management</div></div><div style="flex:1"></div><input type="text" class="ui-input" id="ordSearch" placeholder="Search order #…" style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="ordStatusFilterWrap"></div><button class="ui-btn" onclick="uiRun(this, () => loadOrders())">Refresh</button><button class="ui-btn ui-btn-primary ops-only" onclick="uiRun(this, () => showNewOrderModal())">New order</button><button class="ui-btn ui-btn-primary portal-only" onclick="navigateTo('portalNewOrder')">New order</button></div>
     <div id="ordListView">
       <div class="card">
         <div class="ord-bulk-bar" id="ordBulkBar" hidden></div>
@@ -153,7 +153,7 @@
         <button class="ui-btn" onclick="closeOrderDetail()">← Orders</button>
         <div><div class="page-title" id="ordDetailTitle"></div><div class="page-subtitle" id="ordDetailSub"></div></div>
         <div style="flex:1"></div>
-        <button class="ui-btn ui-btn-primary ops-only" onclick="openMobilePicker(COI)" title="Open the tablet-friendly picker">Pick on tablet</button>
+        <button class="ui-btn ui-btn-primary ops-only" onclick="uiRun(this, () => openMobilePicker(COI))" title="Open the tablet-friendly picker">Pick on tablet</button>
         <!-- Print menu — Pick / Packing / BOL in one dropdown -->
         <div class="ord-print-wrap">
           <button class="ui-btn" onclick="document.getElementById('ordPrintMenu').classList.toggle('open')" title="Print pick slip / packing slip / BOL">Print ▾</button>
@@ -168,7 +168,7 @@
           </div>
         </div>
         <button class="ui-btn ops-only js-ord-edit-btn" onclick="openEditOrderModal()" title="Edit order details">Edit</button>
-        <button class="ui-btn ui-btn-danger ops-only js-ord-delete-btn" onclick="deleteCurrentOrder()" title="Soft-delete this order (kept for audit)">Delete</button>
+        <button class="ui-btn ui-btn-danger ops-only js-ord-delete-btn" onclick="uiRun(this, () => deleteCurrentOrder())" title="Soft-delete this order (kept for audit)">Delete</button>
       </div>
       <div id="ordBanners"></div>
       <div class="ord-grid">
@@ -210,7 +210,7 @@
             <div style="padding:16px 20px 20px;">
               <div id="allocLinesList"></div>
               <div class="alloc-foot">
-                <button class="ui-btn ui-btn-primary" onclick="submitAllocation()">Confirm allocation</button>
+                <button class="ui-btn ui-btn-primary" onclick="uiRun(this, () => submitAllocation())">Confirm allocation</button>
                 <button class="ui-btn" onclick="document.getElementById('allocPanel').style.display='none'">Cancel</button>
               </div>
             </div>
@@ -240,7 +240,7 @@
 
   <div class="page" id="page-inbound">
     <div id="inbListView">
-      <div class="page-header"><div><div class="page-title">Receiving</div><div class="page-subtitle">Purchase orders and inbound</div></div><div style="flex:1"></div><button class="ui-btn" onclick="loadInbound()">Refresh</button><button class="ui-btn ui-btn-primary" onclick="showNewPoModal()">New PO</button></div>
+      <div class="page-header"><div><div class="page-title">Receiving</div><div class="page-subtitle">Purchase orders and inbound</div></div><div style="flex:1"></div><button class="ui-btn" onclick="uiRun(this, () => loadInbound())">Refresh</button><button class="ui-btn ui-btn-primary" onclick="uiRun(this, () => showNewPoModal())">New PO</button></div>
       <div class="card">
         <div style="overflow:auto;" id="inbListWrap"></div>
         <div id="inbPager"></div>
@@ -262,8 +262,8 @@
         <div style="padding:16px 20px 20px;">
           <div id="receiveLinesList"></div>
           <div class="alloc-foot">
-            <button class="ui-btn ui-btn-primary" id="submitReceiveBtn" onclick="submitReceive()">Receive &amp; create LPs</button>
-            <button class="ui-btn" id="completePoBtn" onclick="completePo()" style="display:none;">Complete PO</button>
+            <button class="ui-btn ui-btn-primary" id="submitReceiveBtn" onclick="uiRun(this, () => submitReceive())">Receive &amp; create LPs</button>
+            <button class="ui-btn" id="completePoBtn" onclick="uiRun(this, () => completePo())" style="display:none;">Complete PO</button>
           </div>
         </div>
       </div>
@@ -284,7 +284,7 @@
         <div class="ui-hint" id="intakeCount"></div>
         <div style="flex:1"></div>
         <div class="cb-wrap" style="max-width:160px;" id="intakeStatusFilterWrap"></div>
-        <button class="ui-btn" onclick="loadIntake()">Refresh</button>
+        <button class="ui-btn" onclick="uiRun(this, () => loadIntake())">Refresh</button>
         <button class="ui-btn ui-btn-primary" onclick="document.getElementById('intakeUploadInput').click()">Upload PDF</button>
         <input type="file" id="intakeUploadInput" accept="application/pdf,.pdf" multiple style="display:none;">
       </div>
@@ -333,11 +333,11 @@
           </div>
           <div id="intakeRevForm" style="padding:16px;overflow-y:auto;flex:1;"></div>
           <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;">
-            <button class="ui-btn" onclick="runIntakeExtract(true)" id="intakeReextractBtn">Re-extract</button>
-            <button class="ui-btn" onclick="saveIntakeEdits()" id="intakeSaveBtn">Save edits</button>
+            <button class="ui-btn" onclick="uiRun(this, () => runIntakeExtract(true))" id="intakeReextractBtn">Re-extract</button>
+            <button class="ui-btn" onclick="uiRun(this, () => saveIntakeEdits())" id="intakeSaveBtn">Save edits</button>
             <div style="flex:1"></div>
-            <button class="ui-btn ui-btn-danger" onclick="rejectIntakeDoc()">Reject</button>
-            <button class="ui-btn ui-btn-primary" onclick="approveIntakeDoc()" id="intakeApproveBtn">Approve &amp; create</button>
+            <button class="ui-btn ui-btn-danger" onclick="uiRun(this, () => rejectIntakeDoc())">Reject</button>
+            <button class="ui-btn ui-btn-primary" onclick="uiRun(this, () => approveIntakeDoc())" id="intakeApproveBtn">Approve &amp; create</button>
           </div>
         </div>
       </div>
@@ -384,7 +384,7 @@
         </div>
         <div style="font-size:22px;color:var(--text2);">›</div>
       </button>
-      <button class="floor-card floor-card-flat floor-card-go" type="button" onclick="fpStartQueue()">
+      <button class="floor-card floor-card-flat floor-card-go" type="button" onclick="uiRun(this, () => fpStartQueue())">
         <div class="floor-card-main">
           <div class="floor-card-title">Start picking</div>
           <div class="floor-card-sub">Your wave, then the oldest ready orders — one stop at a time</div>
@@ -416,7 +416,7 @@
     <div style="padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);">
       <button onclick="navigateTo('floorHome')" style="background:#3a3a3a;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:14px;cursor:pointer;">← Home</button>
       <div style="flex:1;font-size:16px;font-weight:700;">Orders to Pick</div>
-      <button onclick="loadFloorPickList()" style="background:#3a3a3a;color:#fff;border:none;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;">↻</button>
+      <button onclick="uiRun(this, () => loadFloorPickList())" style="background:#3a3a3a;color:#fff;border:none;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;">↻</button>
     </div>
     <div id="floorPickListBody" style="padding:12px;"></div>
   </div>
@@ -426,7 +426,7 @@
     <div style="padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);">
       <button onclick="navigateTo('floorHome')" style="background:#3a3a3a;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:14px;cursor:pointer;">← Home</button>
       <div style="flex:1;font-size:16px;font-weight:700;">Receive Inbound</div>
-      <button onclick="loadFloorInbound()" style="background:#3a3a3a;color:#fff;border:none;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;">↻</button>
+      <button onclick="uiRun(this, () => loadFloorInbound())" style="background:#3a3a3a;color:#fff;border:none;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;">↻</button>
     </div>
     <div id="floorInboundBody" style="padding:12px;"></div>
   </div>
@@ -608,7 +608,7 @@
 
     <!-- Sticky submit bar — Submit is always reachable without scrolling. -->
     <div class="pno-submitbar">
-      <button class="ui-btn ui-btn-primary" id="pnoSubmitBtn" onclick="submitPortalNewOrder()">Submit order</button>
+      <button class="ui-btn ui-btn-primary" id="pnoSubmitBtn" onclick="uiRun(this, () => submitPortalNewOrder())">Submit order</button>
       <button class="ui-btn" onclick="navigateTo('portalHome')">Cancel</button>
     </div>
   </div>
@@ -640,7 +640,7 @@
       <div class="card-head">
         <div class="card-title">Your uploads</div>
         <div style="flex:1"></div>
-        <button class="ui-btn" onclick="refreshPortalIntakeList()">Refresh</button>
+        <button class="ui-btn" onclick="uiRun(this, () => refreshPortalIntakeList())">Refresh</button>
       </div>
       <div style="flex:1;overflow:auto;" id="portalIntakeWrap"></div>
     </div>
@@ -652,7 +652,7 @@
       <div class="page-header">
         <div><div class="page-title">Clients</div><div class="page-subtitle">3PL client management — click a row to edit KPI / SLA targets</div></div>
         <div style="flex:1"></div>
-        <button class="ui-btn" onclick="loadClients()">Refresh</button>
+        <button class="ui-btn" onclick="uiRun(this, () => loadClients())">Refresh</button>
         <button class="ui-btn ui-btn-primary" onclick="openClientFormModal()">New client</button>
       </div>
       <div class="card">
@@ -734,8 +734,8 @@
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
           <div style="font-size:13px;color:var(--text2);">Pricing for this client — drafts are editable, active cards are frozen. Service types come from the shared catalog (Settings → Billable Service Catalog).</div>
           <div style="flex:1"></div>
-          <button class="btn btn-ghost" onclick="beGenerateFromLegacy()">Generate from legacy rates</button>
-          <button class="btn btn-primary" onclick="beNewCard()">+ New rate card</button>
+          <button class="btn btn-ghost" onclick="uiRun(this, () => beGenerateFromLegacy())">Generate from legacy rates</button>
+          <button class="btn btn-primary" onclick="uiRun(this, () => beNewCard())">+ New rate card</button>
         </div>
         <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
           <div style="flex:1;overflow:auto;" id="beCardsWrap"></div>
@@ -753,7 +753,7 @@
           <div class="card-head"><div class="card-title">Edit lines (draft)</div>
             <div style="flex:1"></div>
             <button class="btn btn-ghost" onclick="beAddLine()">+ Add line</button>
-            <button class="btn btn-success" onclick="beSaveCardLines()">Save lines</button>
+            <button class="btn btn-success" onclick="uiRun(this, () => beSaveCardLines())">Save lines</button>
           </div>
           <div style="overflow:auto;">
             <table class="data-table">
@@ -774,7 +774,7 @@
 
       <div class="cli-panel" data-tab="performance" style="display:none;">
         <div class="card">
-          <div class="card-head"><div class="card-title">Current Performance</div><div style="flex:1"></div><button class="btn btn-ghost" onclick="loadClientPerformanceTab()">Refresh</button></div>
+          <div class="card-head"><div class="card-title">Current Performance</div><div style="flex:1"></div><button class="btn btn-ghost" onclick="uiRun(this, () => loadClientPerformanceTab())">Refresh</button></div>
           <div id="cliPerformanceBody" style="padding:20px;"></div>
         </div>
       </div>
@@ -788,8 +788,8 @@
         <div style="flex:1"></div>
         <div class="cb-wrap" style="max-width:220px;" id="invcClientFilterWrap"></div>
         <div class="cb-wrap" style="max-width:150px;" id="invcStatusFilterWrap"></div>
-        <button class="ui-btn" onclick="loadInvoices()">Refresh</button>
-        <button class="ui-btn ui-btn-primary" onclick="showGenerateInvoiceModal()">Generate invoice</button>
+        <button class="ui-btn" onclick="uiRun(this, () => loadInvoices())">Refresh</button>
+        <button class="ui-btn ui-btn-primary" onclick="uiRun(this, () => showGenerateInvoiceModal())">Generate invoice</button>
       </div>
       <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
         <div style="flex:1;overflow:auto;" id="invListWrap"></div>
@@ -832,7 +832,7 @@
       <div class="card-head">
         <div class="card-title">Supervisor PIN</div>
         <div style="flex:1"></div>
-        <button class="btn btn-primary" onclick="openOverridePinModal()">Set / change PIN</button>
+        <button class="btn btn-primary" onclick="uiRun(this, () => openOverridePinModal())">Set / change PIN</button>
       </div>
       <div style="padding:14px 20px;font-size:13px;color:var(--text2);">Gates pick-mismatch overrides and destructive order edits.</div>
     </div>
@@ -864,8 +864,8 @@
       <div class="card-head">
         <div class="card-title">Billable Service Catalog</div>
         <div style="flex:1"></div>
-        <button class="btn btn-ghost" onclick="beSeedDefaults()">Seed defaults</button>
-        <button class="btn btn-primary" onclick="beNewCode()">+ New code</button>
+        <button class="btn btn-ghost" onclick="uiRun(this, () => beSeedDefaults())">Seed defaults</button>
+        <button class="btn btn-primary" onclick="uiRun(this, () => beNewCode())">+ New code</button>
       </div>
       <div style="padding:10px 20px 0;font-size:13px;color:var(--text2);">Shared catalog of billable service types. Per-client pricing lives on each client's Rate Card. GL accounts here feed the future Accounting section / QuickBooks export.</div>
       <div id="beCodesWrap" style="padding:8px 12px 16px;"></div>
@@ -883,7 +883,7 @@
           <div style="flex:1"></div>
           <span id="beCoverage" style="font-size:13px;margin-right:8px;"></span>
           <input type="month" id="beRunPeriod" onchange="beCheckCoverage()" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);">
-          <button class="btn btn-primary" id="beRunBtn" onclick="beRunAccrual()">Run accrual</button>
+          <button class="btn btn-primary" id="beRunBtn" onclick="uiRun(this, () => beRunAccrual())">Run accrual</button>
         </div>
         <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
           <div style="flex:1;overflow:auto;" id="beRunsWrap"></div>
@@ -892,7 +892,7 @@
 
       <div id="beRunReview" style="display:none;">
         <div class="page-header">
-          <button class="btn btn-ghost" onclick="loadAccrualRuns()" style="padding:6px 12px;">← Runs</button>
+          <button class="btn btn-ghost" onclick="uiRun(this, () => loadAccrualRuns())" style="padding:6px 12px;">← Runs</button>
           <div><div class="page-title" id="beRevTitle">Accrual</div></div>
           <div style="flex:1"></div>
         </div>
@@ -918,7 +918,7 @@
         <button class="ui-btn" onclick="shiftBillingRange(-1)">‹</button>
         <div class="ui-period" id="billPeriodLabel">—</div>
         <button class="ui-btn" onclick="shiftBillingRange(1)">›</button>
-        <button class="ui-btn" onclick="loadBilling()">Refresh</button>
+        <button class="ui-btn" onclick="uiRun(this, () => loadBilling())">Refresh</button>
       </div>
 
       <div id="billStrip" class="ui-tiles"></div>
@@ -1015,7 +1015,7 @@
             <label class="ui-label" for="reportLotInput">Lot number</label>
             <input type="text" class="ui-input" id="reportLotInput" placeholder="L2024-04 — partial is fine" onkeydown="if(event.key==='Enter')runItemHistory()">
           </div>
-          <button class="ui-btn ui-btn-primary" onclick="runItemHistory()">Search</button>
+          <button class="ui-btn ui-btn-primary" onclick="uiRun(this, () => runItemHistory())">Search</button>
           <div style="flex:1"></div>
           <div class="ui-hint">Leave blank for recent activity</div>
         </div>
@@ -1043,7 +1043,7 @@
           <div style="flex:1"></div>
           <div style="display:flex;align-items:center;gap:8px;">
             <input type="text" class="form-input" id="manualLpInput" placeholder="Look up specific LP..." style="max-width:220px;padding:6px 10px;font-size:12px;" onkeydown="if(event.key==='Enter')runManualTrace()">
-            <button class="btn btn-ghost" onclick="runManualTrace()" style="padding:6px 12px;font-size:12px;">Trace LP</button>
+            <button class="btn btn-ghost" onclick="uiRun(this, () => runManualTrace())" style="padding:6px 12px;font-size:12px;">Trace LP</button>
           </div>
         </div>
       </div>
@@ -1183,7 +1183,7 @@
         <div style="flex:1"></div>
         <span class="chip" id="cmpReviewerBand"></span>
         <button class="btn btn-success" id="cmpAcceptAllGreenBtn" style="display:none;" title="Accept every field that's already auto-eligible (≥95% confidence, no diff). Yellow/orange/red items still need individual review.">✓ Accept all green</button>
-        <button class="btn btn-danger" id="cmpWithdrawBtn" onclick="cmpWithdrawSds()" title="Wrong file uploaded? Withdraw this SDS before any field is applied to the SKU master. Soft delete — record stays for audit but the doc is removed from the queue and the prior version (if any) is restored.">Withdraw SDS</button>
+        <button class="btn btn-danger" id="cmpWithdrawBtn" onclick="uiRun(this, () => cmpWithdrawSds())" title="Wrong file uploaded? Withdraw this SDS before any field is applied to the SKU master. Soft delete — record stays for audit but the doc is removed from the queue and the prior version (if any) is restored.">Withdraw SDS</button>
       </div>
     </div>
     <div id="cmpReviewerSplit" style="display:grid;grid-template-columns:1fr 460px;gap:18px;align-items:start;">
@@ -1217,7 +1217,7 @@
   <div class="page-header">
     <div><div class="page-title">Users &amp; certs</div><div class="page-subtitle">Hazmat certifications — grant, view, revoke</div></div>
     <div style="flex:1"></div>
-    <button class="ui-btn" onclick="loadUsers()">Refresh</button>
+    <button class="ui-btn" onclick="uiRun(this, () => loadUsers())">Refresh</button>
   </div>
   <div class="card">
     <div class="card-head">
@@ -1248,7 +1248,7 @@
         <div class="form-group"><label class="form-label">Units / Case</label><input class="form-input" type="number" id="iskUnitsPerCase"></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px;">
-        <button class="btn btn-primary" onclick="submitIntakeSku()">Create SKU</button>
+        <button class="btn btn-primary" onclick="uiRun(this, () => submitIntakeSku())">Create SKU</button>
         <button class="btn btn-ghost" onclick="closeModal('intakeSkuModal')">Cancel</button>
       </div>
       <div id="iskError" style="color:var(--red);font-size:13px;margin-top:8px;"></div>
@@ -1306,7 +1306,7 @@
 <div id="pickerShell" style="display:none;position:fixed;inset:0;background:#1a1a1a;color:#fff;z-index:9999;flex-direction:column;font-size:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
   <div style="background:#222;padding:14px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #333;flex-shrink:0;">
     <button onclick="exitMobilePicker()" style="background:#444;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-size:15px;cursor:pointer;">← Exit</button>
-    <button onclick="reloadMobilePicker()" title="Re-fetch this order — useful if ops just changed the allocation and you want to pick up the new state without exiting" style="background:#2c7be5;color:#fff;border:none;padding:10px 12px;border-radius:8px;font-size:15px;cursor:pointer;">↻</button>
+    <button onclick="uiRun(this, () => reloadMobilePicker())" title="Re-fetch this order — useful if ops just changed the allocation and you want to pick up the new state without exiting" style="background:#2c7be5;color:#fff;border:none;padding:10px 12px;border-radius:8px;font-size:15px;cursor:pointer;">↻</button>
     <div style="flex:1;min-width:0;">
       <div id="pickerOrderNum" style="font-size:18px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</div>
       <div id="pickerOrderSub" style="font-size:12px;opacity:.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</div>
@@ -1438,7 +1438,7 @@
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeModal('overridePinModal')">Cancel</button>
-      <button class="btn btn-primary" id="opPinSaveBtn" onclick="saveOverridePin()">Save PIN</button>
+      <button class="btn btn-primary" id="opPinSaveBtn" onclick="uiRun(this, () => saveOverridePin())">Save PIN</button>
     </div>
   </div>
 </div>

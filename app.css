@@ -1,4 +1,4 @@
-:root{--bg:#121417;--panel:#1B1F24;--border:#2A2F36;--border-h:#3A3F46;--text:#E6E8EB;--text2:#A1A7B3;--muted:#6B7280;--blue:#3B82F6;--blue-bg:rgba(59,130,246,.08);--green:#22C55E;--green-bg:rgba(34,197,94,.08);--red:#EF4444;--red-bg:rgba(239,68,68,.08);--amber:#F59E0B;--amber-bg:rgba(245,158,11,.08);--purple:#8B5CF6;--purple-bg:rgba(139,92,246,.08);--stripe:rgba(255,255,255,.015);--hover:rgba(255,255,255,.04);--font:'Inter',-apple-system,sans-serif}
+:root{--press-scale:.97;--press-opacity:.82;--bg:#121417;--panel:#1B1F24;--border:#2A2F36;--border-h:#3A3F46;--text:#E6E8EB;--text2:#A1A7B3;--muted:#6B7280;--blue:#3B82F6;--blue-bg:rgba(59,130,246,.08);--green:#22C55E;--green-bg:rgba(34,197,94,.08);--red:#EF4444;--red-bg:rgba(239,68,68,.08);--amber:#F59E0B;--amber-bg:rgba(245,158,11,.08);--purple:#8B5CF6;--purple-bg:rgba(139,92,246,.08);--stripe:rgba(255,255,255,.015);--hover:rgba(255,255,255,.04);--font:'Inter',-apple-system,sans-serif}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;overflow:hidden}
 
@@ -1130,6 +1130,17 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .ui-spin{width:14px;height:14px;border:2px solid var(--border-h);border-top-color:var(--blue);
   border-radius:50%;display:inline-block;animation:uiSpin .7s linear infinite;}
 @keyframes uiSpin{to{transform:rotate(360deg)}}
+/* Press / busy / result feedback — every clickable control (see uiBusy in ui.js) */
+.ui-btn:active:not(:disabled),button:active:not(:disabled),.floor-card:active,.ui-row-click:active{transform:scale(var(--press-scale));opacity:var(--press-opacity);}
+.ui-busy{cursor:progress;opacity:var(--press-opacity);}
+.ui-busy.ui-row-click{pointer-events:none;}
+.ui-btn-spin{width:12px;height:12px;border-color:currentColor;border-top-color:transparent;opacity:.8;}
+.ui-btn-primary .ui-btn-spin,.ui-btn-danger .ui-btn-spin{border-color:#fff;border-top-color:transparent;}
+.ui-flash-ok{box-shadow:0 0 0 2px var(--st-ok);transition:box-shadow .15s;}
+.ui-flash-ok.ui-row-click{background:var(--st-ok-bg);}
+.ui-btn-err{display:inline-block;margin-left:var(--sp-2);font-size:var(--fs-caps);max-width:100%;overflow-wrap:anywhere;}
+.floor-mode .ui-btn-spin{width:16px;height:16px;}
+.floor-mode .ui-btn-err{display:block;margin:var(--sp-1) 0 0;font-size:var(--fs-body);}
 .ui-skel{display:inline-block;width:70%;height:12px;border-radius:4px;
   background:linear-gradient(90deg,var(--border) 25%,var(--border-h) 50%,var(--border) 75%);
   background-size:200% 100%;animation:uiSkel 1.2s infinite;}

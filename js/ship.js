@@ -154,16 +154,16 @@ function fsRender(){
       : `<button type="button" class="ui-btn ui-btn-primary fs-shipbtn js-fs-ship">Ship — verify checklist</button>`}`;
 
   body.querySelector('.js-fs-switch').addEventListener('click', () => { _fs.view = null; _fs.pkgId = null; fsRenderOpening(); });
-  const np = body.querySelector('.js-fs-newpkg'); if(np) np.addEventListener('click', fsNewPackage);
+  const np = body.querySelector('.js-fs-newpkg'); if(np) np.addEventListener('click', uiBusyHandler(fsNewPackage));
   const cl = body.querySelector('.js-fs-close'); if(cl) cl.addEventListener('click', fsClosePackage);
-  const ro = body.querySelector('.js-fs-reopen'); if(ro) ro.addEventListener('click', () => fsPkgAction('reopen'));
-  const vd = body.querySelector('.js-fs-void'); if(vd) vd.addEventListener('click', fsVoidPackage);
-  const lb = body.querySelector('.js-fs-label'); if(lb) lb.addEventListener('click', fsGetLabel);
-  const sl = body.querySelector('.js-fs-sslabel'); if(sl) sl.addEventListener('click', fsGetShipStationLabel);
-  const at = body.querySelector('.js-fs-attach'); if(at) at.addEventListener('click', fsAttachLabel);
-  const rp = body.querySelector('.js-fs-reprint'); if(rp) rp.addEventListener('click', fsReprint);
-  const vl = body.querySelector('.js-fs-voidlabel'); if(vl) vl.addEventListener('click', fsVoidLabel);
-  const sb = body.querySelector('.js-fs-ship'); if(sb) sb.addEventListener('click', fsShip);
+  const ro = body.querySelector('.js-fs-reopen'); if(ro) ro.addEventListener('click', uiBusyHandler(() => fsPkgAction('reopen')));
+  const vd = body.querySelector('.js-fs-void'); if(vd) vd.addEventListener('click', uiBusyHandler(fsVoidPackage));
+  const lb = body.querySelector('.js-fs-label'); if(lb) lb.addEventListener('click', uiBusyHandler(fsGetLabel));
+  const sl = body.querySelector('.js-fs-sslabel'); if(sl) sl.addEventListener('click', uiBusyHandler(fsGetShipStationLabel));
+  const at = body.querySelector('.js-fs-attach'); if(at) at.addEventListener('click', uiBusyHandler(fsAttachLabel));
+  const rp = body.querySelector('.js-fs-reprint'); if(rp) rp.addEventListener('click', uiBusyHandler(fsReprint));
+  const vl = body.querySelector('.js-fs-voidlabel'); if(vl) vl.addEventListener('click', uiBusyHandler(fsVoidLabel));
+  const sb = body.querySelector('.js-fs-ship'); if(sb) sb.addEventListener('click', uiBusyHandler(fsShip));
   body.querySelectorAll('.js-fs-pick').forEach(b => b.addEventListener('click', () => { _fs.pkgId = b.dataset.id; fsRender(); }));
   const qty = body.querySelector('#fsQty'); if(qty) qty.addEventListener('change', () => { _fs.qty = Math.max(1, parseInt(qty.value, 10) || 1); });
 

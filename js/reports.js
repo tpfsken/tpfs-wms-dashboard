@@ -159,10 +159,10 @@ async function openReport(id){
                value="${esc(val)}">
       </div>`;
     }).join('') +
-    `<button class="ui-btn ui-btn-primary" onclick="runGenericReport()">Run</button>
+    `<button class="ui-btn ui-btn-primary" onclick="uiRun(this, () => runGenericReport())">Run</button>
      <div style="flex:1"></div>
-     <button class="ui-btn" onclick="exportGenericReport('csv')">Export CSV</button>
-     <button class="ui-btn" onclick="exportGenericReport('pdf')">Export PDF</button>`;
+     <button class="ui-btn" onclick="uiRun(this, () => exportGenericReport('csv'))">Export CSV</button>
+     <button class="ui-btn" onclick="uiRun(this, () => exportGenericReport('pdf'))">Export PDF</button>`;
 
   runGenericReport();
 }
@@ -599,10 +599,10 @@ function renderTraceAllocations(rows){
   }).join('');
 
   tbody.querySelectorAll('.js-trace-row').forEach(row => {
-    row.addEventListener('click', () => {
+    row.addEventListener('click', uiBusyHandler(() => {
       navigateTo('orders');
       setTimeout(() => openOrderDetail(row.dataset.orderId), 100);
-    });
+    }));
   });
 }
 

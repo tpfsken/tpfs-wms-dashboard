@@ -79,7 +79,7 @@ async function loadComplianceQueue(){
   }
   body.innerHTML = rows.map(r => cmpQueueCard(r)).join('');
   body.querySelectorAll('.cmp-queue-card').forEach(el =>
-    el.addEventListener('click', () => cmpOpenReviewer(el.dataset.id)));
+    el.addEventListener('click', uiBusyHandler(() => cmpOpenReviewer(el.dataset.id))));
 }
 
 function cmpQueueCard(r){
@@ -244,7 +244,7 @@ async function cmpOpenReviewer(extractionId){
     f.triage_decision === 'auto' && !f.applied && !f.reviewer_action && hasValue(f)
   );
   document.getElementById('cmpAcceptAllGreenBtn').style.display = anyGreenPending ? '' : 'none';
-  document.getElementById('cmpAcceptAllGreenBtn').onclick = () => cmpAcceptAllGreen(data);
+  document.getElementById('cmpAcceptAllGreenBtn').onclick = uiBusyHandler(() => cmpAcceptAllGreen(data));
 
   // Withdraw button — only enabled if NO field has been applied yet.
   // Once a field is applied, the SKU master has been touched and pulling
@@ -339,13 +339,13 @@ function cmpRenderFields(data){
   body.innerHTML = fields.map(f => cmpFieldCard(f)).join('');
 
   body.querySelectorAll('.js-cmp-accept').forEach(b =>
-    b.addEventListener('click', () => cmpReviewField(b.dataset.id, 'accepted')));
+    b.addEventListener('click', uiBusyHandler(() => cmpReviewField(b.dataset.id, 'accepted'))));
   body.querySelectorAll('.js-cmp-edit').forEach(b =>
-    b.addEventListener('click', () => cmpEditField(b.dataset.id)));
+    b.addEventListener('click', uiBusyHandler(() => cmpEditField(b.dataset.id))));
   body.querySelectorAll('.js-cmp-reject').forEach(b =>
-    b.addEventListener('click', () => cmpReviewField(b.dataset.id, 'rejected')));
+    b.addEventListener('click', uiBusyHandler(() => cmpReviewField(b.dataset.id, 'rejected'))));
   body.querySelectorAll('.js-cmp-defer').forEach(b =>
-    b.addEventListener('click', () => cmpReviewField(b.dataset.id, 'deferred')));
+    b.addEventListener('click', uiBusyHandler(() => cmpReviewField(b.dataset.id, 'deferred'))));
   body.querySelectorAll('.cmp-source-quote').forEach(el =>
     el.addEventListener('click', () => {
       const p = parseInt(el.dataset.page);

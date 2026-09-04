@@ -86,7 +86,7 @@ async function openUserCertModal(userId, userObj){
     onClose: () => { CERT_M = null; },
   });
 
-  document.getElementById('certGrantBtn').addEventListener('click', openGrantCertForm);
+  document.getElementById('certGrantBtn').addEventListener('click', uiBusyHandler(openGrantCertForm));
   await renderUserCertList(userId);
 }
 
@@ -126,10 +126,10 @@ async function renderUserCertList(userId){
   }).join('');
 
   list.querySelectorAll('.js-revoke-cert').forEach(btn =>
-    btn.addEventListener('click', e => {
+    btn.addEventListener('click', uiBusyHandler(e => {
       e.stopPropagation();
       revokeUserCert(btn.dataset.certId, rows.find(x => x.id === btn.dataset.certId));
-    }));
+    })));
 }
 
 // UI_STATUS_MAP additions live in ui.js; cert states map through CERT_TONE for

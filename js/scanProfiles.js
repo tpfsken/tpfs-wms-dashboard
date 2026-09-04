@@ -89,7 +89,7 @@ function spRenderHost(st){
   });
   st.host.querySelector('.js-sp-new').addEventListener('click', () => spOpenEditor(st, null));
   const ft = st.host.querySelector('.js-sp-from-template');
-  if(ft) ft.addEventListener('click', () => spFromTemplate(st));
+  if(ft) ft.addEventListener('click', uiBusyHandler(() => spFromTemplate(st)));
 
   if(st.editing) spOpenEditor(st, st.editing);
 }
@@ -238,9 +238,9 @@ function spOpenEditor(st, row){
 
   wrap.querySelector('#spSound').addEventListener('change', (e) => scanSoundSet(e.target.checked));
   wrap.querySelector('.js-sp-cancel').addEventListener('click', () => { st.editing = null; wrap.hidden = true; wrap.innerHTML = ''; });
-  wrap.querySelector('.js-sp-save').addEventListener('click', () => spSaveFromEditor(st, row));
+  wrap.querySelector('.js-sp-save').addEventListener('click', uiBusyHandler(() => spSaveFromEditor(st, row)));
   const del = wrap.querySelector('.js-sp-delete');
-  if(del) del.addEventListener('click', () => spDelete(st, row));
+  if(del) del.addEventListener('click', uiBusyHandler(() => spDelete(st, row)));
 
   if(!isClient){
     const clients = (typeof clientsCache !== 'undefined' && clientsCache) ? clientsCache : [];
