@@ -184,8 +184,7 @@ function mgClientCard(c, clients){
         ${p.subLotQtyNot1 && c.rules.sublot_as === 'uid' ? `<div class="ui-banner ui-banner-warn">${esc(p.subLotQtyNot1)} piece(s) carry a SubLot with qty ≠ 1 — they will be blocked under "unit ID". Choose another SubLot rule or split them in Excalibur.</div>` : ''}
         ${c.changed.length ? `<div class="ui-banner ui-banner-danger">Changed since commit (not applied): ${c.changed.map(x => `${esc(x.pieceNo)} — ${esc(x.reason)}`).join('; ')}</div>` : ''}
         <div class="ui-label">Bay / bin → location ${c.unmappedLocations ? uiChip('DRAFT', `${c.unmappedLocations} unmapped`) : uiChip('ACTIVE', 'all mapped')}</div>
-        <div class="mg-locs">${c.locations.map(l => `<div class="mg-loc"><span class="ui-id">${esc(l.bay)}${l.bin ? ' / ' + esc(l.bin) : ''}</span> <span class="ui-muted">${esc(l.pieces)} pc</span>
-            <select class="ui-input js-mg-loc" data-bay="${esc(l.bay)}" data-bin="${esc(l.bin)}"><option value="">— create or pick —</option>${(_mg.locations || []).map(x => `<option value="${esc(x.id)}" ${l.locationId === x.id ? 'selected' : ''}>${esc(x.code)}</option>`).join('')}</select></div>`).join('')}</div>
+        ${mgLocRows(c)}
         <div class="sp-toolbar-actions">
           <button type="button" class="ui-btn js-mg-pieces" data-code="${esc(c.clientCode)}">Pieces</button>
           <button type="button" class="ui-btn js-mg-pieces" data-code="${esc(c.clientCode)}" data-decision="blocked">Blocked</button>
@@ -317,6 +316,21 @@ async function mgReconcile(){
       ], rows: c.rows, rowKey: 'item', empty: 'Nothing on hand on either side.',
     });
   }
+}
+
+// Bay / bin rows. A picker (one <select> listing every warehouse location) is rendered ONLY for
+// unmapped rows; mapped rows show the location code as text. With ~2,000 migration locations the
+// old "select on every row" was 2,000 rows x 2,000 options and froze the page.
+const MG_LOC_ROWS_SHOWN = 25;
+function mgLocRows(c){
+  const byId = new Map((_mg.locations || []).map(x => [x.id, x.code]));
+  const rows = (c.locations || []).slice().sort((a, b) => (a.locationId ? 1 : 0) - (b.locationId ? 1 : 0));
+  const row = (l) => `<div class="mg-loc"><span class="ui-id">${esc(l.bay)}${l.bin ? ' / ' + esc(l.bin) : ''}</span> <span class="ui-muted">${esc(l.pieces)} pc</span>
+    ${l.locationId
+      ? `<span class="mg-loc-code">${esc(byId.get(l.locationId) || 'mapped')}</span>`
+      : `<select class="ui-input js-mg-loc" data-bay="${esc(l.bay)}" data-bin="${esc(l.bin)}"><option value="">— create or pick —</option>${(_mg.locations || []).map(x => `<option value="${esc(x.id)}">${esc(x.code)}</option>`).join('')}</select>`}</div>`;
+  const shown = rows.slice(0, MG_LOC_ROWS_SHOWN), rest = rows.slice(MG_LOC_ROWS_SHOWN);
+  return `<div class="mg-locs">${shown.map(row).join('')}${rest.length ? `<details class="mg-locs-more"><summary>${esc(rest.length)} more bay/bin row(s)</summary>${rest.map(row).join('')}</details>` : ''}</div>`;
 }
 
 async function mgLoadLocations(){

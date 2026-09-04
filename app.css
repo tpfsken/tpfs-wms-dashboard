@@ -1335,6 +1335,9 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .mg-locs{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--sp-2);margin-bottom:var(--sp-3);}
 .mg-loc{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-body);}
 .mg-loc .ui-input{flex:1;min-width:0;}
+.mg-loc-code{font-family:var(--mono);color:var(--text2);margin-left:auto;}
+.mg-locs-more{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--sp-2);}
+.mg-locs-more>summary{grid-column:1/-1;cursor:pointer;color:var(--text2);font-size:var(--fs-caps);text-transform:uppercase;letter-spacing:.04em;padding:var(--sp-1) 0;}
 .mg-plan{margin:0 0 var(--sp-3);padding-left:18px;font-size:var(--fs-body);}
 .mg-plan li{margin:2px 0;}
 
