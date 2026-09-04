@@ -226,6 +226,15 @@ function uiBusy(el, work, opts = {}) {
     throw err;
   });
 }
+/** Scroll a floor / page view back to the top when its content is replaced (new pick directive, new order). Smooth, else immediate. */
+function uiScrollTop(el) {
+  const targets = [el && el.closest ? el.closest('.page') : null, document.scrollingElement || document.documentElement];
+  for (const t of targets) {
+    if (!t) continue;
+    try { t.scrollTo({ top: 0, left: 0, behavior: 'smooth' }); } catch (_) { t.scrollTop = 0; }
+    if (t.scrollTop > 0 && !('scrollBehavior' in document.documentElement.style)) t.scrollTop = 0;
+  }
+}
 function uiBusyHandler(fn, opts) {
   return function (e) { return uiBusy((e && e.currentTarget) || this, () => fn.call(this, e), opts); };
 }

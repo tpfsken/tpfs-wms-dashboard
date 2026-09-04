@@ -13,7 +13,7 @@
 // /orders/:id/ship). This file never judges a scan.
 // =============================================================================
 
-const _fs = { view: null, input: null, pkgId: null, qty: 1 };
+const _fs = { view: null, input: null, pkgId: null, qty: 1, renderedOrderId: null };
 
 function loadFloorShip(){
   document.querySelectorAll('#page-floorShip .js-floor-home').forEach(b => {
@@ -79,6 +79,8 @@ function fsRender(){
   const v = _fs.view;
   const body = document.getElementById('floorShipBody');
   if(!v){ fsRenderOpening(); return; }
+  // A different order on screen (opened from a label / order scan): back to the top, old result gone.
+  if(_fs.renderedOrderId !== v.order.id){ _fs.renderedOrderId = v.order.id; uiScrollTop(body); }
   const o = v.order, c = v.counts;
   const pkg = fsPkg();
   const shipTo = [o.shipTo.name, o.shipTo.line1, [o.shipTo.city, o.shipTo.state, o.shipTo.postal].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
@@ -138,7 +140,7 @@ function fsRender(){
                    <button type="button" class="ui-btn js-fs-voidlabel" ${ssLocked ? 'disabled title="ShipStation write lock is on"' : ''}>Void label</button>${ssLocked ? '<div class="ui-hint fs-locked">ShipStation write lock is on — enable writes under Settings → Integrations</div>' : ''}`
                 : '<button type="button" class="ui-btn js-fs-void">Void (refund label)</button>'}
             </div>` : ''}
-        ` : (shipped ? '<div class="ui-hint">This order has shipped.</div>' : '<div class="ui-hint">Start a package to begin packing.</div>')}
+        ` : (shipped ? '<div class="ui-hint">This order has shipped.</div>' : '<div class="ui-hint">Scan the first unit to start a package, or tap New package.</div>')}
       </div>
     </div>
 
@@ -198,15 +200,18 @@ async function fsNewPackage(){
 
 async function fsScanIntoPackage(raw){
   const pkg = fsPkg();
-  if(!pkg) return fsOpen(raw);
+  // No open box yet but an order is on screen: an item scan opens the first box itself (the
+  // server decides); an order / tracking scan still switches orders.
+  if(!pkg && !(_fs.view && _fs.view.order)) return fsOpen(raw);
   fsBanner(null);
   _fs.input.setBusy(true);
   try {
-    const r = await fetch(`${API}/packages/${pkg.id}/scan`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ raw, qty: _fs.qty }) });
+    const url = pkg ? `${API}/packages/${pkg.id}/scan` : `${API}/orders/${_fs.view.order.id}/pack-scan`;
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ raw, qty: _fs.qty }) });
     const d = await r.json().catch(() => ({}));
     if(!r.ok){ fsBanner(d.error || 'Scan failed', 'danger'); scanBeep('error'); return; }
     if(d.reason === 'not_an_item'){ _fs.input.setBusy(false); return fsOpen(raw); }
-    if(d.view){ _fs.view = d.view; }
+    if(d.view){ _fs.view = d.view; _fs.pkgId = d.view.openPackage ? d.view.openPackage.id : _fs.pkgId; }
     fsRender();
     if(d.accepted) fsBanner(d.message, 'ok');
     else { fsBanner(d.message || 'Rejected', 'danger'); scanBeep('error'); }

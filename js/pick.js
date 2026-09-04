@@ -25,7 +25,7 @@ const FP_EXCEPTION_TYPES = [
   { value: 'uid_unrecognized',       label: 'UID not recognised' },
 ];
 
-const _fp = { orderId: null, tasks: [], idx: 0, input: null, photoCache: {}, packMode: false, packageId: null, packageNumber: null,
+const _fp = { orderId: null, tasks: [], idx: 0, input: null, photoCache: {}, packMode: false, packageId: null, packageNumber: null, renderedTaskId: null,
   // continuous picking: the server hands out one task at a time (GET /pick-queue/next) and claims it
   queue: { active: false, next: null, remaining: null, source: null } };
 const FP_DONE_FLASH_MS = 2000;
@@ -133,6 +133,11 @@ function fpTask(){ return _fp.tasks[_fp.idx] || null; }
 function fpRender(){
   const body = document.getElementById('floorPickBody');
   const t = fpTask();
+  // A new task (or the done screen) replaces the whole body: the old result area is gone with it,
+  // and the page goes back to the top so the directive is in view — the scan field refocuses
+  // with preventScroll (scanInputMount), so the refocus never fights the scroll.
+  const key = t ? t.id : 'done';
+  if(_fp.renderedTaskId !== key){ _fp.renderedTaskId = key; uiScrollTop(body); }
   if(!t){
     body.innerHTML = `
       <div class="fp-done">
