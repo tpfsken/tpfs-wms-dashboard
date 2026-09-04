@@ -7,6 +7,12 @@
 //   package   the open package and its contents; New package; scan units in;
 //             Close (weight + dims); Get label (existing rate/buy path);
 //             tracking shown; Void
+//   box       label_at_pack (order.packaging.boxScanRequired): after the units,
+//             the directive reads SCAN BOX — a BOX-xxxx scan (Settings → Packaging)
+//             fills dims + tare, the packer enters the gross weight (fsReadScale is
+//             the USB/serial hook), and "Close — print label" closes the box and buys
+//             the ShipStation label in one call (refused before any call while the
+//             write lock is on). The PDF opens for printing; the label scan follows.
 //   ship      the server's checklist (green / red), then
 //             "SHIPMENT VERIFIED — OK TO LOAD"
 // Every decision is the server's (POST /ship/open, /packages/:id/scan,
@@ -18,6 +24,7 @@ const _fs = { view: null, input: null, pkgId: null, qty: 1, renderedOrderId: nul
   // is working (from the last opened / shipped order) stays on screen with "Next in wave"
   wave: null, lastOrderId: null };
 const FS_SHIPPED_FLASH_MS = 2000;
+const FS_LOCK_MSG = 'Label printing not enabled — write lock is on';
 
 function loadFloorShip(){
   document.querySelectorAll('#page-floorShip .js-floor-home').forEach(b => {
@@ -129,6 +136,9 @@ function fsRender(){
   const needsLabel = (unlabeled.length > 0 || unverified.length > 0) && (v.lines || []).some(l => l.packagedQty > 0);
   // ship-ready: everything packed into labeled, scanned boxes -> READY — Ship
   const readyToShip = !!v.order.allShipReady && boxes.length > 0 && boxes.every(p => p.status === 'labeled' && (!requireScan || p.labelVerified)) && (v.lines || []).every(l => l.pickedQty > 0 && l.packagedQty >= l.pickedQty);
+  // box catalog (label_at_pack, not ship-ready): SCAN BOX after the units, gross weight, then Close buys the label
+  const boxFlow = !!(o.packaging && o.packaging.boxScanRequired);
+  const boxCtx = { allowCustom: !o.packaging || o.packaging.allowCustomDims !== false, defaultBox: (o.packaging && o.packaging.defaultBox) || null, ssLocked, isSS: o.labelProvider === 'shipstation' };
   body.innerHTML = `
     <div class="fp-head">
       <div class="fp-head-order">${uiId(o.orderNumber)} <span class="ui-muted">·</span> ${esc(o.clientCode)} ${uiChip(o.status)}</div>
@@ -149,7 +159,7 @@ function fsRender(){
 
     <div class="ui-group fs-pkg">
       <div class="sp-editor-head">
-        <div class="ui-dialog-title">${pkg ? `${esc(pkg.packageNumber)} ${uiChip(pkg.status === 'open' ? 'NEW' : pkg.status === 'closed' ? 'PACKED' : pkg.status === 'labeled' ? 'ALLOCATED' : pkg.status === 'shipped' ? 'SHIPPED' : 'CANCELLED', pkg.status.toUpperCase())}` : 'No open package'}</div>
+        <div class="ui-dialog-title">${pkg ? `${esc(pkg.packageNumber)} ${uiChip(pkg.status === 'open' ? 'NEW' : pkg.status === 'closed' ? 'PACKED' : pkg.status === 'labeled' ? 'ALLOCATED' : pkg.status === 'shipped' ? 'SHIPPED' : 'CANCELLED', pkg.status.toUpperCase())}${pkg.boxName && pkg.status !== 'open' ? ` <span class="ui-muted">· ${esc(pkg.boxName)}</span>` : ''}` : 'No open package'}</div>
         <div class="sp-toolbar-actions">
           ${!shipped && !v.order.allShipReady ? '<button type="button" class="ui-btn ui-btn-primary js-fs-newpkg">New package</button>' : ''}
         </div>
@@ -163,10 +173,11 @@ function fsRender(){
               <div id="fsPkgScan" class="fs-scan"></div>
               <label class="fs-qty"><span class="ui-muted">Qty</span><input class="ui-input" type="number" min="1" id="fsQty" value="${esc(_fs.qty)}"></label>
             </div>
+            ${boxFlow ? fsBoxBlock(pkg, boxCtx) : `
             <div class="fp-actions">
               <button type="button" class="ui-btn js-fs-void">Void</button>
               <button type="button" class="ui-btn ui-btn-primary fp-confirm js-fs-close" ${pkg.unitCount ? '' : 'disabled'}>Close package</button>
-            </div>` : ''}
+            </div>`}` : ''}
           ${pkg.status === 'closed' && !pkg.trackingNumber && v.order.labelProvider === 'shipstation' ? `
             <div class="fp-directive fp-directive-loc">
               <div class="fp-directive-label">SCAN SHIPPING LABEL</div>
@@ -179,7 +190,7 @@ function fsRender(){
               <button type="button" class="ui-btn js-fs-void">Void</button>
               ${v.order.labelProvider === 'shipstation'
                 ? `<button type="button" class="ui-btn js-fs-attach">Attach printed label</button>
-                   ${v.order.labelMode === 'label_at_pack' ? `<button type="button" class="ui-btn ui-btn-primary fp-confirm js-fs-sslabel" ${ssLocked ? 'disabled title="ShipStation write lock is on"' : ''}>Get label</button>` : ''}${ssLocked ? '<div class="ui-hint fs-locked">ShipStation write lock is on — enable writes under Settings → Integrations</div>' : ''}`
+                   ${v.order.labelMode === 'label_at_pack' ? `<button type="button" class="ui-btn ui-btn-primary fp-confirm js-fs-sslabel" ${ssLocked ? `disabled title="${esc(FS_LOCK_MSG)}"` : ''}>Get label</button>` : ''}${ssLocked ? `<div class="ui-hint fs-locked">${esc(FS_LOCK_MSG)}${v.order.labelMode === 'label_at_pack' ? '' : ' — enable writes under Settings → Integrations'}</div>` : ''}`
                 : '<button type="button" class="ui-btn ui-btn-primary fp-confirm js-fs-label">Get label</button>'}
             </div>` : ''}
           ${pkg.status === 'labeled' ? `
@@ -219,6 +230,11 @@ function fsRender(){
   body.querySelector('.js-fs-switch').addEventListener('click', () => { _fs.view = null; _fs.pkgId = null; fsRenderOpening(); });
   const np = body.querySelector('.js-fs-newpkg'); if(np) np.addEventListener('click', uiBusyHandler(fsNewPackage));
   const cl = body.querySelector('.js-fs-close'); if(cl) cl.addEventListener('click', fsClosePackage);
+  const db = body.querySelector('.js-fs-defaultbox'); if(db) db.addEventListener('click', uiBusyHandler(() => fsScanIntoPackage(db.dataset.barcode)));
+  const sc = body.querySelector('.js-fs-scale'); if(sc) sc.addEventListener('click', uiBusyHandler(fsReadScaleInto));
+  const cb = body.querySelector('.js-fs-closelabel'); if(cb) cb.addEventListener('click', uiBusyHandler(() => fsCloseAndLabel()));
+  const co = body.querySelector('.js-fs-closelabel-override'); if(co) co.addEventListener('click', uiBusyHandler(fsCloseAndLabelOverride));
+  const gi = body.querySelector('#fsGross'); if(gi) gi.addEventListener('keydown', (e) => { if(e.key === 'Enter'){ e.preventDefault(); const b = body.querySelector('.js-fs-closelabel') || body.querySelector('.js-fs-close'); if(b && !b.disabled) b.click(); } });
   const ro = body.querySelector('.js-fs-reopen'); if(ro) ro.addEventListener('click', uiBusyHandler(() => fsPkgAction('reopen')));
   const vd = body.querySelector('.js-fs-void'); if(vd) vd.addEventListener('click', uiBusyHandler(fsVoidPackage));
   const lb = body.querySelector('.js-fs-label'); if(lb) lb.addEventListener('click', uiBusyHandler(fsGetLabel));
@@ -266,6 +282,7 @@ async function fsScanIntoPackage(raw){
   if(!pkg && !(_fs.view && _fs.view.order)) return fsOpen(raw);
   fsBanner(null);
   _fs.input.setBusy(true);
+  let focusGross = false;
   try {
     const url = pkg ? `${API}/packages/${pkg.id}/scan` : `${API}/orders/${_fs.view.order.id}/pack-scan`;
     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ raw, qty: _fs.qty }) });
@@ -276,30 +293,133 @@ async function fsScanIntoPackage(raw){
     fsRender();
     if(d.accepted) fsBanner(d.message, 'ok');
     else { fsBanner(d.message || 'Rejected', 'danger'); scanBeep('error'); }
+    if(d.accepted && d.reason === 'box_set'){ const g = document.getElementById('fsGross'); if(g){ focusGross = true; g.focus(); g.select(); } }
   } catch(_) { fsBanner('Network error', 'danger'); }
-  finally { if(_fs.input){ _fs.input.setBusy(false); _fs.input.focus(); } }
+  finally { if(_fs.input){ _fs.input.setBusy(false); if(!focusGross) _fs.input.focus(); } }
+}
+
+// ---- box catalog at the bench ----------------------------------------------------------------
+// The open package's action block for a label_at_pack order. Three states: no units yet; units in
+// but no box (SCAN BOX); box scanned (gross weight + Close — print label).
+function fsBoxBlock(pkg, { allowCustom, defaultBox, ssLocked, isSS }){
+  if(!pkg.unitCount) return `
+            <div class="fp-actions">
+              <button type="button" class="ui-btn js-fs-void">Void</button>
+            </div>
+            <div class="ui-hint">Scan the units in first, then scan the box.</div>`;
+  if(!pkg.boxId) return `
+            <div class="fp-directive fp-directive-loc fs-boxdir">
+              <div class="fp-directive-label">SCAN BOX</div>
+              <div class="fp-directive-main">${esc(pkg.packageNumber)}</div>
+              <div class="ui-hint">Units are in. Scan the BOX-xxxx barcode on the box sheet — its dims and tare fill in, then enter the gross weight.${allowCustom ? '' : ' This client does not allow typed dims.'}</div>
+            </div>
+            <div class="fp-actions">
+              <button type="button" class="ui-btn js-fs-void">Void</button>
+              ${defaultBox ? `<button type="button" class="ui-btn js-fs-defaultbox" data-barcode="${esc(defaultBox.barcode)}">Use ${esc(defaultBox.name)}</button>` : ''}
+              ${allowCustom ? '<button type="button" class="ui-btn js-fs-close">Type dims instead</button>' : ''}
+            </div>`;
+  return `
+            <div class="fs-box">BOX <span class="fs-box-name">${esc(pkg.boxName)}</span> <span class="ui-muted">·</span> ${esc(pkg.lengthIn)} × ${esc(pkg.widthIn)} × ${esc(pkg.heightIn)} in <span class="ui-muted">·</span> tare ${esc(pkg.tareLbs ?? 0)} lb <span class="ui-muted">· scan another box to change it</span></div>
+            <div class="fs-gross">
+              <label class="ui-field fs-gross-field"><span class="ui-label">Gross weight (lb) — box, packing and contents</span><input class="ui-input fs-gross-input" type="number" step="0.01" min="0" inputmode="decimal" id="fsGross" value="${esc(pkg.grossLbs || '')}"></label>
+              <button type="button" class="ui-btn js-fs-scale">Read scale</button>
+            </div>
+            <div class="fp-actions">
+              <button type="button" class="ui-btn js-fs-void">Void</button>
+              ${isSS
+                ? `<button type="button" class="ui-btn js-fs-closelabel-override" ${ssLocked ? `disabled title="${esc(FS_LOCK_MSG)}"` : ''}>Other service</button>
+                   <button type="button" class="ui-btn ui-btn-primary fp-confirm js-fs-closelabel" ${ssLocked ? `disabled title="${esc(FS_LOCK_MSG)}"` : ''}>Close — print label</button>`
+                : '<button type="button" class="ui-btn ui-btn-primary fp-confirm js-fs-close">Close package</button>'}
+            </div>
+            ${isSS && ssLocked ? `<div class="ui-hint fs-locked">${esc(FS_LOCK_MSG)}</div>` : ''}`;
+}
+
+// USB / serial scale hook. Resolves the gross weight in lb, or null when no scale is connected.
+// Later: Web Serial (navigator.serial) or a bench bridge — replace the body, keep the signature.
+async function fsReadScale(){ return null; }
+
+async function fsReadScaleInto(){
+  const input = document.getElementById('fsGross');
+  const w = await fsReadScale();
+  if(w == null){ uiToast('No scale connected — type the gross weight', 'error'); if(input) input.focus(); return; }
+  if(input){ input.value = w; input.focus(); }
+}
+
+// Close the box with the gross weight and buy the ShipStation label in one call. The lock is
+// checked here AND on the server before anything is written; the PDF opens for printing and the
+// SCAN SHIPPING LABEL directive follows (require_label_scan still applies).
+async function fsCloseAndLabel(override){
+  const pkg = fsPkg();
+  if(!pkg || !_fs.view) return;
+  if(_fs.view.order.shipstationWritesEnabled === false){ fsBanner(FS_LOCK_MSG, 'danger'); uiToast(FS_LOCK_MSG, 'error'); return; }
+  const input = document.getElementById('fsGross');
+  const gross = Number(input && input.value);
+  if(!(gross > 0)){ uiToast('Enter the gross weight (lb) — box, packing and contents on the scale', 'error'); if(input) input.focus(); return; }
+  if(pkg.tareLbs != null && gross <= Number(pkg.tareLbs)){ uiToast(`Gross weight must be more than the box tare (${pkg.tareLbs} lb)`, 'error'); if(input) input.focus(); return; }
+  const r = await fetch(`${API}/packages/${pkg.id}/close-and-label`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ grossLbs: gross, ...(override || {}) }) });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ uiToast(d.error || 'Could not close and label', 'error'); fsBanner(d.error || 'Could not close and label', 'danger'); scanBeep('error'); await fsRefresh(); return; }   // the close may have gone through before the label failed — refresh shows Get label
+  uiToast(`${pkg.packageNumber} closed · label ${d.label && d.label.trackingNumber ? d.label.trackingNumber : 'created'}`, 'success');
+  await fsRefresh();
+  fsBanner(`LABEL ${d.label && d.label.trackingNumber ? d.label.trackingNumber : ''} — print it, put it on the box, scan it`, 'ok');
+  fsReprint();
+}
+
+// Packer override: pick a carrier / service instead of the mapped one, then close + label.
+async function fsCloseAndLabelOverride(){
+  const pkg = fsPkg();
+  if(!pkg || !_fs.view) return;
+  if(_fs.view.order.shipstationWritesEnabled === false){ fsBanner(FS_LOCK_MSG, 'danger'); uiToast(FS_LOCK_MSG, 'error'); return; }
+  const gross = Number((document.getElementById('fsGross') || {}).value);
+  if(!(gross > 0)){ uiToast('Enter the gross weight first', 'error'); return; }
+  const carriers = await apiGet('/shipstation/carriers');
+  const rows = carriers?.rows || [];
+  const m = uiModal({
+    title: `Service for ${pkg.packageNumber}`,
+    body: `<div class="ui-hint">Mapped: the carrier/service for "${esc(_fs.view.order.requestedService || 'no requested service')}". Pick another only when the packer needs a different service.</div>
+           ${uiFieldSelect({ id: 'fsSsCarrier', label: 'Carrier', options: [{ value: '', label: 'Use mapped service' }, ...rows.map(c => ({ value: c.code, label: `${c.name} (${c.code})` }))] })}
+           ${uiFieldSelect({ id: 'fsSsService', label: 'Service', options: [{ value: '', label: 'Use mapped service' }] })}`,
+    actions: [{ label: 'Cancel' }, { label: 'Close — print label', primary: true, onClick: async (api) => {
+      const carrierCode = api.el.querySelector('#fsSsCarrier').value || undefined, serviceCode = api.el.querySelector('#fsSsService').value || undefined;
+      if((carrierCode && !serviceCode) || (!carrierCode && serviceCode)){ uiToast('Pick both a carrier and a service, or neither', 'error'); return false; }
+      const gi = document.getElementById('fsGross'); if(gi) gi.value = gross;
+      await fsCloseAndLabel({ carrierCode, serviceCode });
+    } }],
+  });
+  m.el.querySelector('#fsSsCarrier').addEventListener('change', async (e) => {
+    const code = e.target.value; const sel = m.el.querySelector('#fsSsService');
+    if(!code){ sel.innerHTML = '<option value="">Use mapped service</option>'; return; }
+    const s = await apiGet(`/shipstation/carriers/${encodeURIComponent(code)}/services`);
+    sel.innerHTML = (s?.rows || []).map(x => `<option value="${esc(x.code)}">${esc(x.name)}</option>`).join('') || '<option value="">no services</option>';
+  });
 }
 
 function fsClosePackage(){
   const pkg = fsPkg();
   if(!pkg) return;
+  const o = _fs.view && _fs.view.order;
+  const labelOnClose = !!(o && o.packaging && o.packaging.boxScanRequired && o.labelProvider === 'shipstation' && !pkg.trackingNumber);
+  if(labelOnClose && o.shipstationWritesEnabled === false){ fsBanner(FS_LOCK_MSG, 'danger'); uiToast(FS_LOCK_MSG, 'error'); return; }
   uiModal({
     title: `Close ${pkg.packageNumber}`,
-    body: `${uiField({ id: 'fsW', label: 'Weight (lbs)', type: 'number', value: pkg.weightLbs || '' })}
+    body: `${labelOnClose ? '<div class="ui-hint">Typed dims instead of a box scan. Closing buys the ShipStation label with these numbers.</div>' : ''}
+           ${uiField({ id: 'fsW', label: labelOnClose ? 'Gross weight (lbs)' : 'Weight (lbs)', type: 'number', value: pkg.grossLbs || pkg.weightLbs || '' })}
            <div class="ui-field-row sp-row-3">
              ${uiField({ id: 'fsL', label: 'Length (in)', type: 'number', value: pkg.lengthIn || '' })}
              ${uiField({ id: 'fsWd', label: 'Width (in)', type: 'number', value: pkg.widthIn || '' })}
              ${uiField({ id: 'fsH', label: 'Height (in)', type: 'number', value: pkg.heightIn || '' })}
            </div>`,
-    actions: [{ label: 'Cancel' }, { label: 'Close package', primary: true, onClick: async (api) => {
+    actions: [{ label: 'Cancel' }, { label: labelOnClose ? 'Close — print label' : 'Close package', primary: true, onClick: async (api) => {
       const v = (id) => api.el.querySelector('#' + id).value;
       if(!Number(v('fsW'))){ uiFieldError(api.el, 'fsW', 'Weight is required'); return false; }
-      const r = await fetch(`${API}/packages/${pkg.id}/close`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` },
+      if(labelOnClose && [v('fsL'), v('fsWd'), v('fsH')].some(x => !(Number(x) > 0))){ uiFieldError(api.el, 'fsL', 'Length, width and height are required without a box scan'); return false; }
+      const r = await fetch(`${API}/packages/${pkg.id}/${labelOnClose ? 'close-and-label' : 'close'}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` },
         body: JSON.stringify({ weightLbs: Number(v('fsW')), lengthIn: Number(v('fsL')) || null, widthIn: Number(v('fsWd')) || null, heightIn: Number(v('fsH')) || null }) });
       const d = await r.json().catch(() => ({}));
-      if(!r.ok){ uiToast(d.error || 'Could not close', 'error'); return false; }
-      uiToast(`${pkg.packageNumber} closed`, 'success');
+      if(!r.ok){ uiToast(d.error || 'Could not close', 'error'); if(labelOnClose) await fsRefresh(); return false; }
+      uiToast(labelOnClose ? `${pkg.packageNumber} closed · label ${d.label && d.label.trackingNumber ? d.label.trackingNumber : 'created'}` : `${pkg.packageNumber} closed`, 'success');
       await fsRefresh();
+      if(labelOnClose) fsReprint();
     } }],
   });
 }

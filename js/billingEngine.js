@@ -525,6 +525,7 @@ function loadSettingsPage() {
   if (typeof spMountTemplates === 'function') spMountTemplates();   // js/scanProfiles.js
   if (typeof mgMount === 'function') { mgLoadLocations().finally(mgMount); }  // js/migration.js — mount even if /locations fails
   if (typeof ssiMount === 'function') ssiMount();   // js/shipstation.js
+  if (typeof pkgMount === 'function') pkgMount();   // js/packaging.js — Settings → Packaging (box catalog)
 }
 
 async function loadChargeCodesTab() {

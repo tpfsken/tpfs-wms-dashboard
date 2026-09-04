@@ -331,7 +331,9 @@ function openClientFormModal(client){
             { value: 'per_unit',  label: 'One package per unit (default)' },
             { value: 'per_order', label: 'One package per order' },
           ], value: (client?.ship_rules && client.ship_rules.ship_ready_packaging) || 'per_unit', hint: 'For items that ship as-is: the unit scan at Pack & Ship packs and closes the box itself.' })}
+        ${uiFieldSelect({ id: 'cfDefaultBox', label: 'Default box (label at pack)', options: [{ value: '', label: 'None — the packer scans the box' }], value: (client?.ship_rules && client.ship_rules.default_box_id) || '', hint: 'Offered as "Use <box>" at Pack & Ship. Boxes live under Settings → Packaging.' })}
         <div class="item-checks">
+          <label class="ui-check"><input type="checkbox" id="cfAllowCustomDims" ${(client?.ship_rules && client.ship_rules.allow_custom_dims === false) ? '' : 'checked'}> Allow typed dims at Pack & Ship (instead of scanning a box)</label>
           <label class="ui-check"><input type="checkbox" id="cfShipsAsIs" ${client?.ships_as_is_default ? 'checked' : ''}> Items ship as-is by default (each SKU can override)</label>
           <label class="ui-check"><input type="checkbox" id="cfRequireLabelScan" ${(client?.ship_rules && client.ship_rules.require_label_scan === false) ? '' : 'checked'}> Require the label scan at ship (every box's label is scanned at the bench before Ship)</label>
           <label class="ui-check"><input type="checkbox" id="cfItemScan" ${pr.require_item_scan === false ? '' : 'checked'}> Require item scans (off = tap-to-count)</label>
@@ -356,6 +358,14 @@ function openClientFormModal(client){
     document.getElementById('cfHazmatBlock').style.display = haz.checked ? '' : 'none';
   });
   document.getElementById('cfCode').focus?.();
+  // the box catalog fills the default-box select once it loads (the modal opens at once)
+  const want = (client?.ship_rules && client.ship_rules.default_box_id) || '';
+  apiGet('/packaging/boxes?all=1').then(d => {
+    const sel = document.getElementById('cfDefaultBox');
+    if(!sel) return;
+    const rows = (d?.rows || []).filter(b => b.active || b.id === want);
+    sel.innerHTML = '<option value="">None — the packer scans the box</option>' + rows.map(b => `<option value="${esc(b.id)}" ${b.id === want ? 'selected' : ''}>${esc(b.name)} — ${esc(b.lengthIn)} × ${esc(b.widthIn)} × ${esc(b.heightIn)} in${b.active ? '' : ' (inactive)'}</option>`).join('');
+  }).catch(() => {});
 }
 
 // uiModal action — returning false keeps the modal open.
@@ -399,7 +409,8 @@ async function submitClientForm(m){
     unit_control: document.getElementById('cfUnitControl').value,
     label_mode: document.getElementById('cfLabelMode').value,
     ships_as_is_default: document.getElementById('cfShipsAsIs').checked,
-    ship_rules: { ...((_currentClient && _currentClient.id === _editingClientId && _currentClient.ship_rules) || {}), ship_ready_packaging: document.getElementById('cfShipReadyPack').value, require_label_scan: document.getElementById('cfRequireLabelScan').checked },
+    ship_rules: { ...((_currentClient && _currentClient.id === _editingClientId && _currentClient.ship_rules) || {}), ship_ready_packaging: document.getElementById('cfShipReadyPack').value, require_label_scan: document.getElementById('cfRequireLabelScan').checked,
+                  default_box_id: document.getElementById('cfDefaultBox').value || null, allow_custom_dims: document.getElementById('cfAllowCustomDims').checked },
     pick_rules: {
       location_mode: document.getElementById('cfLocationMode').value,
       require_item_scan: document.getElementById('cfItemScan').checked,

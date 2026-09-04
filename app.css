@@ -1485,3 +1485,13 @@ body.floor-mode #page-floorHome>div:first-child>div:nth-child(2)>div:first-child
 body.floor-mode #page-floorHome>div:first-child>div:nth-child(2)>div:last-child{font-size:12px !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 body.floor-mode .floor-textsize{padding:6px 8px;font-size:calc(var(--fl-base) - 4px);white-space:nowrap;}
 body.floor-mode .js-signout{font-size:calc(var(--fl-base) - 4px) !important;white-space:nowrap;}
+
+/* --- box catalog at the bench (js/ship.js fsBoxBlock) + Settings → Packaging (js/packaging.js) --- */
+.fs-boxdir{margin-bottom:var(--sp-3);}
+.fs-box{font-size:var(--fs-body);margin-bottom:var(--sp-3);padding:var(--sp-2) var(--sp-3);border:1px solid var(--border);border-radius:var(--radius);background:var(--panel);}
+.fs-box-name{font-weight:600;}
+.fs-gross{display:flex;gap:var(--sp-2);align-items:flex-end;margin-bottom:var(--sp-3);}
+.fs-gross-field{flex:1;margin:0;}
+.fs-gross-input{font-size:1.25em;font-variant-numeric:tabular-nums;}
+body.floor-mode .fs-gross-input{font-size:var(--fl-base);min-height:48px;}
+.pkg-inactive{align-self:center;white-space:nowrap;}
