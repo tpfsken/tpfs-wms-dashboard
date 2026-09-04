@@ -476,6 +476,12 @@ function itemFormBody(){
       <div class="ui-label">Tracking</div>
       <div class="item-checks">
         <label class="ui-check"><input type="checkbox" id="itemLotTracked"> Lot tracked</label>
+        <label class="ui-check inv-ships-as-is"><span class="ui-muted">Ships as-is</span>
+          <select class="ui-input" id="itemShipsAsIs" aria-label="Ships as-is">
+            <option value="">Client default</option>
+            <option value="true">Yes — the unit is its own package</option>
+            <option value="false">No — packed into a box</option>
+          </select></label>
         <label class="ui-check"><input type="checkbox" id="itemExpiryTracked"> Expiry tracked</label>
         <label class="ui-check ui-check-warn"><input type="checkbox" id="itemHazmat"> ⚠ Hazmat</label>
       </div>
@@ -737,6 +743,7 @@ async function openItemFormModal(skuId){
     document.getElementById('itemUnitCost').value     = sku.unit_cost ?? '';
     document.getElementById('itemUnitPrice').value    = sku.unit_price ?? '';
     document.getElementById('itemLotTracked').checked    = !!sku.is_lot_tracked;
+    document.getElementById('itemShipsAsIs').value       = sku.ships_as_is == null ? '' : String(!!sku.ships_as_is);
     document.getElementById('itemExpiryTracked').checked = !!sku.is_expiry_tracked;
     document.getElementById('itemHazmat').checked        = !!sku.is_hazmat;
     document.getElementById('itemUnNumber').value             = sku.un_number || '';
@@ -890,6 +897,7 @@ async function submitItemForm(m){
     unitCost:        numOrNull('itemUnitCost'),
     unitPrice:       numOrNull('itemUnitPrice'),
     isLotTracked:    document.getElementById('itemLotTracked').checked,
+    shipsAsIs:       document.getElementById('itemShipsAsIs').value === '' ? null : document.getElementById('itemShipsAsIs').value === 'true',
     isExpiryTracked: document.getElementById('itemExpiryTracked').checked,
     isHazmat:        document.getElementById('itemHazmat').checked,
     specialHandlingInstructions: document.getElementById('itemSpecialHandling').value.trim() || null,

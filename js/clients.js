@@ -327,7 +327,12 @@ function openClientFormModal(client){
             { value: 'label_first',   label: 'Label first — the office prints in ShipStation before picking (default)' },
             { value: 'label_at_pack', label: 'Label at pack — the packer creates the label from the closed package' },
           ], value: client?.label_mode || 'label_first' })}
+        ${uiFieldSelect({ id: 'cfShipReadyPack', label: 'Ship-ready packaging', options: [
+            { value: 'per_unit',  label: 'One package per unit (default)' },
+            { value: 'per_order', label: 'One package per order' },
+          ], value: (client?.ship_rules && client.ship_rules.ship_ready_packaging) || 'per_unit', hint: 'For items that ship as-is: the unit scan at Pack & Ship packs and closes the box itself.' })}
         <div class="item-checks">
+          <label class="ui-check"><input type="checkbox" id="cfShipsAsIs" ${client?.ships_as_is_default ? 'checked' : ''}> Items ship as-is by default (each SKU can override)</label>
           <label class="ui-check"><input type="checkbox" id="cfItemScan" ${pr.require_item_scan === false ? '' : 'checked'}> Require item scans (off = tap-to-count)</label>
           <label class="ui-check"><input type="checkbox" id="cfCartonConfirm" ${pr.allow_carton_confirm ? 'checked' : ''}> Allow carton confirm (scan an LP to count its units)</label>
         </div>
@@ -392,6 +397,8 @@ async function submitClientForm(m){
     invoice_detail_mode: document.getElementById('cfInvoiceMode').value,
     unit_control: document.getElementById('cfUnitControl').value,
     label_mode: document.getElementById('cfLabelMode').value,
+    ships_as_is_default: document.getElementById('cfShipsAsIs').checked,
+    ship_rules: { ...((_currentClient && _currentClient.id === _editingClientId && _currentClient.ship_rules) || {}), ship_ready_packaging: document.getElementById('cfShipReadyPack').value },
     pick_rules: {
       location_mode: document.getElementById('cfLocationMode').value,
       require_item_scan: document.getElementById('cfItemScan').checked,

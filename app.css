@@ -1277,6 +1277,8 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .unit-group-head{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;font-weight:600;margin-bottom:4px;}
 .unit-hist-label{margin-top:var(--sp-3);}
 .inv-find-unit{max-width:200px;}
+.inv-ships-as-is{gap:var(--sp-2);}
+.inv-ships-as-is .ui-input{max-width:280px;}
 .trace-units-row td{padding:0 var(--sp-3) var(--sp-3);}
 .fp-photo{margin-top:var(--sp-3);}
 .fp-photo-img{max-width:100%;max-height:180px;border-radius:var(--radius-sm);border:1px solid var(--border);}

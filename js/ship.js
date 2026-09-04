@@ -88,6 +88,8 @@ function fsRender(){
   const ssLocked = v.order.labelProvider === 'shipstation' && v.order.shipstationWritesEnabled === false;
   // label-first: a closed box with no label yet keeps Ship off — the directive above says what to scan
   const needsLabel = v.order.labelProvider === 'shipstation' && (v.packages || []).some(p => p.status === 'closed' && !p.trackingNumber);
+  // ship-ready: everything packed into labeled boxes -> READY — Ship
+  const readyToShip = !!v.order.allShipReady && (v.packages || []).length > 0 && (v.packages || []).every(p => p.status === 'labeled') && (v.lines || []).every(l => l.pickedQty > 0 && l.packagedQty >= l.pickedQty);
   body.innerHTML = `
     <div class="fp-head">
       <div class="fp-head-order">${uiId(o.orderNumber)} <span class="ui-muted">·</span> ${esc(o.clientCode)} ${uiChip(o.status)}</div>
@@ -101,7 +103,7 @@ function fsRender(){
     </div>
     <div class="fs-lines">${v.lines.map(l => `
       <div class="fs-line ${l.packagedQty >= l.pickedQty && l.pickedQty > 0 ? 'fs-line-done' : ''}">
-        <span class="ui-id">${esc(l.skuCode)}</span>${l.lotNumber ? ` <span class="ui-muted">lot ${esc(l.lotNumber)}</span>` : ''}${l.cartons ? ` <span class="fs-line-carton">${esc(l.cartons)}</span>` : ''}
+        <span class="ui-id">${esc(l.skuCode)}</span>${l.lotNumber ? ` <span class="ui-muted">lot ${esc(l.lotNumber)}</span>` : ''}${l.cartons ? ` <span class="fs-line-carton">${esc(l.cartons)}</span>` : ''}${l.shipsAsIs ? ' ' + uiChip('ACTIVE', 'SHIPS AS-IS') : ''}
         <span class="fs-line-n">${esc(l.packagedQty)} / ${esc(l.pickedQty)}${l.pendingAllocations ? ' <span class="ui-chip ui-chip-warn">PICKING</span>' : ''}</span>
       </div>`).join('')}</div>
     <div class="fp-banner" id="fsBanner" hidden></div>
@@ -110,7 +112,7 @@ function fsRender(){
       <div class="sp-editor-head">
         <div class="ui-dialog-title">${pkg ? `${esc(pkg.packageNumber)} ${uiChip(pkg.status === 'open' ? 'NEW' : pkg.status === 'closed' ? 'PACKED' : pkg.status === 'labeled' ? 'ALLOCATED' : pkg.status === 'shipped' ? 'SHIPPED' : 'CANCELLED', pkg.status.toUpperCase())}` : 'No open package'}</div>
         <div class="sp-toolbar-actions">
-          ${!shipped ? '<button type="button" class="ui-btn ui-btn-primary js-fs-newpkg">New package</button>' : ''}
+          ${!shipped && !v.order.allShipReady ? '<button type="button" class="ui-btn ui-btn-primary js-fs-newpkg">New package</button>' : ''}
         </div>
       </div>
       <div class="ui-group-body">
@@ -148,7 +150,7 @@ function fsRender(){
                    <button type="button" class="ui-btn js-fs-voidlabel" ${ssLocked ? 'disabled title="ShipStation write lock is on"' : ''}>Void label</button>${ssLocked ? '<div class="ui-hint fs-locked">ShipStation write lock is on — enable writes under Settings → Integrations</div>' : ''}`
                 : '<button type="button" class="ui-btn js-fs-void">Void (refund label)</button>'}
             </div>` : ''}
-        ` : (shipped ? '<div class="ui-hint">This order has shipped.</div>' : '<div class="ui-hint">Scan the first unit to start a package, or tap New package.</div>')}
+        ` : (shipped ? '<div class="ui-hint">This order has shipped.</div>' : (v.order.allShipReady ? '<div class="ui-hint">Ship-ready order: scan the unit — it packs and closes its own box.</div>' : '<div class="ui-hint">Scan the first unit to start a package, or tap New package.</div>'))}
       </div>
     </div>
 
@@ -159,6 +161,18 @@ function fsRender(){
         ${p.trackingNumber ? `<span class="ui-id">${esc(p.trackingNumber)}</span>` : ''}
       </button>`).join('')}</div>
 
+    ${!shipped && needsLabel && !(pkg && pkg.status === 'closed') ? `
+      <div class="fp-directive fp-directive-loc">
+        <div class="fp-directive-label">SCAN SHIPPING LABEL</div>
+        <div class="fp-directive-main">${esc((v.packages || []).filter(p => p.status === 'closed' && !p.trackingNumber).map(p => p.packageNumber).join(' · '))}</div>
+        <div class="ui-hint">Scan the label printed in ShipStation — it attaches to the box.</div>
+      </div>` : ''}
+    ${!shipped && readyToShip ? `
+      <div class="fp-directive fp-directive-item">
+        <div class="fp-directive-label">READY</div>
+        <div class="fp-directive-main">Ship</div>
+        <div class="ui-hint">Every unit is in a labeled box.</div>
+      </div>` : ''}
     ${shipped
       ? `<div class="fs-verified">SHIPPED${v.verification ? ` · verified ${esc(String(v.verification.verifiedAt || '').slice(0, 16).replace('T', ' '))}` : ''}</div>`
       : `<button type="button" class="ui-btn ui-btn-primary fs-shipbtn js-fs-ship" ${needsLabel ? 'disabled title="Scan the shipping label first"' : ''}>${needsLabel ? 'Ship — scan the shipping label first' : 'Ship — verify checklist'}</button>`}`;
