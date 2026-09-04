@@ -38,6 +38,8 @@ const UI_STATUS_MAP = {
   ACTIVE: 'ok', SUPERSEDED: 'neutral', ARCHIVED: 'neutral', INACTIVE: 'neutral', OFFBOARDED: 'warn',
   // inventory
   available: 'ok', allocated: 'info', damaged: 'danger', hold_qc: 'warn',
+  // units (inventory_units.status)
+  in_stock: 'ok', picked: 'warn', packed: 'warn', shipped: 'ok', returned: 'neutral', scrapped: 'danger',
   // receiving
   receiving: 'warn', received: 'ok', partially_received: 'warn',
   confirmed: 'info', in_transit: 'info', draft: 'warn', closed: 'neutral', cancelled: 'neutral',

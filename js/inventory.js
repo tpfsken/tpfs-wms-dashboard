@@ -1951,7 +1951,7 @@ async function withdrawLotDocument(docId, lotId, lotNumber){
   });
 }
 
-async function openInventoryDetail(invId){
+async function openInventoryDetail(invId, opts = {}){
   const m = uiModal({
     title: 'Inventory',
     width: 880,
@@ -1978,6 +1978,7 @@ async function openInventoryDetail(invId){
              tone: inv.status === 'damaged' ? 'danger' : inv.status === 'available' ? 'ok' : null }) +
     uiTile({ label: 'Location', value: inv.location_code || '—', compact: true, sub: inv.zone_name || '' }) +
     uiTile({ label: 'License plate', value: inv.lp_number || '—', compact: true, sub: inv.lp_type || '' }) +
+    uiTile({ label: 'Carton', value: inv.carton_barcode || '—', compact: true, sub: inv.carton_barcode ? 'scan resolves as carton' : '' }) +
     uiTile({ label: 'Lot', value: inv.lot_number || '—', compact: true,
              tone: expSoon ? 'warn' : null,
              sub: inv.expiry_date ? 'Exp ' + new Date(inv.expiry_date).toLocaleDateString() : '' }) +
@@ -2090,6 +2091,8 @@ async function openInventoryDetail(invId){
     </div>` : '';
 
   body.innerHTML = header + item + lot + coaSection + family + inbound + alloc;
+  // Units on this LP — every UID with status, lot, order and last event; click a unit for its history.
+  if(inv.lp_id && typeof lpUnitsSection === 'function') lpUnitsSection(inv.lp_id, body, { highlight: opts.highlightUid || null });
 
   if(inv.lot_id) renderLotCoa(inv.lot_id, inv.lot_number);
 

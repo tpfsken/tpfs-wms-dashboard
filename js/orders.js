@@ -377,6 +377,8 @@ async function openOrderDetail(id){
 
   // Attachments — supporting docs bound to the order. Ops + portal both.
   loadOrderAttachments(id);
+  // Units — picked UIDs (who / when, carton) and the UIDs in each package with tracking. Ops + portal (read-only).
+  if(typeof renderOrderUnits === 'function') renderOrderUnits(id, d);
 
   uiTable('ordShipmentsWrap', {
     columns: [

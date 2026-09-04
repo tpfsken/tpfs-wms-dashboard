@@ -529,8 +529,19 @@ function renderLpFamily(family){
         <td class="right">${esc(lp.current_qty ?? 0)}</td>
         <td><span class="chip ${stChip}">${esc(lp.status || '')}</span></td>
         <td style="color:var(--text2);font-size:12px;">${esc(recv)}</td>
+        <td><button type="button" class="ui-btn js-trace-units" data-lp="${esc(lp.id)}">Units</button></td>
       </tr>`;
   }).join('');
+  // Units per LP, on demand, in a row under the LP: UID, status, lot, order, last event; click a unit for its history.
+  tbody.querySelectorAll('.js-trace-units').forEach(btn => btn.addEventListener('click', uiBusyHandler(async () => {
+    const tr = btn.closest('tr');
+    const next = tr.nextElementSibling;
+    if(next && next.classList.contains('trace-units-row')){ next.remove(); return; }
+    const row = document.createElement('tr'); row.className = 'trace-units-row';
+    row.innerHTML = '<td colspan="8"><div class="js-trace-units-host"></div></td>';
+    tr.insertAdjacentElement('afterend', row);
+    await lpUnitsSection(btn.dataset.lp, row.querySelector('.js-trace-units-host'), { id: 'traceUnits-' + btn.dataset.lp });
+  })));
 }
 
 function renderReceiving(rows){

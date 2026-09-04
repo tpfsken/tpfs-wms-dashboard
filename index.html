@@ -122,7 +122,7 @@
   </div>
 
   <div class="page" id="page-inventory">
-    <div class="page-header"><button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location · add new items from the client's Item Master tab</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><label class="ui-check ops-only inv-show-inactive"><input type="checkbox" id="invShowInactive" onchange="uiRun(this, () => invToggleInactiveClients(this))"> Show inactive</label><input type="text" class="ui-input" id="invSearch" placeholder="Search SKU, lot, LP, or location…" style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="ui-btn" onclick="uiRun(this, () => loadInventory())">Refresh</button><button class="ui-btn ui-btn-primary ops-only" onclick="uiRun(this, () => showCaseBreakModal())">Case break</button></div>
+    <div class="page-header"><button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location · add new items from the client's Item Master tab</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><label class="ui-check ops-only inv-show-inactive"><input type="checkbox" id="invShowInactive" onchange="uiRun(this, () => invToggleInactiveClients(this))"> Show inactive</label><input type="text" class="ui-input" id="invSearch" placeholder="Search SKU, lot, LP, or location…" style="max-width:240px;"><input type="search" class="ui-input inv-find-unit ops-only" id="invFindUnit" placeholder="Find unit (UID)" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();uiRun(this, () => invFindUnit(this.value));}"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="ui-btn" onclick="uiRun(this, () => loadInventory())">Refresh</button><button class="ui-btn ui-btn-primary ops-only" onclick="uiRun(this, () => showCaseBreakModal())">Case break</button></div>
     <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
       <div style="flex:1;overflow:auto;" id="invListWrap"></div>
       <div id="invPager"></div>
@@ -217,6 +217,7 @@
           </div>
           <!-- SHIPMENTS -->
           <div class="card" style="margin-bottom:16px;"><div class="card-head"><div class="card-title">Shipments</div></div><div id="ordShipmentsWrap"></div></div>
+          <div id="ordUnitsWrap"></div>
           <div id="pickListPanel" class="card" style="display:none;margin-bottom:16px;">
             <div class="card-head">
               <div class="card-title">Pick list</div>
@@ -1075,7 +1076,7 @@
         <div class="card-head"><div class="card-title">LP family</div><div style="flex:1"></div><div style="font-size:11px;color:var(--muted);">parent → children, indented by case-break lineage</div></div>
         <div style="overflow:auto;">
           <table class="data-table">
-            <thead><tr><th>LP</th><th>SKU</th><th>Lot</th><th>Location</th><th class="right">Qty</th><th>Status</th><th>Received</th></tr></thead>
+            <thead><tr><th>LP</th><th>SKU</th><th>Lot</th><th>Location</th><th class="right">Qty</th><th>Status</th><th>Received</th><th></th></tr></thead>
             <tbody id="lpFamilyBody"></tbody>
           </table>
         </div>
@@ -1508,6 +1509,7 @@
 <script src="js/migration.js"></script>
 <script src="js/shipstation.js"></script>
 <script src="js/waves.js"></script>
+  <script src="js/units.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
