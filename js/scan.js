@@ -4,6 +4,8 @@
 // -----------------------------------------------------------------------------
 //   const si = scanInputMount(containerEl, {
 //     placeholder: 'Scan or type…',
+//     keyboard: 'none' | 'text',     // 'none' (default): no on-screen keyboard; a Type button opens it for one entry
+//     keepFocus: true,               // focus trap: refocus after blur / scan / re-enable / page visible
 //     onScan(raw, meta) {},        // meta.source: 'wedge' | 'camera' | 'typed' | 'paste'; meta.format: 'QR_CODE' | 'CODE_128' | … | null
 //     autofocus: true,             // grab focus on mount (and after each scan)
 //     camera: true,                // show the Camera button
@@ -68,13 +70,17 @@ function scanClassify(chars, firstTs, lastTs){
 
 function scanInputMount(container, opts = {}){
   const el = typeof container === 'string' ? document.getElementById(container) : container;
-  const o = { placeholder: 'Scan or type…', autofocus: true, camera: true, typedOk: true, sound: true, onScan: () => {}, ...opts };
+  // keyboard: 'none' keeps the on-screen keyboard down on handhelds — wedge scans
+  // land as keystrokes regardless, physical keyboards and paste are unaffected.
+  // The Type button flips inputmode to 'text' for one manual entry.
+  const o = { placeholder: 'Scan or type…', autofocus: true, camera: true, typedOk: true, sound: true, keyboard: 'none', keepFocus: true, onScan: () => {}, ...opts };
 
   el.classList.add('scan-input');
   el.innerHTML = `
     <div class="scan-input-row">
       <input class="ui-input scan-input-field" type="text" autocomplete="off" autocapitalize="off"
-             spellcheck="false" inputmode="text" placeholder="${esc(o.placeholder)}" aria-label="Scan">
+             spellcheck="false" inputmode="${o.keyboard === 'text' ? 'text' : 'none'}" placeholder="${esc(o.placeholder)}" aria-label="Scan">
+      ${o.keyboard === 'text' ? '' : '<button type="button" class="ui-btn scan-input-type" aria-label="Type manually">Type</button>'}
       ${o.camera ? '<button type="button" class="ui-btn scan-input-cam">Camera</button>' : ''}
     </div>
     <div class="scan-input-flash" aria-live="polite"></div>`;
@@ -82,8 +88,39 @@ function scanInputMount(container, opts = {}){
   const input = el.querySelector('.scan-input-field');
   const flash = el.querySelector('.scan-input-flash');
   const camBtn = el.querySelector('.scan-input-cam');
+  const typeBtn = el.querySelector('.scan-input-type');
 
-  let firstTs = 0, lastTs = 0, busy = false, destroyed = false;
+  let firstTs = 0, lastTs = 0, busy = false, destroyed = false, manual = false;
+
+  // ---- keyboard mode --------------------------------------------------------
+  // manual = the operator asked for the keyboard; it reverts after Enter or blur.
+  function setManual(on){
+    manual = !!on;
+    if(o.keyboard !== 'text') input.setAttribute('inputmode', manual ? 'text' : 'none');
+    if(typeBtn) typeBtn.classList.toggle('scan-input-type-on', manual);
+  }
+
+  // ---- focus trap -------------------------------------------------------------
+  // The field must own focus so a wedge scan always lands: refocus after blur
+  // (unless something else focusable took it — a modal, the qty box), after
+  // every scan, when the field is re-enabled, and when the page comes back.
+  function wantsFocus(){
+    if(destroyed || busy || !o.keepFocus || !o.autofocus) return false;
+    if(document.visibilityState !== 'visible') return false;
+    if(!el.isConnected || !input.offsetParent) return false;          // hidden or removed
+    if(document.querySelector('.ui-overlay, .scan-cam')) return false; // a dialog or the camera owns the screen
+    const a = document.activeElement;
+    return !a || a === document.body || a === input;
+  }
+  function refocus(){ if(wantsFocus()) input.focus({ preventScroll: true }); }
+  function onBlur(){ if(manual) setManual(false); setTimeout(refocus, 0); }
+  function onVisible(){ if(document.visibilityState === 'visible') setTimeout(refocus, 50); }
+  input.addEventListener('blur', onBlur);
+  document.addEventListener('visibilitychange', onVisible);
+  window.addEventListener('focus', onVisible);
+  // Removing the focused element (a closed dialog, the camera overlay, a re-rendered
+  // qty box) fires no blur at all — focus just lands on <body>. A slow tick catches that.
+  const focusTick = setInterval(refocus, 1000);
 
   function showFlash(text, tone){
     flash.textContent = text;
@@ -100,8 +137,9 @@ function scanInputMount(container, opts = {}){
     showFlash(`Scanned (${source})`, 'ok');
     input.value = '';
     firstTs = lastTs = 0;
+    if(manual) setManual(false);
     try { o.onScan(v, { source, format: format || null }); } catch(e) { uiToast(e.message || 'Scan handler failed', 'error'); }
-    if(o.autofocus) input.focus();
+    if(o.autofocus) input.focus({ preventScroll: true });
   }
 
   input.addEventListener('keydown', (e) => {
@@ -125,6 +163,14 @@ function scanInputMount(container, opts = {}){
     }
   });
 
+  if(typeBtn){
+    typeBtn.addEventListener('click', () => {
+      // A user gesture on the button, then focus with inputmode=text, opens the keyboard.
+      setManual(!manual);
+      if(manual){ input.focus(); showFlash('Keyboard on — Enter to submit', 'warn'); }
+      else input.focus();
+    });
+  }
   if(camBtn){
     camBtn.addEventListener('click', () => scanOpenCamera({
       onResult: (raw, format) => emit(raw, 'camera', format),
@@ -136,9 +182,16 @@ function scanInputMount(container, opts = {}){
 
   return {
     el, input,
-    focus(){ input.focus(); },
-    setBusy(b){ busy = !!b; input.disabled = !!b; if(camBtn) camBtn.disabled = !!b; },
-    destroy(){ destroyed = true; el.innerHTML = ''; el.classList.remove('scan-input'); },
+    focus(){ input.focus({ preventScroll: true }); },
+    // Disabling the field drops focus; re-enabling takes it back.
+    setBusy(b){ busy = !!b; input.disabled = !!b; if(camBtn) camBtn.disabled = !!b; if(typeBtn) typeBtn.disabled = !!b; if(!busy) setTimeout(refocus, 0); },
+    destroy(){
+      destroyed = true;
+      clearInterval(focusTick);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+      el.innerHTML = ''; el.classList.remove('scan-input');
+    },
   };
 }
 

@@ -1326,3 +1326,51 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 .mg-loc .ui-input{flex:1;min-width:0;}
 .mg-plan{margin:0 0 var(--sp-3);padding-left:18px;font-size:var(--fs-body);}
 .mg-plan li{margin:2px 0;}
+
+/* ===========================================================
+   FLOOR MODE — narrow handhelds (Zebra TC-series, 320–400px).
+   Nothing may sit outside the scrollable area: long identifiers
+   wrap, grids collapse, flex children may shrink, tables stack.
+=========================================================== */
+body.floor-mode .page{overflow-wrap:anywhere;}
+body.floor-mode .page *{min-width:0;}
+body.floor-mode .page img,body.floor-mode .page video,body.floor-mode .page canvas{max-width:100%;height:auto;}
+body.floor-mode .floor-page-body>*{max-width:100%;}
+.fp-banner,.fp-uid,.fs-tracking,.fs-shipto,.scan-input-flash,.sp-step-out,.ui-id{overflow-wrap:anywhere;word-break:break-word;}
+.fp-directive-main{overflow-wrap:anywhere;}
+.fp-head,.sp-editor-head,.sp-toolbar-actions,.fp-actions,.fs-scanrow{flex-wrap:wrap;}
+.fp-actions .ui-btn{flex:1 1 auto;justify-content:center;}
+/* 1fr is minmax(auto,1fr): a long value blows the track out. Pin the floor to 0. */
+.sp-step{grid-template-columns:96px minmax(0,1fr);}
+.ui-field-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
+.sp-row-3{grid-template-columns:repeat(3,minmax(0,1fr));}
+.fs-counts{grid-template-columns:repeat(3,minmax(0,1fr));}
+/* Touch targets: 44px minimum on the floor */
+body.floor-mode .ui-btn,body.floor-mode .floor-back,body.floor-mode .btn,body.floor-mode .ui-input,body.floor-mode .ui-select,
+body.floor-mode .ui-check,body.floor-mode .js-floor-pick-row{min-height:44px;}
+body.floor-mode .ui-chip{min-height:0;}
+.scan-input-type{flex-shrink:0;}
+.scan-input-type-on{background:var(--st-warn-bg);color:var(--st-warn);border-color:var(--st-warn);}
+/* Camera overlay: controls wrap instead of pushing off the edge */
+.scan-cam-controls{flex-wrap:wrap;}
+.scan-cam *{min-width:0;}
+.scan-cam-status,.scan-cam-title{overflow-wrap:anywhere;}
+.scan-cam-zoom{min-width:0;flex:1 1 140px;}
+@media (max-width:480px){
+  .sp-step{grid-template-columns:1fr;}
+  .ui-field-row,.sp-row-3{grid-template-columns:1fr;}
+  .fs-qty{width:64px;}
+  body.floor-mode .ui-table,body.floor-mode .ui-table thead,body.floor-mode .ui-table tbody,
+  body.floor-mode .ui-table tr,body.floor-mode .ui-table td{display:block;width:100%;height:auto;}
+  body.floor-mode .ui-table thead{display:none;}
+  body.floor-mode .ui-table tr{border-bottom:1px solid var(--border);padding:var(--sp-2) 0;}
+  body.floor-mode .ui-table td{padding:2px var(--sp-3);border:0;text-align:left;}
+  body.floor-mode .ui-table td.right{text-align:left;}
+}
+body.floor-mode button,body.floor-mode .cb-input,body.floor-mode .cb-wrap input{min-height:44px;}
+body.floor-mode .ui-check{display:flex;align-items:center;gap:var(--sp-2);}
+body.floor-mode .ui-check input[type=checkbox]{width:22px;height:22px;min-height:0;}
+body.floor-mode .ui-chip,body.floor-mode .ui-chip *{min-height:0;}
+body.floor-mode button{min-width:44px;}
+.scan-input-row{flex-wrap:wrap;}
+.scan-input-field{flex:1 1 160px;}
