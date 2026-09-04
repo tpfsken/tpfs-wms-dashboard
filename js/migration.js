@@ -111,7 +111,7 @@ const MG_RULES = {
   sublot_as:  [['attribute', 'keep as LP attribute'], ['uid', 'unit ID (qty must be 1)'], ['lot_suffix', 'append to lot number'], ['ignore', 'ignore']],
   tagid_as:   [['attribute', 'keep as LP attribute'], ['lot', 'use as lot number'], ['ignore', 'ignore']],
   groupid_as: [['attribute', 'keep as LP attribute'], ['ignore', 'ignore']],
-  lot_as:     [['lot', 'lot number'], ['attribute', 'keep as LP attribute'], ['ignore', 'ignore']],
+  lot_as:     [['lot', 'lot number'], ['carton', 'carton (group pieces into one LP)'], ['attribute', 'keep as LP attribute'], ['ignore', 'ignore']],
 };
 
 function mgRenderReport(){
@@ -177,6 +177,8 @@ function mgClientCard(c, clients){
           ${uiTile({ label: 'Exists', value: p.exists, compact: true })}
           ${uiTile({ label: 'Changed', value: p.changed, tone: p.changed ? 'danger' : null, compact: true })}
           ${uiTile({ label: 'Blocked', value: p.blocked, tone: p.blocked ? 'warn' : null, compact: true })}
+          ${c.rules.lot_as === 'carton' ? uiTile({ label: 'Cartons', value: p.cartons || 0, sub: `${p.loose || 0} loose piece(s)`, compact: true }) : ''}
+          ${c.rules.lot_as === 'carton' && p.cartonIssues ? uiTile({ label: 'Carton issues', value: p.cartonIssues, sub: 'split bins or mixed items', tone: 'danger', compact: true }) : ''}
         </div>
         ${c.uidHint ? `<div class="ui-banner ui-banner-info">Every piece is qty 1 with its own ${esc(c.captions.SubLot || 'SubLot')} — defaulted to unit (UID)${c.mapped ? '' : '; the client will be created with unit control required'}. Change the SubLot rule above to override.</div>` : ''}
         ${p.subLotQtyNot1 && c.rules.sublot_as === 'uid' ? `<div class="ui-banner ui-banner-warn">${esc(p.subLotQtyNot1)} piece(s) carry a SubLot with qty ≠ 1 — they will be blocked under "unit ID". Choose another SubLot rule or split them in Excalibur.</div>` : ''}
@@ -271,7 +273,7 @@ async function mgCommit(){
   const r = await fetch(`${API}/migration/excalibur/runs/${_mg.run.id}/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ clientCodes: codes }) });
   const d = await r.json().catch(() => ({}));
   if(!r.ok){ mgStatus(d.error || 'Commit refused', 'danger'); uiToast(d.error || 'Commit refused', 'error'); return; }
-  const summary = d.results.map(x => `${x.clientCode}: ${x.lps} LP(s), ${x.qty} qty, ${x.skusCreated} SKU(s), ${x.units} unit(s)${x.blocked.length ? `, ${x.blocked.length} blocked` : ''}${x.upcSkipped.length ? `, ${x.upcSkipped.length} UPC skipped` : ''}`).join(' · ');
+  const summary = d.results.map(x => `${x.clientCode}: ${x.lps} LP(s)${x.cartons ? ` (${x.cartons} carton(s))` : ''}${x.appended ? `, ${x.appended} carton(s) appended` : ''}, ${x.qty} qty, ${x.skusCreated} SKU(s), ${x.units} unit(s)${x.blocked.length ? `, ${x.blocked.length} blocked` : ''}${x.upcSkipped.length ? `, ${x.upcSkipped.length} UPC skipped` : ''}`).join(' · ');
   mgStatus(`Committed — ${summary}`, 'info');
   uiToast('Committed', 'success');
   mgOpenRun(_mg.run.id);
