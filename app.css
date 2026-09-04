@@ -1380,3 +1380,61 @@ body.floor-mode button{min-width:44px;}
 /* Bottom clearance on floor pages: the last card clears the Android nav bar */
 body.floor-mode .floor-page-body,body.floor-mode #floorPickListBody,body.floor-mode #floorInboundBody,body.floor-mode #floorMoveBody{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px));}
 body.floor-mode #page-floorHome{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px)) !important;}
+
+/* ===========================================================
+   FLOOR MODE — typography. Two sizes, toggled from the floor
+   header (body.floor-text-large). Tokens are re-pointed so every
+   ui-* component scales; the floor screens' own pieces are set
+   explicitly. Everything still wraps at 320–400px.
+=========================================================== */
+body.floor-mode{
+  --fl-base:16px; --fl-caps:12px; --fl-mono:16px; --fl-btn:16px; --fl-banner:16px; --fl-directive:28px; --fl-counter:26px;
+  --fs-body:var(--fl-base); --fs-ui:var(--fl-base); --fs-emph:var(--fl-base); --fs-caps:var(--fl-caps);
+  font-size:var(--fl-base); line-height:1.45;
+}
+body.floor-mode.floor-text-large{
+  --fl-base:18px; --fl-caps:13px; --fl-mono:18px; --fl-btn:18px; --fl-banner:18px; --fl-directive:32px; --fl-counter:28px;
+}
+body.floor-mode .page{font-size:var(--fl-base);line-height:1.45;}
+body.floor-mode .ui-btn,body.floor-mode .floor-back,body.floor-mode .btn,body.floor-mode .floor-scanpick{font-size:var(--fl-btn);}
+body.floor-mode .ui-input,body.floor-mode .ui-select,body.floor-mode .cb-input,body.floor-mode .scan-input-field{font-size:var(--fl-base);}
+body.floor-mode .ui-hint,body.floor-mode .ui-muted{font-size:calc(var(--fl-base) - 2px);}
+body.floor-mode .ui-label{font-size:var(--fl-caps);}
+body.floor-mode .ui-id,body.floor-mode .ui-mono{font-size:var(--fl-mono);}
+body.floor-mode .ui-chip{font-size:var(--fl-caps);}
+body.floor-mode .floor-card-title{font-size:calc(var(--fl-base) + 4px);}
+body.floor-mode .floor-card-sub,body.floor-mode .floor-card-flat .floor-card-sub{font-size:calc(var(--fl-base) - 2px);}
+body.floor-mode .floor-page-title{font-size:calc(var(--fl-base) + 2px);}
+body.floor-mode .floor-textsize{flex-shrink:0;font-size:calc(var(--fl-base) - 3px);padding:6px 10px;}
+/* scan trace: mono values large, key labels small uppercase */
+body.floor-mode .sp-step-name{font-size:var(--fl-caps);text-transform:uppercase;letter-spacing:.06em;}
+body.floor-mode .sp-step-out{font-family:var(--mono);font-size:var(--fl-mono);line-height:1.4;}
+body.floor-mode .sp-step-final{font-size:var(--fl-mono);}
+body.floor-mode .sp-trace-head{font-size:var(--fl-base);}
+/* pick directive and counter */
+body.floor-mode .fp-directive-label{font-size:var(--fl-caps);}
+body.floor-mode .fp-directive-main{font-size:var(--fl-directive);font-weight:800;line-height:1.15;}
+body.floor-mode .fp-directive-sub{font-size:var(--fl-base);}
+body.floor-mode .fp-directive-qty{font-size:var(--fl-counter);}
+body.floor-mode .fp-counter{font-size:var(--fl-counter);}
+body.floor-mode .fp-head-order{font-size:var(--fl-base);}
+body.floor-mode .fp-uid{font-size:var(--fl-mono);}
+/* banners and flash */
+body.floor-mode .fp-banner{font-size:var(--fl-banner);line-height:1.35;}
+body.floor-mode .scan-input-flash{font-size:var(--fl-caps);}
+/* pack & ship */
+body.floor-mode .fs-count-num{font-size:var(--fl-counter);}
+body.floor-mode .fs-count-label{font-size:var(--fl-caps);}
+body.floor-mode .fs-line,body.floor-mode .fs-shipto,body.floor-mode .fs-tracking{font-size:var(--fl-base);}
+body.floor-mode .ui-dialog-title{font-size:calc(var(--fl-base) + 2px);}
+/* the inline-styled pick list rows */
+body.floor-mode .js-floor-pick-row>div{font-size:var(--fl-base) !important;}
+body.floor-mode .js-floor-pick-row>div>div:first-child{font-size:calc(var(--fl-base) + 1px) !important;}
+/* floor header: brand stays on one line, the toggle stays compact */
+body.floor-mode #page-floorHome>div:first-child{flex-wrap:wrap;row-gap:8px;}
+body.floor-mode #page-floorHome>div:first-child>div:nth-child(2){flex:1 1 130px !important;min-width:130px !important;}  /* inline style="flex:1;min-width:0" on the div */
+.floor-head-actions{display:flex;gap:8px;margin-left:auto;flex-shrink:0;}
+body.floor-mode #page-floorHome>div:first-child>div:nth-child(2)>div:first-child{font-size:15px !important;line-height:1.2;}
+body.floor-mode #page-floorHome>div:first-child>div:nth-child(2)>div:last-child{font-size:12px !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+body.floor-mode .floor-textsize{padding:6px 8px;font-size:calc(var(--fl-base) - 4px);white-space:nowrap;}
+body.floor-mode .js-signout{font-size:calc(var(--fl-base) - 4px) !important;white-space:nowrap;}

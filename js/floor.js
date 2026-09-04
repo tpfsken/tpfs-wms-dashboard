@@ -27,8 +27,37 @@ function shouldUseFloorMode(){
   return window.matchMedia('(max-width: 600px)').matches;
 }
 
+// ---- Text size: Normal / Large. Stored per device; Large by default on
+// handhelds narrower than 420px (Zebra TC-series), Normal on tablets.
+const FLOOR_TEXT_KEY = 'tpfs_floor_text';
+function floorTextSize(){
+  let v = null;
+  try { v = localStorage.getItem(FLOOR_TEXT_KEY); } catch(_) { /* storage blocked */ }
+  if(v === 'normal' || v === 'large') return v;
+  return window.innerWidth < 420 ? 'large' : 'normal';
+}
+function applyFloorTextSize(size){
+  document.body.classList.toggle('floor-text-large', size === 'large');
+  document.querySelectorAll('.js-floor-textsize').forEach(b => {
+    b.textContent = size === 'large' ? 'Aa Large' : 'Aa Normal';
+    b.setAttribute('aria-pressed', size === 'large' ? 'true' : 'false');
+  });
+}
+function toggleFloorTextSize(){
+  const next = floorTextSize() === 'large' ? 'normal' : 'large';
+  try { localStorage.setItem(FLOOR_TEXT_KEY, next); } catch(_) { /* keep it for this page only */ }
+  applyFloorTextSize(next);
+  uiToast(next === 'large' ? 'Large text' : 'Normal text', 'success');
+}
+
 function bootFloor(){
   document.body.classList.add('floor-mode');
+  applyFloorTextSize(floorTextSize());
+  document.querySelectorAll('.js-floor-textsize').forEach(b => {
+    if(b._wired) return;
+    b._wired = true;
+    b.addEventListener('click', toggleFloorTextSize);
+  });
 
   if(U){
     document.getElementById('floorUserLine').textContent =
