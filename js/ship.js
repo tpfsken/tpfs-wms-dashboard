@@ -111,7 +111,7 @@ function fsRender(){
       <div class="ui-group-body">
         ${pkg ? `
           <div class="fs-contents">${pkg.contents.length ? pkg.contents.map(x => `<span class="ui-id fp-uid">${esc(x.uid || x.skuCode)}${x.qty > 1 ? ' ×' + esc(x.qty) : ''}</span>`).join('') : '<span class="ui-muted">Empty — scan units into it</span>'}</div>
-          ${pkg.trackingNumber ? `<div class="fs-tracking">${esc(pkg.carrierCode || '')} ${esc(pkg.serviceLevel || '')} · ${uiId(pkg.trackingNumber)}</div>` : ''}
+          ${pkg.trackingNumber ? `<div class="fs-tracking">${esc(pkg.carrierCode || '')} ${esc(pkg.serviceLevel || '')} · ${uiId(pkg.trackingNumber)} ${pkg.preLabeled ? uiChip('ACTIVE', 'PRE-LABELED') : ''}${pkg.labelBatch ? ` <span class="ui-muted">batch ${esc(pkg.labelBatch)}</span>` : ''}</div>` : (v.order.labelProvider === 'shipstation' && v.order.labelMode === 'label_first' ? '<div class="ui-hint">Label first: the office prints this label in ShipStation. Scan the printed label to attach it, or ask for one.</div>' : '')}
           ${pkg.status === 'open' ? `
             <div class="fs-scanrow">
               <div id="fsPkgScan" class="fs-scan"></div>
@@ -125,10 +125,18 @@ function fsRender(){
             <div class="fp-actions">
               <button type="button" class="ui-btn js-fs-reopen">Reopen</button>
               <button type="button" class="ui-btn js-fs-void">Void</button>
-              <button type="button" class="ui-btn ui-btn-primary fp-confirm js-fs-label">Get label</button>
+              ${v.order.labelProvider === 'shipstation'
+                ? `<button type="button" class="ui-btn js-fs-attach">Attach printed label</button>
+                   ${v.order.labelMode === 'label_at_pack' ? '<button type="button" class="ui-btn ui-btn-primary fp-confirm js-fs-sslabel">Get label</button>' : ''}`
+                : '<button type="button" class="ui-btn ui-btn-primary fp-confirm js-fs-label">Get label</button>'}
             </div>` : ''}
           ${pkg.status === 'labeled' ? `
-            <div class="fp-actions"><button type="button" class="ui-btn js-fs-void">Void (refund label)</button></div>` : ''}
+            <div class="fp-actions">
+              ${pkg.labelProvider === 'shipstation'
+                ? `${pkg.hasPdf ? '<button type="button" class="ui-btn js-fs-reprint">Re-print</button>' : '<span class="ui-hint">Printed in ShipStation — re-print there</span>'}
+                   <button type="button" class="ui-btn js-fs-voidlabel">Void label</button>`
+                : '<button type="button" class="ui-btn js-fs-void">Void (refund label)</button>'}
+            </div>` : ''}
         ` : (shipped ? '<div class="ui-hint">This order has shipped.</div>' : '<div class="ui-hint">Start a package to begin packing.</div>')}
       </div>
     </div>
@@ -150,6 +158,10 @@ function fsRender(){
   const ro = body.querySelector('.js-fs-reopen'); if(ro) ro.addEventListener('click', () => fsPkgAction('reopen'));
   const vd = body.querySelector('.js-fs-void'); if(vd) vd.addEventListener('click', fsVoidPackage);
   const lb = body.querySelector('.js-fs-label'); if(lb) lb.addEventListener('click', fsGetLabel);
+  const sl = body.querySelector('.js-fs-sslabel'); if(sl) sl.addEventListener('click', fsGetShipStationLabel);
+  const at = body.querySelector('.js-fs-attach'); if(at) at.addEventListener('click', fsAttachLabel);
+  const rp = body.querySelector('.js-fs-reprint'); if(rp) rp.addEventListener('click', fsReprint);
+  const vl = body.querySelector('.js-fs-voidlabel'); if(vl) vl.addEventListener('click', fsVoidLabel);
   const sb = body.querySelector('.js-fs-ship'); if(sb) sb.addEventListener('click', fsShip);
   body.querySelectorAll('.js-fs-pick').forEach(b => b.addEventListener('click', () => { _fs.pkgId = b.dataset.id; fsRender(); }));
   const qty = body.querySelector('#fsQty'); if(qty) qty.addEventListener('change', () => { _fs.qty = Math.max(1, parseInt(qty.value, 10) || 1); });
@@ -265,6 +277,72 @@ async function fsGetLabel(){
       await fsRefresh();
     } }],
   });
+}
+
+// ---- ShipStation label paths (source=shipstation orders) -----------------------------
+async function fsGetShipStationLabel(){
+  const pkg = fsPkg();
+  if(!pkg) return;
+  const carriers = await apiGet('/shipstation/carriers');
+  const rows = carriers?.rows || [];
+  const m = uiModal({
+    title: `ShipStation label for ${pkg.packageNumber}`,
+    body: `<div class="ui-hint">Default: the carrier/service mapped for "${esc(_fs.view.order.requestedService || 'no requested service')}". Override below if the packer needs a different service.</div>
+           ${uiFieldSelect({ id: 'fsSsCarrier', label: 'Carrier (override)', options: [{ value: '', label: 'Use mapped service' }, ...rows.map(c => ({ value: c.code, label: `${c.name} (${c.code})` }))] })}
+           ${uiFieldSelect({ id: 'fsSsService', label: 'Service (override)', options: [{ value: '', label: 'Use mapped service' }] })}`,
+    actions: [{ label: 'Cancel' }, { label: 'Create label', primary: true, onClick: async (api) => {
+      const carrierCode = api.el.querySelector('#fsSsCarrier').value || undefined, serviceCode = api.el.querySelector('#fsSsService').value || undefined;
+      if((carrierCode && !serviceCode) || (!carrierCode && serviceCode)){ uiToast('Pick both a carrier and a service, or neither', 'error'); return false; }
+      const r = await fetch(`${API}/packages/${pkg.id}/shipstation-label`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ carrierCode, serviceCode }) });
+      const d = await r.json().catch(() => ({}));
+      if(!r.ok){ uiToast(d.error || 'Label creation failed', 'error'); return false; }
+      uiToast(`Label created — ${d.trackingNumber}`, 'success');
+      await fsRefresh();
+      fsReprint();
+    } }],
+  });
+  m.el.querySelector('#fsSsCarrier').addEventListener('change', async (e) => {
+    const code = e.target.value; const sel = m.el.querySelector('#fsSsService');
+    if(!code){ sel.innerHTML = '<option value="">Use mapped service</option>'; return; }
+    const s = await apiGet(`/shipstation/carriers/${encodeURIComponent(code)}/services`);
+    sel.innerHTML = (s?.rows || []).map(x => `<option value="${esc(x.code)}">${esc(x.name)}</option>`).join('') || '<option value="">no services</option>';
+  });
+}
+
+async function fsReprint(){
+  const pkg = fsPkg();
+  if(!pkg) return;
+  const r = await fetch(`${API}/packages/${pkg.id}/label.pdf`, { headers: { Authorization: `Bearer ${T}` } });
+  if(!r.ok){ const d = await r.json().catch(() => ({})); uiToast(d.error || 'No stored PDF for this label', 'error'); return; }
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank');
+  if(!w) uiToast('Pop-up blocked — allow pop-ups to print the label', 'error');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+async function fsVoidLabel(){
+  const pkg = fsPkg();
+  if(!pkg) return;
+  const reason = await uiPrompt({ title: `Void label ${pkg.trackingNumber}?`, label: 'Reason', placeholder: 'wrong service / box changed / order cancelled', confirmLabel: 'Void label' });
+  if(!reason) return;
+  const r = await fetch(`${API}/packages/${pkg.id}/void-label`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ reason }) });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ uiToast(d.error || 'Void failed', 'error'); return; }
+  uiToast('Label voided in ShipStation', 'success');
+  await fsRefresh();
+}
+
+async function fsAttachLabel(){
+  const pkg = fsPkg();
+  if(!pkg) return;
+  const tracking = await uiPrompt({ title: `Attach a printed label to ${pkg.packageNumber}`, label: 'Scan or type the tracking number', placeholder: '1Z… / 9400… / FedEx', confirmLabel: 'Attach' });
+  if(!tracking) return;
+  const r = await fetch(`${API}/packages/${pkg.id}/attach-label`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ tracking: String(tracking).trim() }) });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ fsBanner(d.error || 'Could not attach the label', 'danger'); scanBeep('error'); return; }
+  uiToast(`Attached ${d.trackingNumber}`, 'success');
+  await fsRefresh();
 }
 
 async function fsShip(){

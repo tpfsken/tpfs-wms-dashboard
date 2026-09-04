@@ -152,6 +152,7 @@ function renderClientProfileTab(){
         ? '<span class="ui-chip ui-chip-info">MANDATORY — all SKUs</span>'
         : '<span class="ui-muted">Per-item</span>' },
     { k: 'Picking', v: esc(`${(c.pick_rules && c.pick_rules.location_mode) === 'scan' ? 'Scan bin' : "Tap I'M HERE"} · ${c.pick_rules && c.pick_rules.require_item_scan === false ? 'count' : 'item scans'} · units ${c.unit_control || 'none'}${c.pick_rules && c.pick_rules.allow_carton_confirm ? ' · carton confirm' : ''}`) },
+    { k: 'Labels', v: esc(c.label_mode === 'label_at_pack' ? 'At pack (packer creates in ShipStation)' : 'Label first (printed in ShipStation before picking)') },
     { k: 'Invoice detail', v: esc(c.invoice_detail_mode === 'SUMMARY'
         ? 'Summary (grouped)' : 'Detailed (per LP)') },
     { k: 'Onboarded', v: c.onboarded_at
@@ -246,6 +247,10 @@ function openClientFormModal(client){
             { value: 'optional', label: 'Optional — units may be received' },
             { value: 'required', label: 'Required — every pick and ship scans units' },
           ], value: client?.unit_control || 'none' })}
+        ${uiFieldSelect({ id: 'cfLabelMode', label: 'Shipping labels', options: [
+            { value: 'label_first',   label: 'Label first — the office prints in ShipStation before picking (default)' },
+            { value: 'label_at_pack', label: 'Label at pack — the packer creates the label from the closed package' },
+          ], value: client?.label_mode || 'label_first' })}
         <div class="item-checks">
           <label class="ui-check"><input type="checkbox" id="cfItemScan" ${pr.require_item_scan === false ? '' : 'checked'}> Require item scans (off = tap-to-count)</label>
           <label class="ui-check"><input type="checkbox" id="cfCartonConfirm" ${pr.allow_carton_confirm ? 'checked' : ''}> Allow carton confirm (scan an LP to count its units)</label>
@@ -310,6 +315,7 @@ async function submitClientForm(m){
     lot_tracking_enabled: lotTracking,
     invoice_detail_mode: document.getElementById('cfInvoiceMode').value,
     unit_control: document.getElementById('cfUnitControl').value,
+    label_mode: document.getElementById('cfLabelMode').value,
     pick_rules: {
       location_mode: document.getElementById('cfLocationMode').value,
       require_item_scan: document.getElementById('cfItemScan').checked,

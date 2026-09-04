@@ -15,6 +15,9 @@ let orderLines = [];     // new-order modal: pending lines
 // nothing. sortDefault sets the FIRST click's direction (dates: newest first).
 const ORD_COLS = [
   { key: 'order_number', label: 'Order #', mono: true },
+  { key: 'source', label: 'Source', render: o => o.source === 'shipstation' ? uiChip('ACTIVE', 'SHIPSTATION') + (o.needs_sku_mapping ? ' ' + uiChip('BACKORDERED', 'SKU MAP') : '') : (o.source === 'intake' ? uiChip('NEW', 'INTAKE') : '<span class="ui-muted">manual</span>') },
+  { key: 'external_order_number', label: 'Ext #', mono: true, render: o => o.external_order_number ? esc(o.external_order_number) : '<span class="ui-muted">—</span>' },
+  { key: 'wave_number', label: 'Wave', mono: true, render: o => o.wave_number ? esc(o.wave_number) : '<span class="ui-muted">—</span>' },
   { key: 'client_name', label: 'Client' },
   { key: 'channel', label: 'Channel' },
   { key: 'order_type', label: 'Type' },

@@ -62,7 +62,7 @@ function closeModal(id){
 // ----- Navigation -----
 
 const titles = {
-  dashboard:'Dashboard', inventory:'Inventory', orders:'Orders',
+  dashboard:'Dashboard', inventory:'Inventory', orders:'Orders', waves:'Waves',
   inbound:'Receiving', intake:'Intake', clients:'Clients',
   billing:'Billing', invoices:'Invoices', settings:'Settings', reports:'Reports', compliance:'Compliance', users:'Users & Certs',
   portalHome:'Customer Portal', portalNewOrder:'Place an Order', portalIntake:'Upload Documents',
@@ -76,6 +76,7 @@ const loaders = {
   dashboard:      loadDashboard,
   inventory:      loadInventory,
   orders:         loadOrders,
+  waves:          loadWaves,
   quotes:         loadQuotes,
   inbound:        loadInbound,
   intake:         loadIntake,
