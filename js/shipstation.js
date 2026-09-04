@@ -13,7 +13,7 @@ async function ssiMount(){
   if(!host) return;
   host.innerHTML = `
     <div class="sp-toolbar">
-      <div class="ui-hint">ShipStation is the order source. Orders pull every 5 minutes, on ShipStation webhooks, and on Sync now. Labels printed in ShipStation before picking arrive as pre-labeled packages; the WMS ship gate still decides when an order is shipped.</div>
+      <div class="ui-hint">ShipStation is the order source. Orders pull every 5 minutes, on ShipStation webhooks, and on Sync now. Labels printed in ShipStation before picking arrive as label-printed packages; the WMS ship gate still decides when an order is shipped.</div>
       <div class="sp-toolbar-actions">
         <button type="button" class="ui-btn js-ssi-test">Connect test</button>
         <button type="button" class="ui-btn ui-btn-primary js-ssi-sync">Sync now</button>
@@ -61,7 +61,7 @@ async function ssiLoad(){
   const last = _ssi.runs[0];
   document.getElementById('ssiLast').innerHTML = last
     ? `${uiChip(last.status === 'ok' ? 'ACTIVE' : last.status === 'failed' ? 'FAILED' : 'DRAFT', last.status.toUpperCase())} <span class="ui-muted">${esc(String(last.started_at || '').slice(0, 16).replace('T', ' '))} · ${esc(last.trigger)}</span>
-       ${last.counts ? `<div class="ui-hint">seen ${esc(last.counts.ordersSeen ?? 0)} · created ${esc(last.counts.created ?? 0)} · updated ${esc(last.counts.updated ?? 0)} · pre-labeled ${esc(last.counts.preLabeled ?? 0)} · waves ${esc(last.counts.waves ?? 0)} · allocated ${esc(last.counts.allocated ?? 0)}${last.counts.errors ? ` · <span class="ui-err-text">errors ${esc(last.counts.errors)}</span>` : ''}</div>` : ''}${last.error ? `<div class="ui-err-text">${esc(last.error)}</div>` : ''}`
+       ${last.counts ? `<div class="ui-hint">seen ${esc(last.counts.ordersSeen ?? 0)} · created ${esc(last.counts.created ?? 0)} · updated ${esc(last.counts.updated ?? 0)} · label-printed ${esc(last.counts.labelPrinted ?? 0)} · waves ${esc(last.counts.waves ?? 0)} · allocated ${esc(last.counts.allocated ?? 0)}${last.counts.errors ? ` · <span class="ui-err-text">errors ${esc(last.counts.errors)}</span>` : ''}</div>` : ''}${last.error ? `<div class="ui-err-text">${esc(last.error)}</div>` : ''}`
     : '<span class="ui-muted">never</span>';
   ssiRenderStores(); ssiRenderSvc(); ssiRenderReview(); ssiRenderRuns();
 }
@@ -178,7 +178,7 @@ function ssiRenderRuns(){
       { key: 'started_at', label: 'Started', render: r => esc(String(r.started_at || '').slice(0, 16).replace('T', ' ')) },
       { key: 'trigger', label: 'Trigger' },
       { key: 'status', label: 'Status', render: r => uiChip(r.status === 'ok' ? 'ACTIVE' : r.status === 'failed' ? 'FAILED' : 'DRAFT', r.status.toUpperCase()) },
-      { key: '_c', label: 'Created / updated / pre-labeled / flagged', render: r => esc(r.counts ? `${r.counts.created ?? 0} / ${r.counts.updated ?? 0} / ${r.counts.preLabeled ?? 0} / ${r.counts.flagged ?? 0}` : '') },
+      { key: '_c', label: 'Created / updated / label-printed / flagged', render: r => esc(r.counts ? `${r.counts.created ?? 0} / ${r.counts.updated ?? 0} / ${r.counts.labelPrinted ?? 0} / ${r.counts.flagged ?? 0}` : '') },
       { key: 'error', label: 'Error', render: r => esc(r.error || '') },
     ], rows: _ssi.runs, rowKey: 'id',
   });
@@ -198,7 +198,7 @@ async function ssiSync(){
   const r = await ssiFetch('POST', '/shipstation/sync');
   if(!r.ok){ ssiStatus(r.d.error || 'Sync failed', 'danger'); uiToast(r.d.error || 'Sync failed', 'error'); return; }
   const c = r.d.counts || {};
-  ssiStatus(`Synced — ${c.ordersSeen ?? 0} seen · ${c.created ?? 0} created · ${c.updated ?? 0} updated · ${c.preLabeled ?? 0} pre-labeled package(s) · ${c.waves ?? 0} wave(s) · ${c.allocated ?? 0} allocated${c.unmappedStore ? ` · ${c.unmappedStore} from unmapped stores` : ''}${c.flagged ? ` · ${c.flagged} need SKU mapping` : ''}${c.errors ? ` · ${c.errors} error(s)` : ''}`, c.errors ? 'warn' : 'info');
+  ssiStatus(`Synced — ${c.ordersSeen ?? 0} seen · ${c.created ?? 0} created · ${c.updated ?? 0} updated · ${c.labelPrinted ?? 0} label-printed package(s) · ${c.waves ?? 0} wave(s) · ${c.allocated ?? 0} allocated${c.unmappedStore ? ` · ${c.unmappedStore} from unmapped stores` : ''}${c.flagged ? ` · ${c.flagged} need SKU mapping` : ''}${c.errors ? ` · ${c.errors} error(s)` : ''}`, c.errors ? 'warn' : 'info');
   uiToast('Sync complete', 'success');
   ssiLoad();
 }

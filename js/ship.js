@@ -86,10 +86,15 @@ function fsRender(){
   const shipTo = [o.shipTo.name, o.shipTo.line1, [o.shipTo.city, o.shipTo.state, o.shipTo.postal].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
   const shipped = o.status === 'SHIPPED';
   const ssLocked = v.order.labelProvider === 'shipstation' && v.order.shipstationWritesEnabled === false;
-  // label-first: a closed box with no label yet keeps Ship off — the directive above says what to scan
-  const needsLabel = v.order.labelProvider === 'shipstation' && (v.packages || []).some(p => p.status === 'closed' && !p.trackingNumber);
-  // ship-ready: everything packed into labeled boxes -> READY — Ship
-  const readyToShip = !!v.order.allShipReady && (v.packages || []).length > 0 && (v.packages || []).every(p => p.status === 'labeled') && (v.lines || []).every(l => l.pickedQty > 0 && l.packagedQty >= l.pickedQty);
+  // Every box needs a label, and (client rule, default on) the label must be scanned at the bench —
+  // a label the office printed is attached by the sync but not verified until the packer scans it.
+  const requireScan = !(v.order.shipRules && v.order.shipRules.require_label_scan === false);
+  const boxes = (v.packages || []).filter(p => p.status !== 'voided' && p.status !== 'shipped');
+  const unlabeled = boxes.filter(p => p.status !== 'open' && !p.trackingNumber);
+  const unverified = requireScan ? boxes.filter(p => p.trackingNumber && !p.labelVerified) : [];
+  const needsLabel = (unlabeled.length > 0 || unverified.length > 0) && (v.lines || []).some(l => l.packagedQty > 0);
+  // ship-ready: everything packed into labeled, scanned boxes -> READY — Ship
+  const readyToShip = !!v.order.allShipReady && boxes.length > 0 && boxes.every(p => p.status === 'labeled' && (!requireScan || p.labelVerified)) && (v.lines || []).every(l => l.pickedQty > 0 && l.packagedQty >= l.pickedQty);
   body.innerHTML = `
     <div class="fp-head">
       <div class="fp-head-order">${uiId(o.orderNumber)} <span class="ui-muted">·</span> ${esc(o.clientCode)} ${uiChip(o.status)}</div>
@@ -118,7 +123,7 @@ function fsRender(){
       <div class="ui-group-body">
         ${pkg ? `
           <div class="fs-contents">${pkg.contents.length ? pkg.contents.map(x => `<span class="ui-id fp-uid">${esc(x.uid || x.skuCode)}${x.qty > 1 ? ' ×' + esc(x.qty) : ''}</span>`).join('') : '<span class="ui-muted">Empty — scan units into it</span>'}</div>
-          ${pkg.trackingNumber ? `<div class="fs-tracking">${esc(pkg.carrierCode || '')} ${esc(pkg.serviceLevel || '')} · ${uiId(pkg.trackingNumber)} ${pkg.preLabeled ? uiChip('ACTIVE', 'PRE-LABELED') : ''}${pkg.labelBatch ? ` <span class="ui-muted">batch ${esc(pkg.labelBatch)}</span>` : ''}</div>` : (v.order.labelProvider === 'shipstation' && v.order.labelMode === 'label_first' ? '<div class="ui-hint">Label first: the office prints this label in ShipStation. Scan the printed label to attach it, or ask for one.</div>' : '')}
+          ${pkg.trackingNumber ? `<div class="fs-tracking">${esc(pkg.carrierCode || '')} ${esc(pkg.serviceLevel || '')} · ${uiId(pkg.trackingNumber)} ${pkg.labelVerified ? uiChip('ACTIVE', 'LABEL VERIFIED') : (pkg.labelPrinted ? uiChip('DRAFT', 'LABEL PRINTED — SCAN IT') : (requireScan ? uiChip('DRAFT', 'SCAN LABEL') : ''))}${pkg.labelBatch ? ` <span class="ui-muted">batch ${esc(pkg.labelBatch)}</span>` : ''}</div>` : (v.order.labelProvider === 'shipstation' && v.order.labelMode === 'label_first' ? '<div class="ui-hint">Label first: the office prints this label in ShipStation. Scan the printed label to attach it, or ask for one.</div>' : '')}
           ${pkg.status === 'open' ? `
             <div class="fs-scanrow">
               <div id="fsPkgScan" class="fs-scan"></div>
@@ -158,14 +163,14 @@ function fsRender(){
       <button type="button" class="fs-pkgrow js-fs-pick" data-id="${esc(p.id)}">
         <span class="ui-id">${esc(p.packageNumber)}</span> <span class="ui-muted">${esc(p.unitCount)} unit${p.unitCount === 1 ? '' : 's'}</span>
         ${uiChip(p.status === 'open' ? 'NEW' : p.status === 'closed' ? 'PACKED' : p.status === 'labeled' ? 'ALLOCATED' : 'SHIPPED', p.status.toUpperCase())}
-        ${p.trackingNumber ? `<span class="ui-id">${esc(p.trackingNumber)}</span>` : ''}
+        ${p.trackingNumber ? `<span class="ui-id">${esc(p.trackingNumber)}</span> ${p.labelVerified ? uiChip('ACTIVE', 'LABEL VERIFIED') : (requireScan && p.status !== 'shipped' ? uiChip('DRAFT', 'SCAN LABEL') : '')}` : ''}
       </button>`).join('')}</div>
 
-    ${!shipped && needsLabel && !(pkg && pkg.status === 'closed') ? `
+    ${!shipped && needsLabel ? `
       <div class="fp-directive fp-directive-loc">
         <div class="fp-directive-label">SCAN SHIPPING LABEL</div>
-        <div class="fp-directive-main">${esc((v.packages || []).filter(p => p.status === 'closed' && !p.trackingNumber).map(p => p.packageNumber).join(' · '))}</div>
-        <div class="ui-hint">Scan the label printed in ShipStation — it attaches to the box.</div>
+        <div class="fp-directive-main">${esc([...unlabeled, ...unverified].map(p => p.packageNumber).join(' · '))}</div>
+        <div class="ui-hint">${unverified.length ? 'The label is printed — put it on the box and scan its tracking barcode to verify it.' : 'Scan the label printed in ShipStation — it attaches to the box.'}${boxes.length > 1 ? ' One scan per box.' : ''}</div>
       </div>` : ''}
     ${!shipped && readyToShip ? `
       <div class="fp-directive fp-directive-item">
