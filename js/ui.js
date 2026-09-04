@@ -35,7 +35,7 @@ const UI_STATUS_MAP = {
   APPROVED: 'ok', SENT: 'info', PAID: 'ok', VOID: 'neutral',
   OPEN: 'info', INVOICED: 'ok',   // a charge is OPEN until it lands on an invoice
   // rate cards
-  ACTIVE: 'ok', SUPERSEDED: 'neutral', ARCHIVED: 'neutral',
+  ACTIVE: 'ok', SUPERSEDED: 'neutral', ARCHIVED: 'neutral', INACTIVE: 'neutral', OFFBOARDED: 'warn',
   // inventory
   available: 'ok', allocated: 'info', damaged: 'danger', hold_qc: 'warn',
   // receiving

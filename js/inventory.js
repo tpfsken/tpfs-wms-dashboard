@@ -94,6 +94,15 @@ function invSetPage(limit, offset){
   document.getElementById('invListWrap')?.scrollIntoView({ block: 'start' });
 }
 
+// Client filter: active clients by default; "Show inactive" rebuilds the combo from /clients?all=1
+async function invToggleInactiveClients(cb){
+  const list = cb.checked ? (await apiGet('/clients?all=1')) || [] : clientsCache;
+  const cur = (_cbState['invClientFilterWrap']?.selected?.value) || '';
+  initCombo('invClientFilterWrap',
+    [{ value: '', label: 'All clients' }].concat(list.map(c => ({ value: String(c.id), label: `${c.code} — ${c.name}${(c.status && c.status !== 'active') ? ' (' + c.status + ')' : ''}` }))),
+    { placeholder: 'All clients', value: cur, onChange: () => loadInventory() });
+}
+
 async function loadInventory(){
   const s  = document.getElementById('invSearch')?.value || '';
   const st = (_cbState['invStatusFilterWrap']?.selected?.value) || '';

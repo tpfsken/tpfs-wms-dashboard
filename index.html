@@ -122,7 +122,7 @@
   </div>
 
   <div class="page" id="page-inventory">
-    <div class="page-header"><button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location · add new items from the client's Item Master tab</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><input type="text" class="ui-input" id="invSearch" placeholder="Search SKU, lot, LP, or location…" style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="ui-btn" onclick="uiRun(this, () => loadInventory())">Refresh</button><button class="ui-btn ui-btn-primary ops-only" onclick="uiRun(this, () => showCaseBreakModal())">Case break</button></div>
+    <div class="page-header"><button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location · add new items from the client's Item Master tab</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><label class="ui-check ops-only inv-show-inactive"><input type="checkbox" id="invShowInactive" onchange="uiRun(this, () => invToggleInactiveClients(this))"> Show inactive</label><input type="text" class="ui-input" id="invSearch" placeholder="Search SKU, lot, LP, or location…" style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="ui-btn" onclick="uiRun(this, () => loadInventory())">Refresh</button><button class="ui-btn ui-btn-primary ops-only" onclick="uiRun(this, () => showCaseBreakModal())">Case break</button></div>
     <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
       <div style="flex:1;overflow:auto;" id="invListWrap"></div>
       <div id="invPager"></div>
@@ -652,10 +652,12 @@
       <div class="page-header">
         <div><div class="page-title">Clients</div><div class="page-subtitle">3PL client management — click a row to edit KPI / SLA targets</div></div>
         <div style="flex:1"></div>
+        <label class="ui-check"><input type="checkbox" id="cliShowInactive" onchange="uiRun(this, () => cliToggleInactive(this))"> Show inactive</label>
         <button class="ui-btn" onclick="uiRun(this, () => loadClients())">Refresh</button>
         <button class="ui-btn ui-btn-primary" onclick="openClientFormModal()">New client</button>
       </div>
       <div class="card">
+        <div class="ord-bulk-bar" id="cliBulkBar" hidden></div>
         <div style="overflow:auto;" id="cliListWrap"></div>
       </div>
     </div>
@@ -666,6 +668,7 @@
         <button class="ui-btn" onclick="closeClientDetail()">← Clients</button>
         <div><div class="page-title" id="cliDetailTitle">—</div><div class="page-subtitle" id="cliDetailSub">—</div></div>
         <div style="flex:1"></div>
+        <span id="cliReactivateHost"></span>
         <button class="ui-btn" onclick="reloadClientDetail()">Refresh</button>
       </div>
       <!-- Tab strip — uiTabs (the one tab system); populated by wireClientTabs() -->

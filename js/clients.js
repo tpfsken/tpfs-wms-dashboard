@@ -20,6 +20,7 @@ async function loadCC(){
 // =============================================================================
 
 const CLI_COLS = [
+  { key: '_sel', label: '', render: c => `<input type="checkbox" class="js-cli-sel" data-id="${esc(c.id)}" aria-label="Select ${esc(c.code)}" ${_cliSel.has(c.id) ? 'checked' : ''}>` },
   { key: 'code', label: 'Code', mono: true },
   { key: 'name', label: 'Client' },
   { key: 'contact_email', label: 'Contact' },
@@ -33,10 +34,56 @@ const CLI_COLS = [
       '<span class="ui-muted">—</span>' },
   { key: '_onboarded', label: 'Onboarded', sortValue: c => c.onboarded_at, render: c => c.onboarded_at
       ? uiId(new Date(c.onboarded_at).toLocaleDateString()) : '<span class="ui-muted">—</span>' },
-  { key: '_status', label: 'Status', sortValue: c => (c.is_active ? 1 : 0), render: c => c.is_active
-      ? '<span class="ui-chip ui-chip-ok">ACTIVE</span>'
-      : '<span class="ui-chip ui-chip-neutral">INACTIVE</span>' },
+  { key: '_status', label: 'Status', sortValue: c => cliStatusOf(c), render: c => cliStatusChip(c) },
 ];
+const _cliSel = new Set();
+let _cliShowInactive = false;
+const cliStatusOf = (c) => c.status || (c.is_active === false ? 'inactive' : 'active');
+function cliStatusChip(c){
+  const st = cliStatusOf(c);
+  const asOf = c.status_as_of ? String(c.status_as_of).slice(0, 10) : '';
+  return uiChip(st.toUpperCase(), st.toUpperCase()) + (st !== 'active' && asOf ? ` <span class="ui-muted">${esc(asOf)}</span>` : '');
+}
+function cliRenderBulk(){
+  const host = document.getElementById('cliBulkBar');
+  if(!host) return;
+  const n = _cliSel.size;
+  host.hidden = n === 0;
+  host.innerHTML = n ? `<span class="ord-bulk-count">${esc(n)} selected</span>
+    <button type="button" class="ui-btn js-cli-bulk-clear">Clear</button>
+    <button type="button" class="ui-btn ui-btn-danger js-cli-bulk-inactive">Set inactive</button>` : '';
+  if(!n) return;
+  host.querySelector('.js-cli-bulk-clear').addEventListener('click', uiBusyHandler(() => { _cliSel.clear(); return loadClients(); }));
+  host.querySelector('.js-cli-bulk-inactive').addEventListener('click', uiBusyHandler(cliBulkInactive));
+}
+async function cliBulkInactive(){
+  const ids = [..._cliSel];
+  if(!ids.length) return false;
+  const codes = ids.map(id => (clientsCache.find(c => c.id === id) || {}).code || id.slice(0, 8));
+  const note = await uiPrompt({ title: `Set ${ids.length} client${ids.length === 1 ? '' : 's'} inactive?`, label: 'Note (optional)', placeholder: 'e.g. no pieces migrated', value: '' });
+  if(note == null) return false;
+  const r = await fetch(`${API}/clients/bulk-status`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ clientIds: ids, status: 'inactive', note: note || null }) });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ uiToast(d.error || 'Could not change status', 'error'); return false; }
+  _cliSel.clear();
+  uiToast(`${(d.changed || []).length} set inactive${(d.refused || []).length ? ` · ${d.refused.length} refused: ${d.refused.map(x => x.why).join('; ')}` : ''} (${codes.slice(0, 5).join(', ')}${codes.length > 5 ? '…' : ''})`, (d.refused || []).length ? 'warning' : 'success');
+  clientsCache = []; await loadCC();
+  await loadClients();
+}
+function cliWireSelection(){
+  const wrap = document.getElementById('cliListWrap');
+  if(!wrap) return;
+  wrap.querySelectorAll('.js-cli-sel').forEach(cb => {
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', () => { if(cb.checked) _cliSel.add(cb.dataset.id); else _cliSel.delete(cb.dataset.id); cliRenderBulk(); });
+  });
+  cliRenderBulk();
+}
+function cliToggleInactive(cb){
+  _cliShowInactive = !!cb.checked;
+  _cliSel.clear();
+  return loadClients();
+}
 
 async function loadClients(){
   // Always reset to list view on (re)load
@@ -44,9 +91,9 @@ async function loadClients(){
   document.getElementById('cliListView').style.display   = 'block';
 
   uiTableLoading('cliListWrap', CLI_COLS);
-  const d = await apiGet('/clients');
+  const d = await apiGet(_cliShowInactive ? '/clients?all=1' : '/clients');
   if(d === null) return uiTableError('cliListWrap', CLI_COLS, 'Could not load clients', loadClients);
-  clientsCache = d;
+  if(!_cliShowInactive) clientsCache = d;      // the shared cache stays active-only: every picker reads it
 
   // A 3PL has tens of clients, not thousands — this list is small enough to
   // sort locally (no onSort) without lying about what's on screen.
@@ -54,8 +101,9 @@ async function loadClients(){
     columns: CLI_COLS, rows: d, rowKey: 'id',
     sortable: true,
     onRowClick: c => openClientDetail(c.id),
-    empty: 'No clients yet.',
+    empty: _cliShowInactive ? 'No clients.' : 'No active clients. Tick "Show inactive" to see the rest.',
   });
+  cliWireSelection();
 }
 
 // =============================================================================
@@ -72,7 +120,8 @@ async function openClientDetail(id){
 
   document.getElementById('cliDetailTitle').textContent = d.name || d.code || '—';
   document.getElementById('cliDetailSub').textContent   =
-    `${d.code || ''}${d.client_type ? ' · ' + d.client_type : ''}${d.is_active === false ? ' · Inactive' : ''}`;
+    `${d.code || ''}${d.client_type ? ' · ' + d.client_type : ''}${cliStatusOf(d) !== 'active' ? ' · ' + cliStatusOf(d).toUpperCase() + (d.status_as_of ? ' since ' + String(d.status_as_of).slice(0, 10) : '') : ''}`;
+  cliRenderReactivate(d);
 
   // Wire tab strip + tab panels (idempotent — wires once per session)
   wireClientTabs();
@@ -157,9 +206,7 @@ function renderClientProfileTab(){
         ? 'Summary (grouped)' : 'Detailed (per LP)') },
     { k: 'Onboarded', v: c.onboarded_at
         ? uiId(new Date(c.onboarded_at).toLocaleDateString()) : '<span class="ui-muted">—</span>' },
-    { k: 'Status', v: c.is_active
-        ? '<span class="ui-chip ui-chip-ok">ACTIVE</span>'
-        : '<span class="ui-chip ui-chip-neutral">INACTIVE</span>' },
+    { k: 'Status', v: cliStatusChip(c) + (c.status_note ? ` <span class="ui-muted">${esc(c.status_note)}</span>` : '') + (cliStatusOf(c) === 'offboarded' ? ' <span class="ui-hint">Offboarded clients are read-only until reactivated.</span>' : '') },
   ]);
 
   // Hazmat panel — only the emergency contact + notes live at client level;
@@ -179,10 +226,28 @@ function renderClientProfileTab(){
   }
 
   const editBtn = document.getElementById('cliEditBtn');
+  if(editBtn) editBtn.disabled = cliStatusOf(c) === 'offboarded';
   if(editBtn && !editBtn._wired){
     editBtn._wired = true;
     editBtn.addEventListener('click', () => openClientFormModal(_currentClient));
   }
+}
+
+// Reactivate — one click for ops. Rendered next to the detail title when the client is not active.
+function cliRenderReactivate(d){
+  const host = document.getElementById('cliReactivateHost');
+  if(!host) return;
+  const st = cliStatusOf(d);
+  host.innerHTML = st === 'active' ? '' : `<button type="button" class="ui-btn ui-btn-primary js-cli-reactivate">Reactivate</button>`;
+  const b = host.querySelector('.js-cli-reactivate');
+  if(b) b.addEventListener('click', uiBusyHandler(async () => {
+    const r = await fetch(`${API}/clients/${d.id}/reactivate`, { method: 'POST', headers: { Authorization: `Bearer ${T}` } });
+    const x = await r.json().catch(() => ({}));
+    if(!r.ok){ uiToast(x.error || 'Could not reactivate', 'error'); return false; }
+    uiToast(`${x.code} is active again`, 'success');
+    clientsCache = []; await loadCC();
+    await openClientDetail(d.id);
+  }));
 }
 
 // =============================================================================
@@ -193,6 +258,11 @@ function renderClientProfileTab(){
 let _editingClientId = null;   // null for new, string id for edit
 let CLIENT_M = null;           // open client-form uiModal
 
+const CLIENT_STATUSES = [
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive — hidden from lists, no new work' },
+  { value: 'offboarded', label: 'Offboarded — inventory must be 0, read-only' },
+];
 const CLIENT_TYPES = [
   { value: 'B2B',  label: 'B2B — distribution' },
   { value: 'B2C',  label: 'B2C — DTC / eCommerce' },
@@ -215,6 +285,12 @@ function openClientFormModal(client){
       </div>
       ${uiFieldSelect({ id: 'cfType', label: 'Client type', options: CLIENT_TYPES,
                         value: client?.client_type || 'B2B' })}
+      ${client ? `<div class="no-row-3">
+        ${uiFieldSelect({ id: 'cfStatus', label: 'Status', options: CLIENT_STATUSES, value: cliStatusOf(client) })}
+        ${uiField({ id: 'cfStatusAsOf', label: 'As of', type: 'date', value: client.status_as_of ? String(client.status_as_of).slice(0, 10) : '' })}
+        ${uiField({ id: 'cfStatusNote', label: 'Status note', value: client.status_note || '', placeholder: 'why' })}
+      </div>
+      <div class="ui-hint">Inactive and offboarded clients leave every working list and picker and take no new orders, receipts or allocations. Offboarded also needs on-hand inventory at 0 and makes the client read-only.</div>` : ''}
       <div class="no-row-3">
         ${uiField({ id: 'cfContactName', label: 'Contact name', value: client?.contact_name || '' })}
         ${uiField({ id: 'cfContactEmail', label: 'Contact email', type: 'email', value: client?.contact_email || '' })}
@@ -328,6 +404,28 @@ async function submitClientForm(m){
       notes:             v('cfHazNotes') || null,
     } : null,
   };
+
+  // Status goes through its own route (PUT /clients/:id/status); an offboarded client is read-only,
+  // so a status change is applied FIRST, and the field edits are skipped while it stays offboarded.
+  if(_editingClientId){
+    const st = document.getElementById('cfStatus').value, was = cliStatusOf(_currentClient || {});
+    const asOf = v('cfStatusAsOf') || null, note = v('cfStatusNote') || null;
+    const statusChanged = st !== was || (st !== 'active' && (asOf !== ((_currentClient && _currentClient.status_as_of) ? String(_currentClient.status_as_of).slice(0, 10) : null) || note !== ((_currentClient && _currentClient.status_note) || null)));
+    if(statusChanged){
+      if(st === 'offboarded' && was !== 'offboarded'){
+        const go = await uiConfirm({ title: `Offboard ${esc(code)}?`, body: '<p>The client must have no inventory on hand. It becomes read-only and disappears from every list and picker. History, invoices and reports stay readable. Reactivate is one click.</p>', confirmLabel: 'Offboard', danger: true });
+        if(!go) return false;
+      }
+      const rs = await fetch(`${API}/clients/${_editingClientId}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ status: st, asOf, note }) });
+      const ds = await rs.json().catch(() => ({}));
+      if(!rs.ok){ uiFieldError(CLIENT_M.el, 'cfStatus', ds.error || 'Status change refused'); uiToast(ds.error || 'Status change refused', 'error'); return false; }
+      if(st === 'offboarded'){
+        uiToast(`${code} offboarded — read-only`, 'success');
+        clientsCache = []; await loadCC(); await loadClients();
+        return true;
+      }
+    }
+  }
 
   try {
     const r = await fetch(
