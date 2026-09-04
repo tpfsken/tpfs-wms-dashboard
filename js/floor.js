@@ -195,7 +195,7 @@ async function loadFloorPickList(){
         <div style="font-size:13px;color:var(--text2);margin-bottom:4px;">${esc(o.customer_name || o.client_name || '')}</div>
         <div style="font-size:12px;color:var(--text2);display:flex;gap:10px;flex-wrap:wrap;">
           ${readyToComplete
-            ? `<span style="color:var(--green);font-weight:600;">✓ Ready to complete</span>`
+            ? `<span style="color:var(--green);font-weight:600;">✓ Picked — held for a supervisor (send to pack)</span>`
             : `<span style="color:var(--blue);font-weight:600;">${esc(pendingPicks)} pick${pendingPicks === 1 ? '' : 's'} ready</span>`}
           <span>· ${esc(lineCount)} ${lineCount === 1 ? 'line' : 'lines'} · ${esc(totalUnits)} units</span>
           ${dueLabel ? `<span>· ${dueLabel}</span>` : ''}

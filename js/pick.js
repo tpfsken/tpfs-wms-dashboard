@@ -77,10 +77,12 @@ function fpApplyNext(n){
 }
 
 // 2-second "ORDER 105384 DONE ✓" between orders.
-function fpFlashDone(orderNumber){
+function fpFlashDone(orderNumber, orderStatus){
   const body = document.getElementById('floorPickBody');
   if(_fp.input){ _fp.input.destroy(); _fp.input = null; }
-  body.innerHTML = `<div class="fp-flash"><div class="fp-flash-title">ORDER ${esc(orderNumber)} DONE ✓</div><div class="fp-flash-sub">Next pick loading…</div></div>`;
+  // the status is the server's: PACKING means the order already left the picker and is at Pack & Ship
+  const sub = orderStatus === 'PACKING' ? 'Ready to pack · next pick loading…' : (orderStatus ? `${esc(orderStatus)} — a supervisor sends it to pack` : 'Next pick loading…');
+  body.innerHTML = `<div class="fp-flash"><div class="fp-flash-title">ORDER ${esc(orderNumber)} DONE ✓</div><div class="fp-flash-sub">${sub}</div></div>`;
   if('vibrate' in navigator) navigator.vibrate([40, 60, 40]);
   return new Promise(res => setTimeout(res, FP_DONE_FLASH_MS));
 }
@@ -299,7 +301,7 @@ async function fpConfirm(){
   // A different order (or nothing) means this order is done: flash, then GO TO.
   const n = await fpFetchNext(_fp.orderId, t.id);
   if(n.error){ fpRender(); fpBanner(n.error, 'danger'); return; }
-  if(!n.task || n.task.orderId !== _fp.orderId) await fpFlashDone(t.orderNumber);
+  if(!n.task || n.task.orderId !== _fp.orderId) await fpFlashDone(t.orderNumber, d.orderStatus || (d.task && d.task.orderStatus) || null);
   fpApplyNext(n);
 }
 
