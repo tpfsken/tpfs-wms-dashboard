@@ -1304,6 +1304,9 @@ body.floor-mode .floor-card { transition: transform .08s, border-color .08s; }
 /* ---- pack & ship station (js/ship.js) + office packages card ---- */
 .fs-opening{display:flex;flex-direction:column;gap:var(--sp-4);padding:var(--sp-6) 0;}
 .fs-opening-title{font-size:var(--fs-emph);font-weight:800;letter-spacing:.06em;text-align:center;color:var(--text2);}
+.fs-wave{text-align:center;font-weight:600;color:var(--text2);}
+.fs-wave-actions{display:flex;gap:var(--sp-2);justify-content:center;flex-wrap:wrap;}
+.fs-wave-actions .ui-btn{min-height:44px;}
 .fs-shipto{font-size:var(--fs-body);color:var(--text2);}
 .fs-counts{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-2);}
 .fs-count{border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--sp-2);text-align:center;background:var(--panel);}

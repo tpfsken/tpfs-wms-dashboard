@@ -13,7 +13,11 @@
 // /orders/:id/ship). This file never judges a scan.
 // =============================================================================
 
-const _fs = { view: null, input: null, pkgId: null, qty: 1, renderedOrderId: null };
+const _fs = { view: null, input: null, pkgId: null, qty: 1, renderedOrderId: null,
+  // continuous Pack & Ship: after Ship the station flashes and returns to the scan box; the wave the packer
+  // is working (from the last opened / shipped order) stays on screen with "Next in wave"
+  wave: null, lastOrderId: null };
+const FS_SHIPPED_FLASH_MS = 2000;
 
 function loadFloorShip(){
   document.querySelectorAll('#page-floorShip .js-floor-home').forEach(b => {
@@ -37,14 +41,43 @@ async function fsOpenOrder(orderId){
 
 function fsRenderOpening(msg){
   const body = document.getElementById('floorShipBody');
+  const w = _fs.wave;
   body.innerHTML = `
     <div class="fs-opening">
-      <div class="fs-opening-title">SCAN ORDER, PACKAGE, PALLET OR UNIT</div>
+      <div class="fs-opening-title">SCAN ORDER, LABEL OR UNIT</div>
       <div id="fsOpenScan"></div>
+      ${w ? `<div class="fs-wave">Wave ${esc(w.waveNumber)} · ${esc(w.shipped)} of ${esc(w.total)} shipped${w.next ? ` · next ${esc(w.next.orderNumber)}` : ' · done'}</div>
+        <div class="fs-wave-actions">${w.next ? '<button type="button" class="ui-btn ui-btn-primary js-fs-wave-next">Next in wave</button>' : ''}<button type="button" class="ui-btn js-fs-wave-clear">Leave wave</button></div>` : ''}
       <div class="fp-banner" id="fsBanner" ${msg ? '' : 'hidden'}>${esc(msg || '')}</div>
     </div>`;
   if(_fs.input) _fs.input.destroy();
   _fs.input = scanInputMount(document.getElementById('fsOpenScan'), { placeholder: 'Scan to open', autofocus: true, onScan: (raw) => fsOpen(raw) });
+  const nx = body.querySelector('.js-fs-wave-next'); if(nx) nx.addEventListener('click', uiBusyHandler(fsNextInWave));
+  const cl = body.querySelector('.js-fs-wave-clear'); if(cl) cl.addEventListener('click', () => { _fs.wave = null; _fs.lastOrderId = null; fsRenderOpening(); });
+  _fs.renderedOrderId = null;
+  uiScrollTop(body);
+}
+
+/** "Next in wave": the next unshipped order of the wave the packer is working (picked ones first). */
+async function fsNextInWave(){
+  if(!_fs.wave) return false;
+  const r = await fetch(`${API}/waves/${_fs.wave.id}/next${_fs.lastOrderId ? '?after=' + encodeURIComponent(_fs.lastOrderId) : ''}`, { headers: { Authorization: `Bearer ${T}` } });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ uiToast(d.error || 'Could not read the wave', 'error'); return false; }
+  _fs.wave = d;
+  if(!d.next){ uiToast(`Wave ${d.waveNumber} — nothing left to ship`, 'success'); fsRenderOpening(); return; }
+  return fsOpenOrder(d.next.id);
+}
+
+/** After Ship: 2-second flash, then back to the scan box — the next scan opens the next order. */
+function fsFlashShipped(sd){
+  const body = document.getElementById('floorShipBody');
+  if(_fs.input){ _fs.input.destroy(); _fs.input = null; }
+  const trk = (sd.trackings || []).map(t => t.length > 8 ? `${t.slice(0, 4)}…${t.slice(-3)}` : t).join(' · ');
+  body.innerHTML = `<div class="fp-flash"><div class="fp-flash-title">SHIPPED ✓ ${esc(sd.orderNumber || '')}${trk ? ' · ' + esc(trk) : ''}</div><div class="fp-flash-sub">${sd.wave ? `Wave ${esc(sd.wave.waveNumber)} · ${esc(sd.wave.shipped)} of ${esc(sd.wave.total)} shipped` : 'Scan the next order, label or unit'}</div></div>`;
+  uiScrollTop(body);
+  if('vibrate' in navigator) navigator.vibrate([40, 40, 40]);
+  return new Promise(res => setTimeout(res, FS_SHIPPED_FLASH_MS));
 }
 
 async function fsOpen(raw){
@@ -81,6 +114,7 @@ function fsRender(){
   if(!v){ fsRenderOpening(); return; }
   // A different order on screen (opened from a label / order scan): back to the top, old result gone.
   if(_fs.renderedOrderId !== v.order.id){ _fs.renderedOrderId = v.order.id; uiScrollTop(body); }
+  if(v.order.wave) _fs.wave = v.order.wave;   // the wave this order belongs to follows the packer to the scan box
   const o = v.order, c = v.counts;
   const pkg = fsPkg();
   const shipTo = [o.shipTo.name, o.shipTo.line1, [o.shipTo.city, o.shipTo.state, o.shipTo.postal].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
@@ -396,10 +430,15 @@ async function fsShip(){
         scanBeep('error');
         return false;
       }
-      uiToast(sd.message || 'Shipped', 'success');
-      if('vibrate' in navigator) navigator.vibrate([40, 40, 40]);
-      await fsRefresh();
-      fsBanner(sd.message || 'SHIPMENT VERIFIED — OK TO LOAD', 'ok');
+      // continuous: close the checklist, flash SHIPPED for 2 s, then the station is back at the scan box,
+      // focused and scrolled to the top — the next sword or label opens the next order, no tap needed
+      api.close();
+      const orderId = v.order.id;
+      if(sd.wave) _fs.wave = sd.wave;
+      _fs.lastOrderId = orderId;
+      await fsFlashShipped(sd);
+      if(_fs.view && _fs.view.order.id === orderId){ _fs.view = null; _fs.pkgId = null; fsRenderOpening(); }
+      return true;
     } }] : [])],
   });
   return m;
