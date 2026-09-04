@@ -482,8 +482,8 @@ body.floor-mode #portalBanner {
 }
 body.floor-mode .shell {
   grid-template-columns: 1fr !important;
-  height: 100dvh;
-  height: 100vh;
+  height: 100vh;      /* fallback */
+  height: 100dvh;     /* wins where supported: tracks the Android URL bar, so .main's overflow:hidden never clips the bottom */
   padding-top:    env(safe-area-inset-top, 0px) !important;
   padding-bottom: env(safe-area-inset-bottom, 0px) !important;
 }
@@ -1377,3 +1377,6 @@ body.floor-mode button{min-width:44px;}
 /* type=search without the browser's search chrome */
 .scan-input-field{-webkit-appearance:none;appearance:none;}
 .scan-input-field::-webkit-search-cancel-button,.scan-input-field::-webkit-search-decoration{-webkit-appearance:none;display:none;}
+/* Bottom clearance on floor pages: the last card clears the Android nav bar */
+body.floor-mode .floor-page-body,body.floor-mode #floorPickListBody,body.floor-mode #floorInboundBody,body.floor-mode #floorMoveBody{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px));}
+body.floor-mode #page-floorHome{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px)) !important;}

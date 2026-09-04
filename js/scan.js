@@ -5,7 +5,7 @@
 //   const si = scanInputMount(containerEl, {
 //     placeholder: 'Scan or type…',
 //     keyboard: 'none' | 'text',     // 'none' (default): no on-screen keyboard; a Type button opens it for one entry
-//     keepFocus: true,               // focus trap: refocus after blur / scan / re-enable / page visible
+//     keepFocus: true,               // focus trap: refocus (preventScroll) after blur / scan / re-enable / page visible, never mid-gesture
 //     onScan(raw, meta) {},        // meta.source: 'wedge' | 'camera' | 'typed' | 'paste'; meta.format: 'QR_CODE' | 'CODE_128' | … | null
 //     autofocus: true,             // grab focus on mount (and after each scan)
 //     camera: true,                // show the Camera button
@@ -108,6 +108,15 @@ function scanInputMount(container, opts = {}){
   // The field must own focus so a wedge scan always lands: refocus after blur
   // (unless something else focusable took it — a modal, the qty box), after
   // every scan, when the field is re-enabled, and when the page comes back.
+  // Touch / scroll / wheel mark the page as "in the user's hands": a refocus then
+  // would fight the gesture (and any scroll-into-view snaps the page back up).
+  let lastInteract = 0, retry = null;
+  const INTERACT_QUIET_MS = 1500;
+  function onInteract(){ lastInteract = performance.now(); }
+  for(const ev of ['touchstart', 'touchmove', 'scroll', 'wheel', 'pointerdown'])
+    document.addEventListener(ev, onInteract, { capture: true, passive: true });
+  function interacting(){ return performance.now() - lastInteract < INTERACT_QUIET_MS; }
+
   function wantsFocus(){
     if(destroyed || busy || !o.keepFocus || !o.autofocus) return false;
     if(document.visibilityState !== 'visible') return false;
@@ -116,15 +125,21 @@ function scanInputMount(container, opts = {}){
     const a = document.activeElement;
     return !a || a === document.body || a === input;
   }
-  function refocus(){ if(wantsFocus()) input.focus({ preventScroll: true }); }
+  function refocus(){
+    if(destroyed) return;
+    clearTimeout(retry); retry = null;
+    if(interacting()){
+      // Wait out the gesture, then try once more — a wedge scan needs the field.
+      retry = setTimeout(refocus, INTERACT_QUIET_MS - (performance.now() - lastInteract) + 20);
+      return;
+    }
+    if(wantsFocus()) input.focus({ preventScroll: true });
+  }
   function onBlur(){ if(manual) setManual(false); setTimeout(refocus, 0); }
   function onVisible(){ if(document.visibilityState === 'visible') setTimeout(refocus, 50); }
   input.addEventListener('blur', onBlur);
   document.addEventListener('visibilitychange', onVisible);
   window.addEventListener('focus', onVisible);
-  // Removing the focused element (a closed dialog, the camera overlay, a re-rendered
-  // qty box) fires no blur at all — focus just lands on <body>. A slow tick catches that.
-  const focusTick = setInterval(refocus, 1000);
 
   function showFlash(text, tone){
     flash.textContent = text;
@@ -171,8 +186,8 @@ function scanInputMount(container, opts = {}){
     typeBtn.addEventListener('click', () => {
       // A user gesture on the button, then focus with inputmode=text, opens the keyboard.
       setManual(!manual);
-      if(manual){ input.focus(); showFlash('Keyboard on — Enter to submit', 'warn'); }
-      else input.focus();
+      if(manual){ input.focus({ preventScroll: true }); showFlash('Keyboard on — Enter to submit', 'warn'); }
+      else input.focus({ preventScroll: true });
     });
   }
   if(camBtn){
@@ -182,7 +197,7 @@ function scanInputMount(container, opts = {}){
     }));
   }
 
-  if(o.autofocus) setTimeout(() => input.focus(), 0);
+  if(o.autofocus) setTimeout(() => input.focus({ preventScroll: true }), 0);
 
   return {
     el, input,
@@ -191,7 +206,8 @@ function scanInputMount(container, opts = {}){
     setBusy(b){ busy = !!b; input.disabled = !!b; if(camBtn) camBtn.disabled = !!b; if(typeBtn) typeBtn.disabled = !!b; if(!busy) setTimeout(refocus, 0); },
     destroy(){
       destroyed = true;
-      clearInterval(focusTick);
+      clearTimeout(retry);
+      for(const ev of ['touchstart', 'touchmove', 'scroll', 'wheel', 'pointerdown']) document.removeEventListener(ev, onInteract, { capture: true });
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
       el.innerHTML = ''; el.classList.remove('scan-input');
