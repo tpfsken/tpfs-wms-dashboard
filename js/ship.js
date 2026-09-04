@@ -86,6 +86,8 @@ function fsRender(){
   const shipTo = [o.shipTo.name, o.shipTo.line1, [o.shipTo.city, o.shipTo.state, o.shipTo.postal].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
   const shipped = o.status === 'SHIPPED';
   const ssLocked = v.order.labelProvider === 'shipstation' && v.order.shipstationWritesEnabled === false;
+  // label-first: a closed box with no label yet keeps Ship off — the directive above says what to scan
+  const needsLabel = v.order.labelProvider === 'shipstation' && (v.packages || []).some(p => p.status === 'closed' && !p.trackingNumber);
   body.innerHTML = `
     <div class="fp-head">
       <div class="fp-head-order">${uiId(o.orderNumber)} <span class="ui-muted">·</span> ${esc(o.clientCode)} ${uiChip(o.status)}</div>
@@ -124,6 +126,12 @@ function fsRender(){
               <button type="button" class="ui-btn js-fs-void">Void</button>
               <button type="button" class="ui-btn ui-btn-primary fp-confirm js-fs-close" ${pkg.unitCount ? '' : 'disabled'}>Close package</button>
             </div>` : ''}
+          ${pkg.status === 'closed' && !pkg.trackingNumber && v.order.labelProvider === 'shipstation' ? `
+            <div class="fp-directive fp-directive-loc">
+              <div class="fp-directive-label">SCAN SHIPPING LABEL</div>
+              <div class="fp-directive-main">${esc(pkg.packageNumber)}</div>
+              <div class="ui-hint">Scan the label printed in ShipStation — it attaches to this box. Ship stays off until every box has a label.</div>
+            </div>` : ''}
           ${pkg.status === 'closed' ? `
             <div class="fp-actions">
               <button type="button" class="ui-btn js-fs-reopen">Reopen</button>
@@ -153,7 +161,7 @@ function fsRender(){
 
     ${shipped
       ? `<div class="fs-verified">SHIPPED${v.verification ? ` · verified ${esc(String(v.verification.verifiedAt || '').slice(0, 16).replace('T', ' '))}` : ''}</div>`
-      : `<button type="button" class="ui-btn ui-btn-primary fs-shipbtn js-fs-ship">Ship — verify checklist</button>`}`;
+      : `<button type="button" class="ui-btn ui-btn-primary fs-shipbtn js-fs-ship" ${needsLabel ? 'disabled title="Scan the shipping label first"' : ''}>${needsLabel ? 'Ship — scan the shipping label first' : 'Ship — verify checklist'}</button>`}`;
 
   body.querySelector('.js-fs-switch').addEventListener('click', () => { _fs.view = null; _fs.pkgId = null; fsRenderOpening(); });
   const np = body.querySelector('.js-fs-newpkg'); if(np) np.addEventListener('click', uiBusyHandler(fsNewPackage));
