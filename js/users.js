@@ -1,94 +1,347 @@
 // =============================================================================
-// USERS & CERTS — admin/supervisor management of warehouse staff +
-// their hazmat certifications. Grants are PIN-less for v1 (we already
-// gate at the role layer); revokes are admin-only (route enforces).
+// USERS — accounts, roles, per-user overrides, hazmat certifications.
 //
-// Listing: GET /users (admin/supervisor)
-// Per-user: GET /users/:id/certs   — full history (active + expired + revoked)
-//           POST /users/:id/certs  — grant
-//           POST /users/:id/certs/:certId/revoke — admin only
-// Cert types: GET /cert-types — populates the grant form's dropdown
+// Listing / lifecycle (users.manage, or users.onboard for floor accounts):
+//   GET  /users?q=&role=&active=      rows + the roles the caller may assign
+//   POST /users                        create; temp password shown ONCE
+//   PUT  /users/:id                    name / role / client (portal)
+//   POST /users/:id/deactivate | /reactivate | /reset-password
+// Overrides (users.manage only):
+//   GET/PUT /users/:id/overrides       extra / removed permissions vs the role
+// Certs (unchanged): GET /users/:id/certs, POST …/certs, POST …/certs/:id/revoke
+//
+// The API decides what the caller may do (scope + editable per row); the page
+// only hides controls so nobody clicks into a 403.
 // =============================================================================
 
 'use strict';
-let _userCertCurrent = null;   // currently-open user object
+let _userCertCurrent = null;   // currently-open user object (certs section)
+let _usersData = { rows: [], roles: [], scope: 'onboard' };
+let _usersShowInactive = false;
+let _usersRoleFilter = '';
+let _usersToolbarWired = false;
+
+const ROLE_TONE = { admin: 'info', supervisor: 'warn', floor: 'neutral', portal: 'ok' };
+function userRoleChip(u){
+  const base = u.baseRole || u.base_role || 'floor';
+  const name = u.roleName || u.role_name || u.role || base;
+  return `<span class="ui-chip ui-chip-${esc(ROLE_TONE[base] || 'neutral')}" title="${esc(base)} base">${esc(name)}</span>`;
+}
 
 const USER_COLS = [
-  { key: 'full_name', label: 'Name' },
-  { key: 'email', label: 'Email' },
-  { key: '_role', label: 'Role', sortValue: u => u.user_type === 'admin' ? 0 : u.is_supervisor ? 1 : 2,
-    render: u => userRoleChip(u) },
-  // A hazmat picker with no live cert is the thing this page exists to catch.
-  { key: 'active_cert_count', label: 'Active certs', num: true, render: u => Number(u.active_cert_count) > 0
-      ? uiNum(u.active_cert_count)
-      : '<span class="ui-chip ui-chip-warn">none</span>' },
+  { key: 'fullName', label: 'Name', render: u =>
+      `<div>${esc(u.fullName || '')}${u.overrideCount ? ` <span class="idn-tag idn-tag-primary" title="Has per-user permission overrides">${esc(u.overrideCount)} override${u.overrideCount === 1 ? '' : 's'}</span>` : ''}</div>` +
+      (u.mustChangePassword ? '<div class="ui-hint">temp password — must change at next login</div>' : '') },
+  { key: 'email', label: 'Email', mono: true },
+  { key: '_role', label: 'Role', sortValue: u => `${u.baseRole}|${u.roleName}`, render: u => userRoleChip(u) },
+  { key: '_client', label: 'Client', sortValue: u => u.clientCode || '', render: u => u.clientCode
+      ? `${uiId(u.clientCode)} <span class="ui-muted">${esc(u.clientName || '')}</span>` : '<span class="ui-muted">—</span>' },
+  { key: '_login', label: 'Last login', sortValue: u => u.lastLoginAt || '', render: u => u.lastLoginAt
+      ? uiId(fmtTimeShort(u.lastLoginAt)) : '<span class="ui-muted">never</span>' },
+  { key: '_status', label: 'Status', sortValue: u => u.isActive ? 0 : 1, render: u => u.isActive
+      ? uiChip('ACTIVE', 'active') : uiChip('INACTIVE', 'inactive') },
+  { key: 'activeCertCount', label: 'Active certs', num: true, render: u => u.userType === 'client'
+      ? '<span class="ui-muted">—</span>' : (Number(u.activeCertCount) > 0 ? uiNum(u.activeCertCount) : '<span class="ui-chip ui-chip-warn">none</span>') },
 ];
 
-async function loadUsers(){
-  uiTableLoading('usersBody', USER_COLS);
-  const r = await apiGet('/users');
-  if(r === null) return uiTableError('usersBody', USER_COLS, 'Could not load users', loadUsers);
-  const rows = r.rows || [];
+function initUsersToolbar(){
+  const host = document.getElementById('usersToolbar');
+  if(!host || _usersToolbarWired) return;
+  _usersToolbarWired = true;
+  host.innerHTML = `
+    <input type="search" class="ui-input usr-search" id="usrSearch" placeholder="Search name or email…" autocomplete="off" spellcheck="false">
+    <div class="cb-wrap usr-role" id="usrRoleFilterWrap"></div>
+    <label class="ui-check"><input type="checkbox" id="usrShowInactive"> Show inactive</label>`;
+  host.querySelector('#usrSearch').addEventListener('input', debounce(() => loadUsers(), 350));
+  host.querySelector('#usrShowInactive').addEventListener('change', e => { _usersShowInactive = e.target.checked; loadUsers(); });
+  initCombo('usrRoleFilterWrap', [{ value: '', label: 'All roles' }], { placeholder: 'All roles', onChange: v => { _usersRoleFilter = v; loadUsers(); } });
+}
 
+async function loadUsers(){
+  initUsersToolbar();
+  uiTableLoading('usersBody', USER_COLS);
+  const qs = new URLSearchParams({ active: _usersShowInactive ? 'all' : 'true' });
+  const q = (document.getElementById('usrSearch')?.value || '').trim();
+  if(q) qs.set('q', q);
+  if(_usersRoleFilter) qs.set('role', _usersRoleFilter);
+  const r = await apiGet(`/users?${qs.toString()}`);
+  if(r === null) return uiTableError('usersBody', USER_COLS, 'Could not load users', loadUsers);
+  _usersData = r;
+  // Role filter options follow the tenant's roles (system + custom).
+  const cur = cbVal('usrRoleFilterWrap');
+  initCombo('usrRoleFilterWrap', [{ value: '', label: 'All roles' }].concat((r.roles || []).map(x => ({ value: x.key, label: x.name }))),
+    { placeholder: 'All roles', value: cur, onChange: v => { _usersRoleFilter = v; loadUsers(); } });
   uiTable('usersBody', {
-    columns: USER_COLS, rows, rowKey: 'id',
-    sortable: true,
-    onRowClick: u => openUserCertModal(u.id, u),
-    empty: 'No users.',
+    columns: USER_COLS, rows: r.rows || [], rowKey: 'id',
+    sortable: true, patch: true,
+    onRowClick: u => openUserModal(u.id),
+    empty: q || _usersRoleFilter ? 'No users match that filter.' : 'No users yet — use Add user.',
   });
 }
 
-function userRoleChip(u){
-  if(u.user_type === 'admin') return '<span class="ui-chip ui-chip-info">ADMIN</span>';
-  if(u.is_supervisor)         return '<span class="ui-chip ui-chip-warn">SUPERVISOR</span>';
-  return '<span class="ui-chip ui-chip-neutral">OPS</span>';
+function _assignableRoles(){ return (_usersData.roles || []).filter(r => r.assignable); }
+
+// =============================================================================
+// ADD USER
+// =============================================================================
+async function openAddUserModal(){
+  if(!_usersData.roles.length) await loadUsers();
+  const roleOpts = _assignableRoles().map(r => ({ value: r.key, label: `${r.name}${r.is_system ? '' : ' (custom, ' + r.base_role + ')'}` }));
+  if(!roleOpts.length) return uiToast('No roles you may assign', 'error');
+  const m = uiModal({
+    title: 'Add user',
+    width: 560,
+    body: `
+      ${uiField({ id: 'nuName', label: 'Full name *', placeholder: 'e.g. Maria Lopez' })}
+      ${uiField({ id: 'nuEmail', label: 'Email (login) *', type: 'email', placeholder: 'maria@tpfswarehouse.com', hint: 'Floor staff without email: any unique address works as a login name, e.g. maria@floor.local' })}
+      <div class="ui-field" data-field="nuRoleWrap">
+        <label class="ui-label">Role *</label>
+        <div class="cb-wrap" id="nuRoleWrap"></div>
+        <div class="ui-field-err" style="display:none;"></div>
+      </div>
+      <div class="ui-field" data-field="nuClientWrap" id="nuClientField" hidden>
+        <label class="ui-label">Client (portal users) *</label>
+        <div class="cb-wrap" id="nuClientWrap"></div>
+        <div class="ui-field-err" style="display:none;"></div>
+      </div>
+      <div class="ui-banner ui-banner-info">A temporary password is generated and shown once. The user must set their own password at first login.</div>`,
+    actions: [
+      { label: 'Cancel' },
+      { label: 'Create user', primary: true, onClick: async (api) => {
+        const name = api.el.querySelector('#nuName').value.trim();
+        const email = api.el.querySelector('#nuEmail').value.trim().toLowerCase();
+        const role = cbVal('nuRoleWrap');
+        const isPortal = (_usersData.roles.find(r => r.key === role) || {}).base_role === 'portal';
+        const clientId = isPortal ? cbVal('nuClientWrap') : '';
+        const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        uiFieldError(api.el, 'nuName', name.length >= 2 ? '' : 'Full name is required');
+        uiFieldError(api.el, 'nuEmail', emailOk ? '' : 'A valid email is required');
+        uiFieldError(api.el, 'nuRoleWrap', role ? '' : 'Pick a role');
+        uiFieldError(api.el, 'nuClientWrap', (!isPortal || clientId) ? '' : 'Portal users need a client');
+        if(name.length < 2 || !role || (isPortal && !clientId) || !emailOk) return false;
+        const r = await fetch(`${API}/users`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` },
+          body: JSON.stringify({ email, fullName: name, role, clientId: clientId || undefined }) });
+        const d = await r.json().catch(() => ({}));
+        if(!r.ok){
+          if(d.code === 'PERMISSION_DENIED') permDeniedToast(d); else uiToast(d.error || 'Could not create the user', 'error');
+          if(/email|exists/i.test(d.error || '')) uiFieldError(api.el, 'nuEmail', d.error);
+          return false;
+        }
+        uiToast(`${d.user.fullName} created`);
+        loadUsers();
+        pwShowTempPassword(d.user.fullName, d.tempPassword);
+      } },
+    ],
+  });
+  initCombo('nuRoleWrap', roleOpts, { placeholder: 'Select a role…', onChange: async (v) => {
+    const isPortal = (_usersData.roles.find(r => r.key === v) || {}).base_role === 'portal';
+    document.getElementById('nuClientField').hidden = !isPortal;
+    if(isPortal && typeof loadCC === 'function'){
+      await loadCC();
+      initCombo('nuClientWrap', clientsCache.map(c => ({ value: String(c.id), label: `${c.code} — ${c.name}` })), { placeholder: 'Pick a client…' });
+    }
+  } });
+  return m;
 }
 
 // =============================================================================
-// USER CERT MODAL — full cert history for one user, grant + revoke buttons
+// USER DETAIL — account, overrides, certifications
 // =============================================================================
+let CERT_M = null;   // open user modal (certs section lives inside it)
 
-let CERT_M = null;   // open user-cert uiModal
+async function openUserModal(userId){
+  const u = (_usersData.rows || []).find(x => x.id === userId);
+  if(!u) return uiToast('Reload the list and try again', 'error');
+  _userCertCurrent = { id: userId, full_name: u.fullName, email: u.email, user_type: u.userType, is_supervisor: u.baseRole === 'supervisor' || u.baseRole === 'admin' };
+  const isPortal = u.userType === 'client';
+  const canEdit = !!u.editable;
+  const canOverrides = can('users.manage') && !isPortal && u.baseRole !== 'admin';
+  const roleOpts = _assignableRoles().filter(r => (r.base_role === 'portal') === isPortal)
+    .map(r => ({ value: r.key, label: `${r.name}${r.is_system ? '' : ' (custom, ' + r.base_role + ')'}` }));
+  if(!roleOpts.some(o => o.value === u.role)) roleOpts.unshift({ value: u.role, label: u.roleName });
+
+  CERT_M = uiModal({
+    title: u.fullName || u.email,
+    width: 760,
+    body: `
+      ${uiMeta([
+        { k: 'Email', v: uiId(u.email) },
+        { k: 'Role', v: userRoleChip(u) },
+        { k: 'Status', v: u.isActive ? uiChip('ACTIVE', 'active') : uiChip('INACTIVE', `inactive since ${esc(u.deactivatedAt ? fmtTimeShort(u.deactivatedAt) : '—')}`) },
+        { k: 'Last login', v: u.lastLoginAt ? uiId(fmtTimeShort(u.lastLoginAt)) : '<span class="ui-muted">never</span>' },
+        ...(isPortal ? [{ k: 'Client', v: `${uiId(u.clientCode || '')} <span class="ui-muted">${esc(u.clientName || '')}</span>` }] : []),
+        { k: 'Created', v: u.createdAt ? uiId(fmtTimeShort(u.createdAt)) : '<span class="ui-muted">—</span>' },
+      ])}
+      ${canEdit ? `
+      <div class="eo-section">
+        <div class="item-sec-head"><div class="ui-label">Account</div></div>
+        <div class="ui-field-row">
+          ${uiField({ id: 'euName', label: 'Full name', value: u.fullName || '' })}
+          <div class="ui-field" data-field="euRoleWrap">
+            <label class="ui-label">Role</label>
+            <div class="cb-wrap" id="euRoleWrap"></div>
+            <div class="ui-field-err" style="display:none;"></div>
+          </div>
+        </div>
+        ${isPortal ? `<div class="ui-field" data-field="euClientWrap"><label class="ui-label">Client</label><div class="cb-wrap" id="euClientWrap"></div><div class="ui-field-err" style="display:none;"></div></div>` : ''}
+        <div class="usr-actions">
+          <button type="button" class="ui-btn ui-btn-primary js-usr-save">Save changes</button>
+          ${u.isActive && u.id !== U?.id ? '<button type="button" class="ui-btn js-usr-reset">Reset password</button>' : ''}
+          <span style="flex:1"></span>
+          ${u.id === U?.id ? '<span class="ui-hint">This is you — role and status are changed by another admin.</span>'
+            : (u.isActive ? '<button type="button" class="ui-btn ui-btn-danger js-usr-deactivate">Deactivate</button>'
+                          : '<button type="button" class="ui-btn js-usr-reactivate">Reactivate</button>')}
+        </div>
+      </div>` : ''}
+      ${canOverrides ? `
+      <div class="eo-section">
+        <div class="item-sec-head">
+          <div class="ui-label">Permission overrides</div>
+          <span class="ui-hint">on top of the ${esc(u.roleName)} role · admin only</span>
+          <span style="flex:1"></span>
+          <button type="button" class="ui-btn js-usr-ovr-toggle">Edit overrides</button>
+        </div>
+        <div id="usrOverridesBody"></div>
+      </div>` : ''}
+      ${!isPortal ? `
+      <div class="eo-section">
+        <div class="item-sec-head">
+          <div class="ui-label">Certifications</div>
+          <span style="flex:1"></span>
+          <button class="ui-btn" id="certGrantBtn">Grant cert</button>
+        </div>
+        <div id="userCertList"></div>
+      </div>` : ''}`,
+    actions: [{ label: 'Close' }],
+    onClose: () => { CERT_M = null; },
+  });
+  const el = CERT_M.el;
+
+  if(canEdit){
+    initCombo('euRoleWrap', roleOpts, { placeholder: 'Role', value: u.role });
+    if(isPortal && typeof loadCC === 'function'){
+      await loadCC();
+      initCombo('euClientWrap', clientsCache.map(c => ({ value: String(c.id), label: `${c.code} — ${c.name}` })), { placeholder: 'Client', value: u.clientId ? String(u.clientId) : '' });
+    }
+    el.querySelector('.js-usr-save').addEventListener('click', uiBusyHandler(async () => {
+      const body = { fullName: el.querySelector('#euName').value.trim() };
+      const role = cbVal('euRoleWrap'); if(role && role !== u.role) body.role = role;
+      if(isPortal){ const c = cbVal('euClientWrap'); if(c && c !== String(u.clientId)) body.clientId = c; }
+      const r = await fetch(`${API}/users/${u.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({}));
+      if(!r.ok){ if(d.code === 'PERMISSION_DENIED') permDeniedToast(d); else uiToast(d.error || 'Could not save', 'error'); return false; }
+      uiToast(d.changed && d.changed.length ? `Saved (${d.changed.join(', ')})` : 'Nothing to save');
+      CERT_M.close(); loadUsers();
+    }));
+    el.querySelector('.js-usr-reset')?.addEventListener('click', uiBusyHandler(async () => { await pwAdminReset(u.id, u.fullName || u.email); return false; }));
+    el.querySelector('.js-usr-deactivate')?.addEventListener('click', uiBusyHandler(() => setUserActive(u, false)));
+    el.querySelector('.js-usr-reactivate')?.addEventListener('click', uiBusyHandler(() => setUserActive(u, true)));
+  }
+  if(canOverrides){
+    el.querySelector('.js-usr-ovr-toggle').addEventListener('click', uiBusyHandler(() => renderUserOverrides(u.id, el)));
+    renderUserOverridesSummary(u.id);
+  }
+  if(!isPortal){
+    document.getElementById('certGrantBtn').addEventListener('click', uiBusyHandler(openGrantCertForm));
+    await renderUserCertList(userId);
+  }
+}
+
+async function setUserActive(u, active){
+  const ok = await uiConfirm({
+    title: active ? `Reactivate ${u.fullName || u.email}?` : `Deactivate ${u.fullName || u.email}?`,
+    body: active ? 'They can sign in again with their existing password.'
+                 : 'They are signed out within a minute and cannot sign in until reactivated. Their history stays.',
+    confirmLabel: active ? 'Reactivate' : 'Deactivate', danger: !active,
+  });
+  if(!ok) return false;
+  const r = await fetch(`${API}/users/${u.id}/${active ? 'reactivate' : 'deactivate'}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: '{}' });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ if(d.code === 'PERMISSION_DENIED') permDeniedToast(d); else uiToast(d.error || 'Could not change status', 'error'); return false; }
+  uiToast(active ? 'Reactivated' : 'Deactivated — signed out within a minute', active ? 'success' : 'error');
+  if(CERT_M) CERT_M.close();
+  if(!active){
+    _usersShowInactive = true;
+    const cb = document.getElementById('usrShowInactive'); if(cb) cb.checked = true;
+  }
+  loadUsers();
+}
+
+// ---- overrides ---------------------------------------------------------------
+
+async function renderUserOverridesSummary(userId){
+  const host = document.getElementById('usrOverridesBody');
+  if(!host) return;
+  const d = await apiGet(`/users/${userId}/overrides`);
+  if(!d){ host.innerHTML = uiError('Could not load overrides'); return; }
+  const tag = (k, tone) => `<span class="idn-tag ${tone}">${esc(k)}</span>`;
+  host.innerHTML = (!d.extra.length && !d.removed.length)
+    ? '<div class="ui-hint">No overrides — this user has exactly the role\'s permissions.</div>'
+    : `<div class="usr-ovr-summary">
+         ${d.extra.length ? `<div><span class="ui-label">Extra</span> ${d.extra.map(k => tag(k, 'idn-tag-primary')).join(' ')}</div>` : ''}
+         ${d.removed.length ? `<div><span class="ui-label">Removed</span> ${d.removed.map(k => tag(k, 'usr-tag-removed')).join(' ')}</div>` : ''}
+       </div>`;
+}
+
+async function renderUserOverrides(userId, scopeEl){
+  const host = document.getElementById('usrOverridesBody');
+  host.innerHTML = uiSpinner('Loading…');
+  const d = await apiGet(`/users/${userId}/overrides`);
+  if(!d){ host.innerHTML = uiError('Could not load overrides'); return; }
+  const ovr = Object.fromEntries(d.overrides.map(o => [o.key, o.allowed]));
+  const groups = [];
+  for(const p of d.permissions){ let g = groups.find(x => x.name === p.group); if(!g){ g = { name: p.group, rows: [] }; groups.push(g); } g.rows.push(p); }
+  const roleHas = new Set(d.roleEffective);
+  host.innerHTML = `
+    <div class="ui-hint" style="margin-bottom:8px;">Inherit = whatever the ${esc(d.role.name)} role says. Allow / Deny wins over the role. Locked keys stay admin-only.</div>
+    <div class="roles-grid-wrap"><table class="ui-table roles-grid">
+      <thead><tr><th>Permission</th><th class="roles-col">${esc(d.role.name)}</th><th class="roles-col">Override</th><th class="roles-col">Effective</th></tr></thead>
+      <tbody>${groups.map(g => `
+        <tr class="roles-group"><td colspan="4">${esc(g.name)}</td></tr>
+        ${g.rows.map(p => {
+          const o = ovr[p.key];
+          const eff = o === true ? true : o === false ? false : roleHas.has(p.key);
+          return `<tr data-key="${esc(p.key)}">
+            <td><div>${esc(p.label)}</div><div class="ui-hint ui-mono">${esc(p.key)}</div></td>
+            <td class="roles-col">${roleHas.has(p.key) ? '<span class="roles-lock">✓</span>' : '<span class="ui-muted">—</span>'}</td>
+            <td class="roles-col">${p.locked ? '<span class="roles-lock-off">—</span>'
+              : `<select class="ui-input usr-ovr-sel js-usr-ovr" data-key="${esc(p.key)}">
+                   <option value="inherit"${o == null ? ' selected' : ''}>Inherit</option>
+                   <option value="allow"${o === true ? ' selected' : ''}>Allow</option>
+                   <option value="deny"${o === false ? ' selected' : ''}>Deny</option>
+                 </select>`}</td>
+            <td class="roles-col">${eff ? '<span class="roles-lock">✓</span>' : '<span class="ui-muted">—</span>'}</td>
+          </tr>`; }).join('')}`).join('')}
+      </tbody></table></div>
+    <div class="usr-actions"><button type="button" class="ui-btn ui-btn-primary js-usr-ovr-save">Save overrides</button>
+      <button type="button" class="ui-btn js-usr-ovr-cancel">Cancel</button></div>`;
+  host.querySelector('.js-usr-ovr-cancel').addEventListener('click', uiBusyHandler(() => renderUserOverridesSummary(userId)));
+  host.querySelector('.js-usr-ovr-save').addEventListener('click', uiBusyHandler(async () => {
+    const changes = [];
+    host.querySelectorAll('.js-usr-ovr').forEach(sel => {
+      const want = sel.value === 'inherit' ? null : sel.value === 'allow';
+      const had = ovr[sel.dataset.key] == null ? null : ovr[sel.dataset.key];
+      if(want !== had) changes.push({ key: sel.dataset.key, allowed: want });
+    });
+    if(!changes.length) return uiToast('No override changes', 'error');
+    const r = await fetch(`${API}/users/${userId}/overrides`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ changes }) });
+    const d2 = await r.json().catch(() => ({}));
+    if(!r.ok){ if(d2.code === 'PERMISSION_DENIED') permDeniedToast(d2); else uiToast(d2.error || 'Could not save overrides', 'error'); return false; }
+    uiToast(`${changes.length} override${changes.length === 1 ? '' : 's'} saved`);
+    renderUserOverridesSummary(userId);
+    loadUsers();
+  }));
+}
+
+// =============================================================================
+// CERTIFICATIONS (unchanged behaviour) — full history, grant, revoke
+// =============================================================================
 
 // Cert state -> the frozen tone scale. Expiring-soon is the one that matters:
 // it's the only state you can still act on before someone is uncertified.
 const CERT_TONE = {
   active: 'ok', expiring_soon: 'warn', expired: 'danger', revoked: 'neutral',
 };
-
-async function openUserCertModal(userId, userObj){
-  _userCertCurrent = { id: userId, ...(userObj || {}) };
-
-  CERT_M = uiModal({
-    title: userObj?.full_name || userObj?.email || 'User',
-    width: 720,
-    body: `
-      <div class="ui-hint" style="margin-bottom:12px;">
-        ${esc(userObj?.email || '')} · ${esc(userObj?.user_type || '')}${userObj?.is_supervisor ? ' · supervisor' : ''}
-      </div>
-      <div class="item-sec-head">
-        <div class="ui-label">Certifications</div>
-        <span style="flex:1"></span>
-        <button class="ui-btn ui-btn-primary" id="certGrantBtn">Grant cert</button>
-      </div>
-      <div id="userCertList"></div>
-      <div id="grantCertForm" style="display:none;"></div>`,
-    actions: [
-      // For floor staff with no work email, this is the ONLY recovery path —
-      // an emailed reset link is useless to a picker holding a scanner. Issues
-      // a temp password, shown once, and forces a change at their next login.
-      ...(can('users.manage') ? [{ label: 'Reset password', onClick: async () => {
-        await pwAdminReset(userId, userObj?.full_name || userObj?.email);
-        return false;   // keep the user modal open behind it
-      } }] : []),
-      { label: 'Close' },
-    ],
-    onClose: () => { CERT_M = null; },
-  });
-
-  document.getElementById('certGrantBtn').addEventListener('click', uiBusyHandler(openGrantCertForm));
-  await renderUserCertList(userId);
-}
 
 async function renderUserCertList(userId){
   const list = document.getElementById('userCertList');
@@ -212,7 +465,7 @@ async function openGrantCertForm(){
   // INTERNAL_SAFETY_LEAD is admin-only to grant.
   const types = await apiGet('/cert-types');
   const opts = (types?.rows || [])
-    .filter(t => U?.userType === 'admin' || t.cert_type !== 'INTERNAL_SAFETY_LEAD')
+    .filter(t => U?.userType === 'admin' || U?.role === 'admin' || t.cert_type !== 'INTERNAL_SAFETY_LEAD')
     .map(t => ({ value: t.cert_type, label: t.display_name }));
 
   initCombo('grantCertTypeWrap', opts, {

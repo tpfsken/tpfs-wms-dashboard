@@ -73,7 +73,7 @@ function closeModal(id){
 const titles = {
   dashboard:'Dashboard', inventory:'Inventory', orders:'Orders', waves:'Waves',
   inbound:'Receiving', intake:'Intake', clients:'Clients',
-  billing:'Billing', invoices:'Invoices', settings:'Settings', reports:'Reports', compliance:'Compliance', users:'Users & Certs',
+  billing:'Billing', invoices:'Invoices', settings:'Settings', reports:'Reports', compliance:'Compliance', users:'Users',
   portalHome:'Customer Portal', portalNewOrder:'Place an Order', portalIntake:'Upload Documents',
   // Floor mode (phone-first ops shell)
   floorHome:'Warehouse Floor', floorPickList:'Orders to Pick',
@@ -153,7 +153,7 @@ async function refreshCertExpiryRibbon(){
     ribbon.style.display = '';
     ribbon.onclick = () => {
       // Admin/supervisor can act on it — take them to the page where they can.
-      if(U?.userType === 'admin' || U?.isSupervisor){
+      if(can('users.manage') || can('users.onboard')){
         navigateTo('users');
         return;
       }
@@ -184,14 +184,7 @@ function boot(){
     document.getElementById('userName').textContent = U.fullName || U.email;
   }
 
-  // Reveal admin/supervisor-only nav items (role from the JWT / /auth/me; the
-  // legacy flags still count for tokens minted before roles shipped).
-  const isAdmin = U?.userType === 'admin' || U?.role === 'admin';
-  const isSup   = !!U?.isSupervisor || U?.role === 'supervisor';
-  if(isAdmin || isSup){
-    const usersNav = document.getElementById('navUsersItem');
-    if(usersNav) usersNav.style.display = '';
-  }
+  // Users nav is [data-perm="users.manage|users.onboard"] — gated by loadMe().
 
   // Topbar 90-day cert expiry ribbon — fires once on boot, links to Users
   // page (admin/supervisor) or just informs the user otherwise.

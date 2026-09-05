@@ -1559,3 +1559,19 @@ body.floor-mode .fs-gross-input{font-size:var(--fl-base);min-height:48px;}
 .roles-cell input{width:16px;height:16px;accent-color:var(--blue);}
 .roles-lock{color:var(--st-ok);font-weight:700;}
 .roles-lock-off{color:var(--muted);font-weight:500;}
+
+/* --- Users page + per-user overrides (js/users.js) --- */
+.usr-toolbar{gap:var(--sp-2);flex-wrap:wrap;}
+.usr-toolbar .usr-search{max-width:260px;}
+.usr-toolbar .usr-role{max-width:200px;}
+.usr-actions{display:flex;align-items:center;gap:var(--sp-2);margin-top:var(--sp-3);flex-wrap:wrap;}
+.usr-ovr-summary{display:flex;flex-direction:column;gap:6px;}
+.usr-ovr-summary .ui-label{display:inline-block;margin:0 6px 0 0;}
+.usr-tag-removed{color:var(--st-danger);background:var(--st-danger-bg);}
+.usr-ovr-sel{width:auto;padding:4px 8px;font-size:12px;}
+.roles-head{font-weight:600;}
+.roles-head .ui-hint{display:block;margin:0;font-weight:400;text-transform:none;letter-spacing:0;}
+.roles-head-acts{display:flex;gap:4px;justify-content:center;margin-top:4px;}
+.roles-head-acts .ui-btn{padding:2px 8px;font-size:11px;}
+.side-user{padding:8px 14px 2px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#shell.collapsed .side-user{display:none;}

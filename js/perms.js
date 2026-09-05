@@ -45,6 +45,13 @@ async function loadMe(){
       try { sessionStorage.setItem('tpfs_user', JSON.stringify(U)); } catch(_) {}
     }
     document.body.dataset.role = ME.role || '';
+    if(U) U.roleName = ME.roleName || ME.role;
+    const line = document.getElementById('sideUserLine');
+    if(line) line.textContent = `${U?.fullName || U?.email || ''} · ${ME.roleName || ME.role || ''}`;
+    if(U && U.userType !== 'client'){
+      const roleEl = document.querySelector('.topbar-user-info .role');
+      if(roleEl && ME.roleName) roleEl.textContent = ME.roleName;
+    }
     applyPermGates(document);
     return ME;
   } catch(_) {

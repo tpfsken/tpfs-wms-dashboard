@@ -270,6 +270,11 @@ async function pwAdminReset(userId, fullName) {
   const d = await r.json().catch(() => ({}));
   if (!r.ok) return uiToast(d.error || 'Could not reset password', 'error');
 
+  return pwShowTempPassword(d.user?.fullName || fullName, d.tempPassword);
+}
+
+/** The one-time temp-password dialog — used by admin reset and by Add user. */
+function pwShowTempPassword(fullName, tempPassword) {
   // Shown ONCE. It is not stored in plaintext anywhere and cannot be retrieved
   // again — a second reset issues a different one. Say so plainly, or someone
   // will close this and come back looking for it.
@@ -278,18 +283,18 @@ async function pwAdminReset(userId, fullName) {
     width: 460,
     body: `
       <div class="ui-hint" style="margin-bottom:12px;">
-        Give this to <strong>${esc(d.user?.fullName || fullName || 'the user')}</strong>.
+        Give this to <strong>${esc(fullName || 'the user')}</strong>.
         They must set their own password when they sign in.
       </div>
       <div id="pwTempBox" style="font-family:ui-monospace,Menlo,monospace;font-size:22px;letter-spacing:.12em;
            text-align:center;padding:16px;background:var(--hover);border:1px solid var(--border-h);
-           border-radius:10px;user-select:all;">${esc(d.tempPassword)}</div>
+           border-radius:10px;user-select:all;">${esc(tempPassword)}</div>
       <div class="ui-banner ui-banner-warn" style="margin-top:12px;">
         This is shown once. It cannot be looked up again — if it's lost, just reset again.
       </div>`,
     actions: [
       { label: 'Copy', onClick: async (api) => {
-        try { await navigator.clipboard.writeText(d.tempPassword); uiToast('Copied', 'success'); }
+        try { await navigator.clipboard.writeText(tempPassword); uiToast('Copied', 'success'); }
         catch (_) { uiToast('Select the text and copy it manually', 'error'); }
         return false;   // keep the dialog open — closing it loses the password
       } },
