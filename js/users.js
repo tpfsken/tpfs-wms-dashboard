@@ -58,7 +58,9 @@ function initUsersToolbar(){
 }
 
 async function loadUsers(){
-  initUsersToolbar();
+  // The filter bar is part of the page chrome: it renders before, and
+  // independently of, the list — a toolbar hiccup must never blank the table.
+  try { initUsersToolbar(); } catch(e){ console.error('[users] toolbar', e); }
   uiTableLoading('usersBody', USER_COLS);
   const qs = new URLSearchParams({ active: _usersShowInactive ? 'all' : 'true' });
   const q = (document.getElementById('usrSearch')?.value || '').trim();
@@ -66,13 +68,13 @@ async function loadUsers(){
   if(_usersRoleFilter) qs.set('role', _usersRoleFilter);
   const r = await apiGet(`/users?${qs.toString()}`);
   if(r === null) return uiTableError('usersBody', USER_COLS, 'Could not load users', loadUsers);
-  _usersData = r;
+  _usersData = { rows: Array.isArray(r.rows) ? r.rows : [], roles: Array.isArray(r.roles) ? r.roles : [], scope: r.scope || 'onboard' };
   // Role filter options follow the tenant's roles (system + custom).
   const cur = cbVal('usrRoleFilterWrap');
   initCombo('usrRoleFilterWrap', [{ value: '', label: 'All roles' }].concat((r.roles || []).map(x => ({ value: x.key, label: x.name }))),
     { placeholder: 'All roles', value: cur, onChange: v => { _usersRoleFilter = v; loadUsers(); } });
   uiTable('usersBody', {
-    columns: USER_COLS, rows: r.rows || [], rowKey: 'id',
+    columns: USER_COLS, rows: _usersData.rows, rowKey: 'id',
     sortable: true, patch: true,
     onRowClick: u => openUserModal(u.id),
     empty: q || _usersRoleFilter ? 'No users match that filter.' : 'No users yet — use Add user.',

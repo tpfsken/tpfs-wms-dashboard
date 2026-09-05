@@ -109,6 +109,16 @@ floor mode adds a vibration on press. **Run `node scripts/busy-census.mjs`
 before every commit** — it flags any async click handler that is not wrapped
 and must exit 0.
 
+**7. A page outside `.main` renders blank.** `.shell` is `height:100vh` and
+`body` is `overflow:hidden`, so a `<div class="page">` that a stray `</div>`
+pushed out of `.shell > .main` still gets `.active`, still runs its loader,
+and sits invisibly below the fold — no header, no table, no error. The Users
+page shipped exactly like that on 2026-09-05. **Run `node scripts/page-nesting.mjs`
+before every commit** (and whenever you add a page or touch closing tags near
+the end of index.html) — it must exit 0. Headless checks that pull a page's
+markup out of index.html cannot see this; check the page inside the real shell
+with `getBoundingClientRect()`.
+
 ## XSS / HTML interpolation — NON-NEGOTIABLE
 
 Every value coming from the API, the user, or any other untrusted source MUST go through `esc()` before being placed in `innerHTML` or an HTML attribute. No exceptions. `esc(undefined)` and `esc(null)` are safe; they return `''`.
