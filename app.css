@@ -1495,3 +1495,15 @@ body.floor-mode .js-signout{font-size:calc(var(--fl-base) - 4px) !important;whit
 .fs-gross-input{font-size:1.25em;font-variant-numeric:tabular-nums;}
 body.floor-mode .fs-gross-input{font-size:var(--fl-base);min-height:48px;}
 .pkg-inactive{align-self:center;white-space:nowrap;}
+
+/* --- report suite: generic runner toolbar, presets, drill-down, schedules (js/reports.js) --- */
+.rep-field{min-width:170px;margin-bottom:0;}
+.rep-field-wide{min-width:220px;}
+.rep-spacer{flex:1;}
+.rep-textarea{min-height:64px;font-family:var(--mono);resize:vertical;}
+.rep-since{white-space:nowrap;align-self:center;}
+.rep-presets{display:flex;gap:var(--sp-2);align-items:center;}
+.rep-presets .ui-input{min-width:160px;}
+.rep-hint{flex-basis:100%;}
+.rep-drill{padding:2px 8px;font-size:var(--fs-body);}
+.rep-portal-chip{margin-left:var(--sp-2);vertical-align:middle;}

@@ -60,12 +60,13 @@ async function loadReports(){
   const d = await apiGet('/reports/catalog');
   _reportCatalog = d?.rows || [];
   renderReportsIndex();
+  rpRenderSchedules();
 }
 
 /* The report catalog is a working index, not a landing page. Grouped rows,
  * dense, scannable, no decoration — you come here to run a report, not to
  * admire it. */
-const REPORT_GROUP_ORDER = ['Activity', 'Inbound', 'Outbound', 'Inventory', 'Compliance', 'Billing', 'Traceability'];
+const REPORT_GROUP_ORDER = ['Inventory', 'Inbound', 'Outbound', 'Labor', 'Activity', 'Compliance', 'Billing', 'Traceability'];
 
 function renderReportsIndex(){
   const host = document.getElementById('reportsIndexGrid');
@@ -73,7 +74,7 @@ function renderReportsIndex(){
 
   // Server-defined reports + the hand-built ones that predate the registry.
   const all = _reportCatalog.map(r => ({
-    id: r.id, title: r.title, desc: r.description, group: r.group || 'Other',
+    id: r.id, title: r.title, desc: r.description, group: r.group || 'Other', portalVisible: !!r.portalVisible,
     open: () => openReport(r.id),
   })).concat(REPORTS_CATALOG.filter(r => r.status === 'live').map(r => ({
     id: r.id, title: r.title, desc: r.desc, group: 'Traceability', open: r.open,
@@ -91,7 +92,7 @@ function renderReportsIndex(){
       <div class="card-head"><div class="card-title">${esc(g)}</div></div>
       ${groups[g].map(r => `
         <button class="rep-row js-report-card" data-id="${esc(r.id)}">
-          <span class="rep-row-title">${esc(r.title)}</span>
+          <span class="rep-row-title">${esc(r.title)}${r.portalVisible && !rpPortal() ? ' <span class="ui-chip ui-chip-neutral rep-portal-chip">PORTAL</span>' : ''}</span>
           <span class="rep-row-desc">${esc(r.desc || '')}</span>
           <span class="rep-row-go">Run →</span>
         </button>`).join('')}
@@ -99,13 +100,28 @@ function renderReportsIndex(){
 
   host.querySelectorAll('.js-report-card').forEach(card => {
     const r = all.find(x => x.id === card.dataset.id);
-    if(r) card.addEventListener('click', () => r.open());
+    if(r) card.addEventListener('click', uiBusyHandler(() => r.open()));
   });
 }
 
 /* ---- Generic runner: parameters -> results -> export --------------------- */
+let _reportPresets = [];      // the caller's saved presets for the open report
+let _reportDrillBack = null;  // { id, params } — the report a drill-down came from
 
-async function openReport(id){
+// A param default -> a value, the same way the server does it: 'today' | 'monthStart' | '-30d' | '+30d' | literal.
+function reportDefault(def){
+  if(def === undefined || def === null) return '';
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const now = new Date();
+  if(def === 'today') return iso(now);
+  if(def === 'monthStart') return iso(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
+  const m = /^([+-])(\d+)d$/.exec(String(def));
+  if(m) return iso(new Date(now.getTime() + (m[1] === '-' ? -1 : 1) * Number(m[2]) * 86400000));
+  return String(def);
+}
+function rpPortal(){ return typeof isPortalMode === 'function' && isPortalMode(); }
+
+async function openReport(id, initialParams = {}){
   _reportDef = _reportCatalog.find(r => r.id === id);
   if(!_reportDef) return uiToast('Unknown report', 'error');
   _reportParams = {};
@@ -120,53 +136,92 @@ async function openReport(id){
   document.getElementById('reportsCurrentTitle').textContent = _reportDef.title;
   document.getElementById('reportsCurrentSub').textContent   = _reportDef.description || '';
 
-  // Sensible default window: this month to date. Most report questions are
-  // "what happened recently", and an empty date box helps nobody.
-  const today = new Date();
-  const first = new Date(today.getFullYear(), today.getMonth(), 1);
-  const iso = (d) => d.toISOString().slice(0, 10);
-
-  const clients = (typeof isPortalMode === 'function' && isPortalMode())
-    ? [] : (await apiGet('/clients')) || [];
+  const clients = rpPortal() ? [] : (await apiGet('/clients')) || [];
+  const hasDates = _reportDef.params.some(p => p.key === 'dateFrom');
+  _reportPresets = (await apiGet(`/reports/presets?reportId=${encodeURIComponent(id)}`))?.rows || [];
+  const val = (p) => initialParams[p.key] !== undefined && initialParams[p.key] !== null ? String(initialParams[p.key]) : reportDefault(p.default);
 
   document.getElementById('genericReportParams').innerHTML =
     _reportDef.params.map(p => {
       if(p.type === 'client'){
         // Portal users don't get a client picker — the server forces their scope.
         if(!clients.length) return '';
-        return `<div class="ui-field" style="min-width:220px;margin-bottom:0;">
+        return `<div class="ui-field rep-field rep-field-wide">
           <label class="ui-label">${esc(p.label)}</label>
           <select class="ui-input js-rp" data-key="${esc(p.key)}">
             <option value="">All clients</option>
-            ${clients.map(c => `<option value="${esc(c.id)}">${esc(c.code)} — ${esc(c.name)}</option>`).join('')}
+            ${clients.map(c => `<option value="${esc(c.id)}" ${String(c.id) === val(p) ? 'selected' : ''}>${esc(c.code)} — ${esc(c.name)}</option>`).join('')}
           </select>
         </div>`;
       }
       if(p.type === 'select'){
-        return `<div class="ui-field" style="min-width:180px;margin-bottom:0;">
+        return `<div class="ui-field rep-field">
           <label class="ui-label">${esc(p.label)}</label>
           <select class="ui-input js-rp" data-key="${esc(p.key)}">
-            ${(p.options || []).map(o => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('')}
+            ${(p.options || []).map(o => `<option value="${esc(o.value)}" ${String(o.value) === val(p) ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
           </select>
         </div>`;
       }
-      const val = p.type === 'date'
-        ? (p.key === 'dateTo' || p.key === 'asOf' ? iso(today) : iso(first))
-        : '';
-      return `<div class="ui-field" style="min-width:170px;margin-bottom:0;">
+      if(p.type === 'uidlist'){
+        return `<div class="ui-field rep-field rep-field-wide">
+          <label class="ui-label">${esc(p.label)}</label>
+          <textarea class="ui-input rep-textarea js-rp" data-key="${esc(p.key)}" placeholder="one per line, or comma separated">${esc(val(p))}</textarea>
+        </div>`;
+      }
+      return `<div class="ui-field rep-field">
         <label class="ui-label">${esc(p.label)}${p.required ? ' *' : ''}</label>
-        <input class="ui-input js-rp" data-key="${esc(p.key)}" type="${p.type === 'date' ? 'date' : 'text'}"
-               value="${esc(val)}">
+        <input class="ui-input js-rp" data-key="${esc(p.key)}" type="${p.type === 'date' ? 'date' : p.type === 'number' ? 'number' : 'text'}" value="${esc(val(p))}">
       </div>`;
     }).join('') +
     `<button class="ui-btn ui-btn-primary" onclick="uiRun(this, () => runGenericReport())">Run</button>
-     <div style="flex:1"></div>
-     <button class="ui-btn" onclick="uiRun(this, () => exportGenericReport('csv'))">Export CSV</button>
-     <button class="ui-btn" onclick="uiRun(this, () => exportGenericReport('pdf'))">Export PDF</button>`;
+     ${_reportDrillBack ? `<button class="ui-btn js-rp-back">← ${esc(_reportDrillBack.title || 'Back')}</button>` : ''}
+     <div class="rep-spacer"></div>
+     ${hasDates ? '<label class="ui-check rep-since" title="Start the window where your last run of this report ended"><input type="checkbox" id="rpSince"> Since last run</label>' : ''}
+     <div class="rep-presets">
+       <select class="ui-input" id="rpPresetSel" title="Saved filters">
+         <option value="">Presets…</option>
+         ${_reportPresets.map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}
+       </select>
+       <button class="ui-btn" onclick="uiRun(this, () => rpSavePreset())">Save preset</button>
+       <button class="ui-btn" id="rpDelPreset" onclick="uiRun(this, () => rpDeletePreset())" hidden>Delete preset</button>
+     </div>
+     <button class="ui-btn" onclick="uiRun(this, () => exportGenericReport('csv'))">CSV</button>
+     <button class="ui-btn" onclick="uiRun(this, () => exportGenericReport('xlsx'))">Excel</button>
+     <button class="ui-btn" onclick="uiRun(this, () => exportGenericReport('pdf'))">PDF</button>
+     ${rpPortal() ? '' : '<button class="ui-btn" onclick="uiRun(this, () => rpScheduleModal())">Schedule…</button>'}
+     <div class="rep-hint ui-hint" id="rpHint" hidden></div>`;
+
+  const host = document.getElementById('genericReportParams');
+  const sel = host.querySelector('#rpPresetSel');
+  sel.addEventListener('change', () => {
+    const p = _reportPresets.find(x => x.id === sel.value);
+    host.querySelector('#rpDelPreset').hidden = !p;
+    if(p){ rpApplyParams(p.params); runGenericReport(); }
+  });
+  const since = host.querySelector('#rpSince');
+  if(since) since.addEventListener('change', uiBusyHandler(async () => {
+    if(since.checked){
+      const d = await apiGet(`/reports/last-run/${_reportDef.id}`);
+      rpHint(d?.lastRun ? `Since your last run: ${fmtTimeShort(d.lastRun.ranAt)} (${d.lastRun.rowCount ?? '?'} rows then)` : 'No previous run — the dates above apply');
+    } else rpHint('');
+    await runGenericReport();
+  }));
+  const back = host.querySelector('.js-rp-back');
+  if(back) back.addEventListener('click', uiBusyHandler(() => { const b = _reportDrillBack; _reportDrillBack = null; return openReport(b.id, b.params); }));
+  host.querySelectorAll('.js-rp').forEach(el => el.addEventListener('keydown', (e) => { if(e.key === 'Enter' && el.tagName !== 'TEXTAREA'){ e.preventDefault(); runGenericReport(); } }));
 
   runGenericReport();
 }
 
+function rpHint(text){
+  const h = document.getElementById('rpHint');
+  if(!h) return;
+  h.textContent = text || '';
+  h.hidden = !text;
+}
+function rpApplyParams(params){
+  document.querySelectorAll('#genericReportParams .js-rp').forEach(el => { el.value = params && params[el.dataset.key] !== undefined ? String(params[el.dataset.key]) : (el.tagName === 'SELECT' ? '' : ''); });
+}
 function collectReportParams(){
   const p = {};
   document.querySelectorAll('#genericReportParams .js-rp').forEach(el => {
@@ -176,17 +231,12 @@ function collectReportParams(){
 }
 
 function reportQuery(extra = {}){
-  const qs = new URLSearchParams({ ..._reportParams, ...extra });
+  const since = document.getElementById('rpSince');
+  const qs = new URLSearchParams({ ..._reportParams, ...(since && since.checked ? { sinceLastRun: 1 } : {}), ...extra });
   return qs.toString();
 }
 
-async function runGenericReport(){
-  if(!_reportDef) return;
-  _reportParams = collectReportParams();
-
-  const missing = _reportDef.params.filter(p => p.required && !_reportParams[p.key]);
-  if(missing.length) return uiToast(`${missing.map(m => m.label).join(' and ')} required`, 'error');
-
+function rpColumns(){
   const cols = _reportDef.columns.map(c => ({
     key: c.key,
     label: c.label,
@@ -199,17 +249,45 @@ async function runGenericReport(){
         ? (r) => r[c.key] ? uiId(new Date(r[c.key]).toLocaleDateString()) : '<span class="ui-muted">—</span>'
         : undefined,
   }));
+  const drill = _reportDef.drill;
+  if(drill && _reportCatalog.some(r => r.id === drill.report)){
+    cols.push({ key: '_drill', label: '', render: (r) => {
+      if(drill.when && !r[drill.when]) return '';
+      const target = {};
+      for(const [param, key] of Object.entries(drill.map || {})) if(r[key] !== undefined && r[key] !== null) target[param] = r[key];
+      return `<button type="button" class="ui-btn rep-drill js-rp-drill" data-payload="${esc(JSON.stringify(target))}">${esc(drill.label || 'Open')} ›</button>`;
+    } });
+  }
+  return cols;
+}
 
+async function runGenericReport(){
+  if(!_reportDef) return;
+  _reportParams = collectReportParams();
+
+  const missing = _reportDef.params.filter(p => p.required && !_reportParams[p.key]);
+  if(missing.length) return uiToast(`${missing.map(m => m.label).join(' and ')} required`, 'error');
+
+  const cols = rpColumns();
   uiTableLoading('genericReportWrap', cols);
-  const d = await apiGet(`/reports/run/${_reportDef.id}?${reportQuery({
-    limit: _reportLimit, offset: _reportOffset,
-  })}`);
-  if(d === null) return uiTableError('genericReportWrap', cols, 'Report failed', runGenericReport);
+  const r = await fetch(`${API}/reports/run/${_reportDef.id}?${reportQuery({ limit: _reportLimit, offset: _reportOffset })}`, { headers: { Authorization: `Bearer ${T}` } });
+  const d = await r.json().catch(() => null);
+  if(!r.ok || !d){ uiToast((d && d.error) || 'Report failed', 'error'); return uiTableError('genericReportWrap', cols, (d && d.error) || 'Report failed', runGenericReport); }
+
+  // the window that actually ran (defaults or since-last-run applied) goes back into the inputs
+  if(d.params){ document.querySelectorAll('#genericReportParams .js-rp').forEach(el => { if(d.params[el.dataset.key] !== undefined && !el.value) el.value = String(d.params[el.dataset.key]); }); }
+  if(d.since && d.since.applied){ rpApplyParams({ ...collectReportParams(), dateFrom: d.since.dateFrom, dateTo: d.since.dateTo }); rpHint(`Since your last run: ${fmtTimeShort(d.since.lastRunAt)} → window ${d.since.dateFrom} to ${d.since.dateTo}`); }
 
   uiTable('genericReportWrap', {
     columns: cols, rows: d.rows || [], rowKey: 'id',
     empty: 'Nothing happened in that window — no rows match.',
   });
+  const drill = _reportDef.drill;
+  document.querySelectorAll('#genericReportWrap .js-rp-drill').forEach(b => b.addEventListener('click', uiBusyHandler((e) => {
+    e.stopPropagation();
+    _reportDrillBack = { id: _reportDef.id, title: _reportDef.title, params: collectReportParams() };
+    return openReport(drill.report, JSON.parse(b.dataset.payload || '{}'));
+  })));
 
   uiPager('genericReportPager', {
     total: Number(d.total || 0), limit: _reportLimit, offset: _reportOffset,
@@ -218,9 +296,9 @@ async function runGenericReport(){
   });
 }
 
-/* Both exports run the SAME definition as the screen, so a CSV someone works
- * from and a PDF a client files away can never disagree with what ops saw.
- * CSV downloads; PDF opens for review before it's sent to anyone. */
+/* Every export runs the SAME definition as the screen, so a CSV someone works
+ * from, the spreadsheet the office pivots, and the PDF a client files away can
+ * never disagree with what ops saw. CSV / Excel download; PDF opens for review. */
 async function exportGenericReport(fmt){
   if(!_reportDef) return;
   _reportParams = collectReportParams();
@@ -228,11 +306,10 @@ async function exportGenericReport(fmt){
   const missing = _reportDef.params.filter(p => p.required && !_reportParams[p.key]);
   if(missing.length) return uiToast(`${missing.map(m => m.label).join(' and ')} required`, 'error');
 
-  uiToast('Building the export…');
   const r = await fetch(`${API}/reports/export/${_reportDef.id}.${fmt}?${reportQuery()}`, {
     headers: { Authorization: `Bearer ${T}` },
   });
-  if(!r.ok) return uiToast('Export failed', 'error');
+  if(!r.ok){ const d = await r.json().catch(() => ({})); return uiToast(d.error || 'Export failed', 'error'); }
 
   const blob = await r.blob();
   const url  = URL.createObjectURL(blob);
@@ -241,13 +318,124 @@ async function exportGenericReport(fmt){
   if(fmt === 'pdf'){
     // Open it — nobody should email a client a report they haven't looked at.
     if(!window.open(url, '_blank', 'noopener')) uiToast('Pop-up blocked — allow pop-ups to view the PDF', 'error');
+    else uiToast('PDF opened');
   } else {
     const a = document.createElement('a');
     a.href = url; a.download = name;
     a.click();
-    uiToast('CSV downloaded');
+    uiToast(fmt === 'xlsx' ? 'Excel file downloaded' : 'CSV downloaded', 'success');
   }
   setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+/* ---- presets: the caller's saved filters, per report ------------------------ */
+async function rpSavePreset(){
+  if(!_reportDef) return;
+  const params = collectReportParams();
+  const name = await uiPrompt({ title: 'Save these filters as a preset', label: 'Preset name', placeholder: 'e.g. Client A — last month', confirmLabel: 'Save' });
+  if(!name) return;
+  const r = await fetch(`${API}/reports/presets`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ reportKey: _reportDef.id, name, params }) });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok) return uiToast(d.error || 'Could not save the preset', 'error');
+  _reportPresets = (await apiGet(`/reports/presets?reportId=${encodeURIComponent(_reportDef.id)}`))?.rows || [];
+  const sel = document.getElementById('rpPresetSel');
+  if(sel){ sel.innerHTML = '<option value="">Presets…</option>' + _reportPresets.map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join(''); sel.value = d.id; document.getElementById('rpDelPreset').hidden = false; }
+  uiToast(`Preset "${d.name}" saved`, 'success');
+}
+async function rpDeletePreset(){
+  const sel = document.getElementById('rpPresetSel');
+  const p = _reportPresets.find(x => x.id === (sel && sel.value));
+  if(!p) return;
+  if(!(await uiConfirm({ title: `Delete preset "${p.name}"?`, confirmLabel: 'Delete', danger: true }))) return;
+  const r = await fetch(`${API}/reports/presets/${p.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${T}` } });
+  if(!r.ok) return uiToast('Could not delete the preset', 'error');
+  _reportPresets = _reportPresets.filter(x => x.id !== p.id);
+  sel.innerHTML = '<option value="">Presets…</option>' + _reportPresets.map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');
+  document.getElementById('rpDelPreset').hidden = true;
+  uiToast('Preset deleted', 'success');
+}
+
+/* ---- scheduled delivery (ops) -------------------------------------------------- */
+const RP_HOURS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${String(h).padStart(2, '0')}:00` }));
+const RP_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => ({ value: String(i), label: d }));
+
+function rpScheduleModal(){
+  if(!_reportDef) return;
+  const params = collectReportParams();
+  const summary = Object.entries(params).map(([k, v]) => `${k}: ${v}`).join(' · ') || 'default filters';
+  const m = uiModal({
+    title: `Schedule "${_reportDef.title}"`,
+    body: `<div class="ui-hint">Runs with the filters on screen now (${esc(summary)}). The file is built on schedule and handed to the email hook — mail delivery is wired separately, so until then each run is logged as built.</div>
+           ${uiField({ id: 'rsName', label: 'Name', value: _reportDef.title })}
+           <div class="ui-field-row">
+             ${uiFieldSelect({ id: 'rsFreq', label: 'Frequency', options: [{ value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }] })}
+             ${uiFieldSelect({ id: 'rsWeekday', label: 'Weekday', options: RP_WEEKDAYS, value: '1' })}
+             ${uiField({ id: 'rsMonthDay', label: 'Day of month (1-28)', type: 'number', value: '1' })}
+             ${uiFieldSelect({ id: 'rsHour', label: 'At', options: RP_HOURS, value: '6' })}
+           </div>
+           <div class="ui-field-row">
+             ${uiField({ id: 'rsTz', label: 'Timezone', value: 'America/Los_Angeles' })}
+             ${uiFieldSelect({ id: 'rsFormat', label: 'Format', options: [{ value: 'xlsx', label: 'Excel (.xlsx)' }, { value: 'csv', label: 'CSV' }, { value: 'pdf', label: 'PDF' }], value: 'xlsx' })}
+           </div>
+           <div class="ui-field"><label class="ui-label">Recipients</label><textarea class="ui-input rep-textarea" id="rsTo" placeholder="one email per line"></textarea></div>
+           ${_reportDef.params.some(p => p.key === 'dateFrom') ? '<label class="ui-check"><input type="checkbox" id="rsSince" checked> Since last run (each delivery covers the period since the previous one)</label>' : ''}`,
+    actions: [{ label: 'Cancel' }, { label: 'Schedule', primary: true, onClick: async (api) => {
+      const v = (id) => { const el = api.el.querySelector('#' + id); return el ? el.value : ''; };
+      const recipients = v('rsTo').split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+      if(!recipients.length){ uiToast('Add at least one recipient', 'error'); return false; }
+      const since = api.el.querySelector('#rsSince');
+      const body = { reportKey: _reportDef.id, name: v('rsName'), params, frequency: v('rsFreq'), weekday: v('rsWeekday'), monthDay: v('rsMonthDay'), runHour: v('rsHour'), timezone: v('rsTz'), format: v('rsFormat'), recipients, sinceLastRun: !!(since && since.checked) };
+      const r = await fetch(`${API}/reports/schedules`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({}));
+      if(!r.ok){ uiToast(d.error || 'Could not create the schedule', 'error'); return false; }
+      uiToast(`Scheduled — next run ${fmtTimeShort(d.nextRunAt)}`, 'success');
+    } }],
+  });
+  const freq = m.el.querySelector('#rsFreq');
+  const sync = () => { m.el.querySelector('#rsWeekday').closest('.ui-field').hidden = freq.value !== 'weekly'; m.el.querySelector('#rsMonthDay').closest('.ui-field').hidden = freq.value !== 'monthly'; };
+  freq.addEventListener('change', sync); sync();
+}
+
+async function rpRenderSchedules(){
+  const host = document.getElementById('reportsSchedules');
+  if(!host || rpPortal()) return;
+  const d = await apiGet('/reports/schedules');
+  const rows = d?.rows || [];
+  const when = (s) => s.frequency === 'weekly' ? `${RP_WEEKDAYS[s.weekday || 0].label}s ${String(s.runHour).padStart(2, '0')}:00` : s.frequency === 'monthly' ? `day ${s.monthDay} ${String(s.runHour).padStart(2, '0')}:00` : `daily ${String(s.runHour).padStart(2, '0')}:00`;
+  uiTable(host, {
+    columns: [
+      { key: 'name', label: 'Schedule' },
+      { key: '_report', label: 'Report', render: s => esc((_reportCatalog.find(r => r.id === s.reportKey) || {}).title || s.reportKey) },
+      { key: '_when', label: 'When', render: s => `${esc(when(s))} <span class="ui-muted">${esc(s.timezone)}</span>` },
+      { key: 'format', label: 'Format', mono: true },
+      { key: '_to', label: 'Recipients', render: s => esc((s.recipients || []).join(', ')) },
+      { key: '_next', label: 'Next run', render: s => s.isActive && s.nextRunAt ? uiId(fmtTimeShort(s.nextRunAt)) : uiChip('INACTIVE', 'PAUSED') },
+      { key: '_last', label: 'Last run', render: s => s.lastRunAt ? `${uiId(fmtTimeShort(s.lastRunAt))} ${uiChip(s.lastStatus === 'sent' ? 'ACTIVE' : s.lastStatus === 'failed' ? 'CANCELLED' : 'DRAFT', (s.lastStatus || '').toUpperCase())}` : '<span class="ui-muted">never</span>' },
+      { key: '_act', label: '', render: s => `<button type="button" class="ui-btn js-rs-run" data-id="${esc(s.id)}">Run now</button> <button type="button" class="ui-btn js-rs-toggle" data-id="${esc(s.id)}" data-active="${s.isActive ? '1' : ''}">${s.isActive ? 'Pause' : 'Resume'}</button> <button type="button" class="ui-btn js-rs-del" data-id="${esc(s.id)}">Delete</button>` },
+    ],
+    rows, empty: 'No scheduled deliveries. Open a report and click Schedule…',
+  });
+  const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` };
+  host.querySelectorAll('.js-rs-run').forEach(b => b.addEventListener('click', uiBusyHandler(async () => {
+    const r = await fetch(`${API}/reports/schedules/${b.dataset.id}/run-now`, { method: 'POST', headers: hdr });
+    const d2 = await r.json().catch(() => ({}));
+    if(!r.ok) return uiToast(d2.error || 'Run failed', 'error');
+    uiToast(`Run ${d2.status}: ${d2.rowCount ?? 0} rows${d2.error ? ' — ' + d2.error : ''}`, d2.status === 'failed' ? 'error' : 'success');
+    await rpRenderSchedules();
+  })));
+  host.querySelectorAll('.js-rs-toggle').forEach(b => b.addEventListener('click', uiBusyHandler(async () => {
+    const r = await fetch(`${API}/reports/schedules/${b.dataset.id}`, { method: 'PATCH', headers: hdr, body: JSON.stringify({ isActive: !b.dataset.active }) });
+    if(!r.ok) return uiToast('Could not update the schedule', 'error');
+    uiToast(b.dataset.active ? 'Schedule paused' : 'Schedule resumed', 'success');
+    await rpRenderSchedules();
+  })));
+  host.querySelectorAll('.js-rs-del').forEach(b => b.addEventListener('click', uiBusyHandler(async () => {
+    if(!(await uiConfirm({ title: 'Delete this schedule?', confirmLabel: 'Delete', danger: true }))) return;
+    const r = await fetch(`${API}/reports/schedules/${b.dataset.id}`, { method: 'DELETE', headers: hdr });
+    if(!r.ok) return uiToast('Could not delete the schedule', 'error');
+    uiToast('Schedule deleted', 'success');
+    await rpRenderSchedules();
+  })));
 }
 
 function backToReportsIndex(){
@@ -255,6 +443,8 @@ function backToReportsIndex(){
   document.getElementById('genericReportView').style.display = 'none';
   document.getElementById('reportsIndexView').style.display = 'block';
   _reportDef = null;
+  _reportDrillBack = null;
+  rpRenderSchedules();
 }
 
 // =============================================================================
