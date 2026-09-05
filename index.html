@@ -97,6 +97,7 @@
     <div class="kpi-row" id="kpiRow"></div>
     <!-- SLA achievement row — last 30 days. On-time %, past-due, avg turnaround, avg pick time. -->
     <div class="kpi-row" id="slaRow" style="grid-template-columns:repeat(4,1fr);"></div>
+    <div id="catchupTileRow" class="ui-tiles" style="display:none;" data-perm="integrations.excalibur_keying"></div>
     <div class="grid-2">
       <div class="card">
         <div class="card-head"><div class="card-title">Order Queue</div><div style="flex:1"></div><div class="chip chip-active" style="font-size:11px;">● Live</div><div class="card-badge" style="background:var(--blue-bg);color:var(--blue);" id="orderCountBadge">0</div></div>
@@ -695,6 +696,16 @@
             <button class="btn btn-ghost" id="cliEditBtn">Edit</button>
           </div>
           <div style="padding:20px;" id="cliProfileBody"></div>
+        </div>
+        <!-- Excalibur catch-up — WMS-live clients that still have an Excalibur mapping (js/excalCatchup.js). -->
+        <div class="card" id="cliCatchupCard" style="display:none;margin-top:16px;" data-perm="integrations.excalibur_keying">
+          <div class="card-head">
+            <div class="card-title">Excalibur catch-up</div>
+            <div class="ui-hint" id="cliCatchupCount" style="margin-left:12px;"></div>
+            <div style="flex:1"></div>
+            <button class="btn btn-ghost" onclick="uiRun(this, () => loadClientCatchupCard())">Refresh</button>
+          </div>
+          <div id="cliCatchupBody"></div>
         </div>
         <!-- Hazmat panel — only shown when hazmat_enabled is true on the
              client. Fields are stored in clients.hazmat_config (JSONB). -->
@@ -1554,6 +1565,7 @@
 <script src="js/users.js"></script>
 <script src="js/portalAccess.js"></script>
 <script src="js/itemImport.js"></script>
+<script src="js/excalCatchup.js"></script>
 <script src="js/invoices.js"></script>
 <!-- Before app.js: app.js's DOMContentLoaded wiring calls pwOpenForgot /
      pwOpenResetFromUrl, and doLogin() calls pwForcedChange(). -->

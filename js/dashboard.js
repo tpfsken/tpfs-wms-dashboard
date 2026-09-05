@@ -44,6 +44,7 @@ async function loadDashboard(){
     if(!d) return;                        // keep what is on screen
     if(d.kpis)         renderKPIs(d.kpis);
     if(d.sla)          renderSLA(d.sla);
+    if(typeof loadCatchupTile === 'function') loadCatchupTile();   // Excalibur catch-up count (own request, own row)
     if(d.liveOrders)   renderQ(d.liveOrders);
     if(d.alerts)       renderAlerts(d.alerts);
     if(d.waves)        renderWaves(d.waves);

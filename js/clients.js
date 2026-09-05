@@ -213,6 +213,7 @@ function renderClientProfileTab(){
   ]);
   const goLive = document.getElementById('cliProfileBody').querySelector('.js-cli-golive');
   if(goLive) goLive.addEventListener('click', uiBusyHandler(() => cliGoLive(c)));
+  if(typeof loadClientCatchupCard === 'function') loadClientCatchupCard();   // Excalibur catch-up card (live + mapped clients only)
   const backM = document.getElementById('cliProfileBody').querySelector('.js-cli-backmirror');
   if(backM) backM.addEventListener('click', uiBusyHandler(() => cliBackToMirror(c)));
 

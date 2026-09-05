@@ -1627,3 +1627,10 @@ tr.ii-row-error td{background:var(--st-danger-bg);}
 .ii-hist-acts{display:flex;gap:4px;flex-wrap:wrap;}
 .ii-hist-acts .ui-btn{padding:2px 8px;font-size:11px;}
 .ii-client-warn{margin-bottom:12px;}
+
+/* --- Excalibur catch-up card (js/excalCatchup.js) --- */
+.ec-table td{vertical-align:top;}
+.ec-table input[type=checkbox]{width:16px;height:16px;accent-color:var(--blue);}
+.ec-drift{padding:10px 16px;}
+.ec-recent{padding:0 16px 12px;}
+.ec-recent summary{cursor:pointer;font-size:12px;color:var(--muted);margin-bottom:6px;}
