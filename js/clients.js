@@ -985,6 +985,13 @@ async function loadClientItemsTab(){
       if(typeof onItemClientChange === 'function') onItemClientChange();
     }));
   }
+  // Item Import (js/itemImport.js) — items.import
+  const impBtn = document.getElementById('cliItemsImportBtn');
+  if(impBtn && !impBtn._wired){ impBtn._wired = true; impBtn.addEventListener('click', uiBusyHandler(() => openItemImportWizard())); }
+  const tplBtn = document.getElementById('cliItemsTemplateBtn');
+  if(tplBtn && !tplBtn._wired){ tplBtn._wired = true; tplBtn.addEventListener('click', uiBusyHandler(() => downloadItemImportTemplate())); }
+  if(typeof applyPermGates === 'function') applyPermGates(document.querySelector('.cli-panel[data-tab="items"]'));
+  if(typeof loadItemImportHistory === 'function') loadItemImportHistory();
   fetchClientItems(search?.value.trim() || '');
 }
 

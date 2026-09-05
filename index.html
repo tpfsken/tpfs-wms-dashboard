@@ -714,9 +714,12 @@
             <div class="ui-hint" id="cliItemsCount"></div>
             <div style="flex:1"></div>
             <input type="text" class="ui-input" id="cliItemsSearch" placeholder="Search SKU, UPC, or name…" style="max-width:280px;">
+            <button class="ui-btn" id="cliItemsTemplateBtn" data-perm="items.import" title="Blank spreadsheet with every importable column and a documented example row">Download template</button>
+            <button class="ui-btn" id="cliItemsImportBtn" data-perm="items.import" title="Bulk item setup from a CSV or Excel file with column mapping">Import items</button>
             <button class="ui-btn ui-btn-primary" id="cliItemsAddBtn">Add item</button>
           </div>
           <div style="overflow:auto;max-height:60vh;" id="cliItemsWrap"></div>
+          <div id="cliImportHistory" class="ii-history-wrap"></div>
         </div>
       </div>
       <div class="cli-panel" data-tab="kpi" style="display:none;">
@@ -1550,6 +1553,7 @@
 <script src="js/compliance.js"></script>
 <script src="js/users.js"></script>
 <script src="js/portalAccess.js"></script>
+<script src="js/itemImport.js"></script>
 <script src="js/invoices.js"></script>
 <!-- Before app.js: app.js's DOMContentLoaded wiring calls pwOpenForgot /
      pwOpenResetFromUrl, and doLogin() calls pwForcedChange(). -->
