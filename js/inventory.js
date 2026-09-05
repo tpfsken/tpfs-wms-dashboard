@@ -445,7 +445,7 @@ function itemFormBody(){
       <div class="ui-field-err" style="display:none;"></div>
     </div>
     ${uiField({ id: 'itemCode', label: 'Base SKU code *',
-                placeholder: 'ACM-1234', hint: 'Auto-fills the level codes below. Barcodes are entered per level in the Levels table.' })}
+                placeholder: 'ACM-1234', hint: 'Auto-fills the level codes below. Barcodes live under Identifiers & pack levels.' })}
     ${uiField({ id: 'itemName', label: 'Name *', placeholder: 'e.g. Vitamin C 500mg, 60-count bottle' })}
     ${uiField({ id: 'itemDescription', label: 'Description', placeholder: 'Long-form description (optional)' })}
     <div class="ui-field">
@@ -462,6 +462,27 @@ function itemFormBody(){
       </div>
       <div id="itemHuList"></div>
       <div id="itemHuEditNote" class="ui-hint" style="display:none;margin-top:6px;"></div>
+    </div>
+
+    <div class="eo-section" id="itemIdnSection">
+      <div class="item-sec-head">
+        <div class="ui-label">Identifiers &amp; pack levels</div>
+        <span class="ui-hint">Barcodes on the sellable unit (each). The first UPC, GTIN or ASIN is the primary — labels and scans resolve to it.</span>
+        <span style="flex:1"></span>
+        <button type="button" class="ui-btn" id="itemIdnAddBtn">+ Add barcode</button>
+      </div>
+      <div id="itemIdnList" class="idn-list"></div>
+      <div class="idn-case">
+        <div class="item-sec-head">
+          <div class="ui-label">Case pack</div>
+          <span class="ui-hint">The case level above the each. Leave blank if the item is never handled by the case.</span>
+        </div>
+        <div class="idn-case-row">
+          ${uiField({ id: 'itemCaseSku', label: 'Case SKU', placeholder: 'ACM-1234-CS' })}
+          ${uiField({ id: 'itemCaseUnits', label: 'Units per case', type: 'number', placeholder: '12' })}
+          ${uiField({ id: 'itemCaseBarcode', label: 'Case barcode', placeholder: '10012345678902', hint: '14 digits is kept as a GTIN-14; anything else as a carton code.' })}
+        </div>
+      </div>
     </div>
 
     <div class="eo-section">
@@ -725,6 +746,10 @@ async function openItemFormModal(skuId){
   }
 
   _itemHandlingUnits = [];
+  _itemIdentifiers = [];
+  _itemCaseBarcode = '';
+  _itemCaseTouched = false;
+  _itemIdnLoaded = !skuId;     // create mode has nothing to load; edit mode flips this after GET
 
   if(skuId){
     // Edit mode — fetch and populate
@@ -799,6 +824,24 @@ async function openItemFormModal(skuId){
         freight_class: m.freight_class || '',
       });
     }
+    // Identifiers & pack levels — the EACH's barcodes + the CASE's one barcode.
+    // If this GET fails we must NOT save an empty list later (that would wipe
+    // every barcode), so _itemIdnLoaded gates the PUT in submitItemForm.
+    const idn = await apiGet(`/skus/${skuId}/identifiers`);
+    if(idn && Array.isArray(idn.levels)){
+      const eachLvl = idn.levels.find(l => l.id === idn.each_id) || idn.levels.find(l => l.sku_type === 'EACH') || idn.levels.find(l => l.id === skuId);
+      _itemIdentifiers = (eachLvl?.identifiers || []).map(x => ({ id: x.id, type: x.type, value: x.value, source: x.source, read_only: !!x.read_only }));
+      const caseLvl = idn.levels.find(l => l.id === idn.case_id);
+      if(caseLvl){
+        // One "case barcode": the GTIN column first, then a carton code, then a legacy upc.
+        const pick = (t, s) => (caseLvl.identifiers || []).find(x => x.type === t && (!s || s.includes(x.source)));
+        const cb = pick('gtin', ['sync', 'backfill']) || pick('carton_barcode') || pick('upc', ['sync', 'backfill']) || pick('gtin');
+        _itemCaseBarcode = cb ? cb.value : '';
+      }
+      _itemIdnLoaded = true;
+    } else {
+      uiToast('Could not load this item\'s barcodes — they will not be changed by Save', 'error');
+    }
     // Multi-handling-unit edit: + Add Level button stays visible in
     // edit mode now. Uses POST /skus/:id/handling-units to attach a
     // new level with proper parent linkage.
@@ -820,6 +863,9 @@ async function openItemFormModal(skuId){
   }
   await renderHandlingUnits();
   _wireBaseCodeAutofill();
+  renderItemIdentifiers();
+  renderCasePack();
+  _wireIdentifiersSection();
   if(!skuId) renderItemPendingDocs();
 }
 
@@ -918,6 +964,20 @@ async function submitItemForm(m){
     if(!common.unNumber || !common.hazardClass) return false;
   }
 
+  // Identifiers & pack levels payload — validated here for the obvious
+  // (half-filled case pack), by the API for the rest (check digits,
+  // duplicates). Errors from either land beside the offending input.
+  _clearIdentifierErrors(m.el);
+  const idnPayload = _identifiersPayload();
+  if(idnPayload._error){
+    uiFieldError(m.el, idnPayload._error.field, idnPayload._error.msg);
+    return false;
+  }
+  // The EACH's and CASE's barcodes are owned by the identifiers payload, so
+  // the level rows must not also PATCH/POST `upc` for them — that would clear
+  // the code a moment before the PUT writes it back.
+  const levelUpc = (hu) => (hu.sku_type === 'EACH' || hu.sku_type === 'CASE') ? undefined : ((hu.upc || '').trim() || null);
+
   try {
     let r, d;
     if(_editingItemId){
@@ -941,7 +1001,7 @@ async function submitItemForm(m){
           {
             skuCode:      hu.sku_code.trim().toUpperCase(),
             skuType:      hu.sku_type,
-            upc:          (hu.upc || '').trim() || null,
+            ...(levelUpc(hu) === undefined ? {} : { upc: levelUpc(hu) }),
             unitsPerCase: hu.pack_qty,
             lengthIn:     hu.length_in,
             widthIn:      hu.width_in,
@@ -970,7 +1030,7 @@ async function submitItemForm(m){
         const newBody = {
           sku_type:      hu.sku_type,
           sku_code:      hu.sku_code.trim().toUpperCase(),
-          upc:           (hu.upc || '').trim() || null,
+          upc:           levelUpc(hu) ?? null,
           pack_qty:      hu.pack_qty,
           length_in:     hu.length_in,
           width_in:      hu.width_in,
@@ -989,18 +1049,42 @@ async function submitItemForm(m){
           return false;
         }
         lastResp = dd;
+        if(hu.sku_type === 'CASE' && dd.inserted) hu._id = dd.inserted.id;   // the case pack PUT below finds it by family, but keep state honest
+      }
+
+      // 3) Barcodes + case pack in ONE call on the EACH (any level id works —
+      //    the API walks the family). Skipped when the GET failed on open, so
+      //    a blank list can never overwrite real barcodes.
+      if(_itemIdnLoaded){
+        const eachHu = _itemHandlingUnits.find(hu => hu.sku_type === 'EACH' && hu._id);
+        const rr = await fetch(`${API}/skus/${eachHu ? eachHu._id : _editingItemId}/identifiers`, {
+          method:'PUT', headers:{'Content-Type':'application/json', 'Authorization':`Bearer ${T}`},
+          body: JSON.stringify({ identifiers: idnPayload.identifiers, case_pack: idnPayload.case_pack }),
+        });
+        const dd = await rr.json().catch(() => ({}));
+        if(!rr.ok){
+          _showIdentifierError(m.el, dd, idnPayload);
+          uiToast(`Item saved, but the barcodes were not: ${dd.error || 'save failed'}`, 'error');
+          if(typeof loadInventory === 'function') loadInventory();
+          if(typeof refreshClientItemsIfOpen === 'function') refreshClientItemsIfOpen();
+          return false;
+        }
       }
 
       r = { ok: true };  // shape so the success branch below doesn't choke
       d = lastResp || {};
     } else {
       // CREATE MODE — POST /items handles both single-level and multi-
-      // level. Server creates parent + linked children in order.
+      // level. Server creates parent + linked children in order, then the
+      // identifiers + case pack in the same transaction — one save, and a
+      // barcode 409 leaves no half-made item behind.
       const createBody = Object.assign({}, common, {
+        identifiers: idnPayload.identifiers,
+        case_pack:   idnPayload.case_pack,
         handlingUnits: _itemHandlingUnits.map(hu => ({
           sku_type:      hu.sku_type,
           sku_code:      hu.sku_code.trim().toUpperCase(),
-          upc:           (hu.upc || '').trim() || null,
+          upc:           levelUpc(hu) ?? null,
           pack_qty:      hu.pack_qty,
           length_in:     hu.length_in,
           width_in:      hu.width_in,
@@ -1015,6 +1099,7 @@ async function submitItemForm(m){
         body: JSON.stringify(createBody),
       });
       d = await r.json();
+      if(!r.ok) _showIdentifierError(m.el, d, idnPayload);
     }
     if(!r.ok){ uiToast(d.error || 'Save failed', 'error'); return false; }
     // For multi-level create, .items[0] is the biggest level (PALLET if
@@ -1160,10 +1245,15 @@ async function renderHandlingUnits(){
           <label class="form-label" title="Number of EACH inside this level. e.g. a Case of 12 means pack qty 12 on the Case level (and 1 on the Each level).">Qty per parent <span style="color:var(--muted);font-weight:400;font-size:10px;">(qty inside)</span></label>
           <input class="form-input js-hu-pack" data-idx="${esc(i)}" type="number" min="0" step="1" value="${hu.pack_qty == null ? '' : esc(hu.pack_qty)}" placeholder="${hu.sku_type === 'EACH' ? '1' : 'e.g. 12'}">
         </div>
-        <div style="min-width:170px;">
-          <label class="form-label">Barcode <span style="color:var(--muted);font-weight:400;font-size:10px;">(UPC / EAN / GTIN)</span></label>
-          <input class="form-input ui-mono js-hu-upc" data-idx="${esc(i)}" value="${esc(hu.upc || '')}" placeholder="${hu.sku_type === 'CASE' ? 'case code' : '012345678905'}">
-        </div>
+        ${hu.sku_type === 'EACH' || hu.sku_type === 'CASE'
+          ? `<div style="min-width:170px;">
+              <label class="form-label">Barcode</label>
+              <div class="ui-hint idn-hu-note">${hu.sku_type === 'EACH' ? 'Identifiers & pack levels ↓' : 'Case pack ↓'}</div>
+            </div>`
+          : `<div style="min-width:170px;">
+              <label class="form-label">Barcode <span style="color:var(--muted);font-weight:400;font-size:10px;">(UPC / EAN / GTIN)</span></label>
+              <input class="form-input ui-mono js-hu-upc" data-idx="${esc(i)}" value="${esc(hu.upc || '')}" placeholder="012345678905">
+            </div>`}
         ${(!editing || hu._isNew) ? `<button type="button" class="btn btn-ghost js-hu-rm" data-idx="${esc(i)}" style="color:var(--red);padding:6px 10px;font-size:14px;" title="${editing ? 'Remove this new level — existing levels cannot be removed here' : 'Remove this level'}">✕</button>` : ''}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
@@ -1178,7 +1268,7 @@ async function renderHandlingUnits(){
           <span class="js-hu-density" data-idx="${esc(i)}" style="font-size:10px;color:var(--text2);text-align:center;"></span>
         </div>
       </div>
-      <div class="hu-codes">
+      ${hu.sku_type === 'EACH' ? '' : `<div class="hu-codes">
         <span class="ui-label">Other codes</span>
         ${(hu._identifiers || []).filter(x => x.source === 'manual').map(x => `<span class="ui-chip ui-chip-neutral hu-code">${esc(x.type)} · <span class="ui-mono">${esc(x.value)}</span> <button type="button" class="hu-code-rm js-hu-code-rm" data-idx="${esc(i)}" data-ident="${esc(x.id)}" aria-label="Remove">✕</button></span>`).join('')}
         ${hu._id ? `<span class="hu-code-add">
@@ -1188,7 +1278,7 @@ async function renderHandlingUnits(){
             <input class="form-input ui-mono js-hu-code-val" data-idx="${esc(i)}" placeholder="code">
             <button type="button" class="btn btn-ghost js-hu-code-add" data-idx="${esc(i)}">+ Add</button>
           </span>` : '<span class="ui-hint">Save the item to add other codes to this level</span>'}
-      </div>
+      </div>`}
     </div>
   `).join('');
 
@@ -1225,6 +1315,7 @@ async function renderHandlingUnits(){
     const i = +e.target.dataset.idx;
     _itemHandlingUnits[i].sku_code = e.target.value;
     _itemHandlingUnits[i]._autoSync = false;
+    if(_itemHandlingUnits[i].sku_type === 'CASE') renderCasePack();   // the Case pack block mirrors the CASE row
   }));
   wrap.querySelectorAll('.js-hu-upc').forEach(inp => inp.addEventListener('input', e => {
     _itemHandlingUnits[+e.target.dataset.idx].upc = e.target.value.trim();
@@ -1253,7 +1344,9 @@ async function renderHandlingUnits(){
   })));
   wrap.querySelectorAll('.js-hu-pack').forEach(inp => inp.addEventListener('input', e => {
     const v = e.target.value.trim();
-    _itemHandlingUnits[+e.target.dataset.idx].pack_qty = v === '' ? null : Number(v);
+    const hu = _itemHandlingUnits[+e.target.dataset.idx];
+    hu.pack_qty = v === '' ? null : Number(v);
+    if(hu.sku_type === 'CASE') renderCasePack();
   }));
   const dimWire = (cls, field) => wrap.querySelectorAll(cls).forEach(inp => inp.addEventListener('input', e => {
     const v = e.target.value.trim();
@@ -1288,8 +1381,10 @@ async function renderHandlingUnits(){
     if(_itemHandlingUnits.length <= 1){
       return uiToast('An item needs at least one handling unit', 'error');
     }
-    _itemHandlingUnits.splice(+btn.dataset.idx, 1);
+    const [removed] = _itemHandlingUnits.splice(+btn.dataset.idx, 1);
+    if(removed && removed.sku_type === 'CASE'){ _itemCaseBarcode = ''; _itemCaseTouched = true; }
     renderHandlingUnits();
+    renderCasePack();
   })));
 
   // Initial density readouts
@@ -1336,6 +1431,239 @@ function _wireBaseCodeAutofill(){
       }
     }
     if(mutated) renderHandlingUnits();
+  });
+}
+
+// =============================================================================
+// IDENTIFIERS & PACK LEVELS — the EACH's barcodes and the CASE pack, saved
+// through PUT /skus/:id/identifiers (edit) or inside POST /items (create).
+// =============================================================================
+// Rows in _itemIdentifiers: { id?, type, value, source, read_only }. Synced
+// rows the API marks read_only (the SKU code itself) are shown with a tag and
+// cannot be edited or removed here; a synced UPC / GTIN / ASIN IS editable —
+// it is the item's primary code and the API keeps the column in step.
+let _itemIdentifiers = [];
+let _itemCaseBarcode = '';      // the CASE level's one barcode (GTIN-14 or carton code)
+let _itemCaseTouched = false;   // the user typed in the Case pack block this open
+let _itemIdnLoaded   = false;   // GET succeeded (edit) or create mode — gates the PUT
+
+const IDN_TYPE_OPTIONS = [
+  { value: 'upc',              label: 'UPC' },
+  { value: 'gtin',             label: 'GTIN / EAN' },
+  { value: 'asin',             label: 'ASIN' },
+  { value: 'customer_sku',     label: 'Customer SKU' },
+  { value: 'carton_barcode',   label: 'Carton barcode' },
+  { value: 'alias',            label: 'Alias' },
+  { value: 'customer_barcode', label: 'Customer barcode' },
+  { value: 'internal_sku',     label: 'SKU code' },
+];
+const IDN_PRIMARY_TYPES = ['upc', 'gtin', 'asin'];
+const idnTypeLabel = (t) => (IDN_TYPE_OPTIONS.find(o => o.value === t) || { label: t }).label;
+
+function _caseHu(){ return _itemHandlingUnits.find(h => h.sku_type === 'CASE'); }
+
+function renderItemIdentifiers(){
+  const list = document.getElementById('itemIdnList');
+  if(!list) return;
+  const seenPrimary = new Set();
+  const rows = _itemIdentifiers.map((x, i) => {
+    const primary = IDN_PRIMARY_TYPES.includes(x.type) && !seenPrimary.has(x.type) && (x.value || '').trim();
+    if(primary) seenPrimary.add(x.type);
+    const ro = !!x.read_only;
+    return `<div class="idn-row${ro ? ' idn-ro' : ''}" data-field="idn_${esc(i)}">
+      <select class="ui-input js-idn-type" data-idx="${esc(i)}"${ro ? ' disabled' : ''}>
+        ${IDN_TYPE_OPTIONS.filter(o => o.value !== 'internal_sku' || x.type === 'internal_sku')
+          .map(o => `<option value="${esc(o.value)}"${o.value === x.type ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}
+      </select>
+      <input class="ui-input ui-mono js-idn-val" data-idx="${esc(i)}" value="${esc(x.value || '')}" placeholder="scan or type the code"${ro ? ' disabled' : ''}>
+      <span class="idn-tags">${ro || (x.source && x.source !== 'manual' && !IDN_PRIMARY_TYPES.includes(x.type)) ? '<span class="idn-tag">synced</span>' : ''}${primary ? '<span class="idn-tag idn-tag-primary">primary</span>' : ''}</span>
+      ${ro ? '<span></span>' : `<button type="button" class="idn-rm js-idn-rm" data-idx="${esc(i)}" aria-label="Remove barcode" title="Remove">✕</button>`}
+      <div class="ui-field-err" style="display:none;"></div>
+    </div>`;
+  });
+  list.innerHTML = rows.join('') || '<div class="idn-empty">No barcodes yet — add the UPC / EAN the label carries.</div>';
+
+  list.querySelectorAll('.js-idn-type').forEach(sel => sel.addEventListener('change', e => {
+    _itemIdentifiers[+e.target.dataset.idx].type = e.target.value;
+    renderItemIdentifiers();                      // the primary tag may move
+  }));
+  // Never rebuild the list from inside input/blur: replacing the focused
+  // node mid-event throws in Chrome and steals focus from the next field.
+  // Only the primary tags can change while typing, so refresh those in place.
+  list.querySelectorAll('.js-idn-val').forEach(inp => inp.addEventListener('input', e => {
+    _itemIdentifiers[+e.target.dataset.idx].value = e.target.value;
+    _refreshIdnTags();
+  }));
+  list.querySelectorAll('.js-idn-val').forEach(inp => inp.addEventListener('blur', e => {
+    e.target.value = e.target.value.trim();
+    _itemIdentifiers[+e.target.dataset.idx].value = e.target.value;
+    _refreshIdnTags();
+  }));
+  list.querySelectorAll('.js-idn-rm').forEach(b => b.addEventListener('click', uiBusyHandler(() => {
+    _itemIdentifiers.splice(+b.dataset.idx, 1);
+    renderItemIdentifiers();
+  })));
+}
+
+function _refreshIdnTags(){
+  const seen = new Set();
+  _itemIdentifiers.forEach((x, i) => {
+    const primary = IDN_PRIMARY_TYPES.includes(x.type) && !seen.has(x.type) && (x.value || '').trim();
+    if(primary) seen.add(x.type);
+    const tags = document.querySelector(`#itemIdnList .idn-row[data-field="idn_${i}"] .idn-tags`);
+    if(!tags) return;
+    const synced = x.read_only || (x.source && x.source !== 'manual' && !IDN_PRIMARY_TYPES.includes(x.type));
+    tags.innerHTML = `${synced ? '<span class="idn-tag">synced</span>' : ''}${primary ? '<span class="idn-tag idn-tag-primary">primary</span>' : ''}`;
+  });
+}
+
+function _wireIdentifiersSection(){
+  const add = document.getElementById('itemIdnAddBtn');
+  if(add && !add._wired){
+    add._wired = true;
+    add.addEventListener('click', uiBusyHandler(() => {
+      // Default to the first type not yet present: UPC, then GTIN, then customer SKU.
+      const used = new Set(_itemIdentifiers.map(x => x.type));
+      const type = ['upc', 'gtin', 'customer_sku', 'asin', 'carton_barcode'].find(t => !used.has(t)) || 'alias';
+      _itemIdentifiers.push({ type, value: '', source: 'manual', read_only: false });
+      renderItemIdentifiers();
+      const inputs = document.querySelectorAll('#itemIdnList .js-idn-val:not([disabled])');
+      if(inputs.length) inputs[inputs.length - 1].focus();
+    }));
+  }
+  for(const id of ['itemCaseSku', 'itemCaseUnits', 'itemCaseBarcode']){
+    const el = document.getElementById(id);
+    if(el && !el._wired){ el._wired = true; el.addEventListener('input', onCasePackInput); }
+  }
+}
+
+// Case pack block <-> the CASE row in the Handling units list are ONE thing:
+// typing in either updates the same _itemHandlingUnits entry.
+function renderCasePack(){
+  const skuEl = document.getElementById('itemCaseSku');
+  if(!skuEl) return;
+  const hu = _caseHu();
+  const set = (id, v) => { const el = document.getElementById(id); if(el && document.activeElement !== el) el.value = v; };
+  set('itemCaseSku', hu ? (hu.sku_code || '') : '');
+  set('itemCaseUnits', hu && hu.pack_qty != null ? String(hu.pack_qty) : '');
+  set('itemCaseBarcode', _itemCaseBarcode || '');
+}
+
+function onCasePackInput(){
+  _itemCaseTouched = true;
+  const code  = document.getElementById('itemCaseSku').value.trim();
+  const units = document.getElementById('itemCaseUnits').value.trim();
+  _itemCaseBarcode = document.getElementById('itemCaseBarcode').value.trim();
+  let hu = _caseHu();
+  if(!hu){
+    if(!code && !units && !_itemCaseBarcode) return;
+    hu = {
+      sku_type: 'CASE', sku_code: '', pack_qty: null,
+      _isNew: !!_editingItemId, _autoSync: false, _fromCasePack: true,
+      length_in: null, width_in: null, height_in: null, weight_lbs: null, nmfc_code: '', freight_class: '',
+    };
+    _itemHandlingUnits.push(hu);
+    hu.sku_code = code; hu.pack_qty = units === '' ? null : Number(units);
+    renderHandlingUnits();                          // a new row appears in the Handling units list
+    return;
+  }
+  if(hu._fromCasePack && !hu._id && !code && !units && !_itemCaseBarcode){
+    // The block created this row and the user emptied it again — take the row back out.
+    _itemHandlingUnits.splice(_itemHandlingUnits.indexOf(hu), 1);
+    renderHandlingUnits();
+    return;
+  }
+  hu.sku_code = code; hu._autoSync = false; hu.pack_qty = units === '' ? null : Number(units);
+  // Mirror into the CASE row's inputs without re-rendering the whole list mid-keystroke.
+  const i = _itemHandlingUnits.indexOf(hu);
+  const codeInp = document.querySelector(`#itemHuList .js-hu-code[data-idx="${i}"]`);
+  const packInp = document.querySelector(`#itemHuList .js-hu-pack[data-idx="${i}"]`);
+  if(codeInp) codeInp.value = code;
+  if(packInp) packInp.value = hu.pack_qty == null ? '' : String(hu.pack_qty);
+}
+
+/** The PUT / POST payload, or { _error: { field, msg } } for a half-filled case pack. */
+function _identifiersPayload(){
+  const identifiers = _itemIdentifiers
+    .filter(x => !x.read_only)
+    .map(x => ({ type: x.type, value: (x.value || '').trim() }))
+    .filter(x => x.value);
+  const hu = _caseHu();
+  const code  = hu ? (hu.sku_code || '').trim().toUpperCase() : '';
+  const units = hu && hu.pack_qty != null && hu.pack_qty !== '' ? Number(hu.pack_qty) : null;
+  let case_pack = null;
+  // A pre-existing CASE the user never touched and that is missing a code or
+  // quantity (legacy data) is left alone rather than blocking the whole save.
+  if(hu && hu._id && !_itemCaseTouched && (!code || !units)) return { identifiers, case_pack: null };
+  if(hu || _itemCaseBarcode){
+    if(!code)  return { _error: { field: 'itemCaseSku',   msg: 'Case SKU code is required for the case pack' } };
+    if(!units || !Number.isInteger(units) || units < 1) return { _error: { field: 'itemCaseUnits', msg: 'Units per case must be a whole number of 1 or more' } };
+    case_pack = { case_sku_code: code, units_per_case: units };
+    // Only rewrite the case barcode when the user actually touched the block
+    // (or on create): an untouched block must never clear a code we could not
+    // show (e.g. a case that carries both a GTIN and a legacy UPC).
+    if(_itemCaseTouched || !_editingItemId) case_pack.case_barcode = _itemCaseBarcode || '';
+  }
+  return { identifiers, case_pack };
+}
+
+function _clearIdentifierErrors(scopeEl){
+  for(const id of ['itemCaseSku', 'itemCaseUnits', 'itemCaseBarcode']) uiFieldError(scopeEl, id, '');
+  scopeEl.querySelectorAll('#itemIdnList .ui-field-err').forEach(f => { f.textContent = ''; f.style.display = 'none'; });
+}
+
+/** Pin an API 400/409 to the row or case-pack field it names. */
+function _showIdentifierError(scopeEl, resp, payload){
+  const c = resp?.conflict || {};
+  const field = c.field || resp?.field || null;
+  const index = c.index != null ? c.index : (resp?.index != null ? resp.index : null);
+  const msg = resp?.error || 'Not saved';
+  const caseField = { case_barcode: 'itemCaseBarcode', case_sku_code: 'itemCaseSku', units_per_case: 'itemCaseUnits' }[field];
+  if(caseField){ uiFieldError(scopeEl, caseField, msg); _scrollFieldIntoView(scopeEl, caseField); return; }
+  // Payload index -> row: the payload is the editable, non-blank rows in order.
+  let rowIdx = null;
+  if(index != null){
+    const editable = _itemIdentifiers.map((x, i) => ({ x, i })).filter(({ x }) => !x.read_only && (x.value || '').trim());
+    if(editable[index]) rowIdx = editable[index].i;
+  }
+  if(rowIdx == null && c.value){
+    const hit = _itemIdentifiers.findIndex(x => (x.value || '').trim() === String(c.value).trim());
+    if(hit >= 0) rowIdx = hit;
+  }
+  if(rowIdx != null){ uiFieldError(scopeEl, `idn_${rowIdx}`, msg); _scrollFieldIntoView(scopeEl, `idn_${rowIdx}`); }
+}
+function _scrollFieldIntoView(scopeEl, id){
+  const el = scopeEl.querySelector(`[data-field="${CSS.escape(id)}"]`);
+  if(el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+// Read-only card on the inventory detail modal: every level of the family,
+// biggest first, with its barcodes.
+async function renderIdentifiersCard(skuId, hostId){
+  const host = document.getElementById(hostId);
+  if(!host) return;
+  const d = await apiGet(`/skus/${skuId}/identifiers`);
+  if(!d || !Array.isArray(d.levels)){ host.innerHTML = uiError('Could not load barcodes for this item'); return; }
+  const codes = (l) => {
+    const list = (l.identifiers || []).filter(x => x.type !== 'internal_sku');   // the SKU code is already its own column
+    if(!list.length) return '<span class="ui-muted">—</span>';
+    return `<div class="idn-codes">${list.map(x =>
+      `<span class="idn-code"><span class="idn-type">${esc(idnTypeLabel(x.type))}</span><span class="ui-mono">${esc(x.value)}</span>${x.source && x.source !== 'manual' ? '<span class="idn-tag">synced</span>' : ''}</span>`).join('')}</div>`;
+  };
+  const pack = (l) => {
+    const n = l.units_per_case ?? l.conversion_factor;
+    if(l.sku_type === 'EACH') return uiNum(1);
+    return n != null && Number(n) > 0 ? `<span class="ui-num">× ${esc(n)}</span>` : '<span class="ui-muted">—</span>';
+  };
+  uiTable(host, {
+    columns: [
+      { key: 'sku_type', label: 'Level', render: l => `<span class="idn-level">${esc(l.sku_type || '')}</span>${l.id === skuId ? ' <span class="idn-tag">this LP</span>' : ''}` },
+      { key: 'sku_code', label: 'SKU code', mono: true },
+      { key: '_pack', label: 'Pack', num: true, render: pack },
+      { key: '_codes', label: 'Barcodes', render: codes },
+    ],
+    rows: d.levels, rowKey: 'id',
+    empty: 'No levels found for this item.',
   });
 }
 
@@ -2019,6 +2347,16 @@ async function openInventoryDetail(invId, opts = {}){
       </div>
     </div>`;
 
+  // ---- Identifiers & pack levels (every level of the family, biggest first) ----
+  const idnCard = inv.sku_id ? `
+    <div class="card inv-sec">
+      <div class="card-head">
+        <div class="card-title">Identifiers &amp; pack levels</div>
+        <div class="ui-hint" style="margin-left:8px;">barcodes on each handling level</div>
+      </div>
+      <div id="invIdnWrap">${uiSpinner('Loading…')}</div>
+    </div>` : '';
+
   // ---- Lot ----
   const lot = inv.lot_id ? `
     <div class="card inv-sec">
@@ -2098,7 +2436,8 @@ async function openInventoryDetail(invId, opts = {}){
       <div id="invAllocWrap"></div>
     </div>` : '';
 
-  body.innerHTML = header + item + lot + coaSection + family + inbound + alloc;
+  body.innerHTML = header + item + idnCard + lot + coaSection + family + inbound + alloc;
+  if(inv.sku_id) renderIdentifiersCard(inv.sku_id, 'invIdnWrap');
   // Units on this LP — every UID with status, lot, order and last event; click a unit for its history.
   if(inv.lp_id && typeof lpUnitsSection === 'function') lpUnitsSection(inv.lp_id, body, { highlight: opts.highlightUid || null });
 
