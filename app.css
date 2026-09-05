@@ -1507,3 +1507,9 @@ body.floor-mode .fs-gross-input{font-size:var(--fl-base);min-height:48px;}
 .rep-hint{flex-basis:100%;}
 .rep-drill{padding:2px 8px;font-size:var(--fs-body);}
 .rep-portal-chip{margin-left:var(--sp-2);vertical-align:middle;}
+
+/* --- Excalibur replay mirror (js/migration.js mmLoad, js/clients.js cliSorCell) --- */
+.mg-mirror{margin-top:var(--sp-4);}
+.mg-mirror-enabled{white-space:nowrap;align-self:center;}
+.mg-mirror-interval{width:80px;text-align:right;}
+.cli-sor-btn{margin-left:var(--sp-2);}

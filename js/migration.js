@@ -21,10 +21,140 @@ async function mgMount(){
     <div class="mg-status" id="mgStatus"></div>
     <div id="mgRuns"></div>
     <div id="mgReport"></div>
-    <div id="mgReconcile"></div>`;
+    <div id="mgReconcile"></div>
+    <div class="ui-group mg-mirror">
+      <div class="sp-editor-head">
+        <div class="ui-dialog-title">Mirror — replay of Excalibur's posted transactions</div>
+        <div class="sp-toolbar-actions">
+          <label class="ui-check mg-mirror-enabled"><input type="checkbox" class="js-mm-enabled"> Every</label>
+          <input class="ui-input mg-mirror-interval js-mm-interval" type="number" min="5" max="1440" step="5" title="minutes"> <span class="ui-muted">min</span>
+          <button type="button" class="ui-btn js-mm-save">Save</button>
+          <button type="button" class="ui-btn ui-btn-primary js-mm-sync">Sync now</button>
+        </div>
+      </div>
+      <div class="ui-group-body">
+        <div class="ui-hint">For every client whose system of record is Excalibur: posted receipts are received here, posted shipments are allocated, picked and shipped with the exact sublines (lot / UID), adjustments applied — all tagged excalibur_replay. An order the floor already shipped is compared, never repeated, and recorded as a match or a mismatch. After each cycle the client is reconciled against the piece feed: zero drift means the WMS handled every event. Live clients are skipped.</div>
+        <div class="mg-status" id="mmStatus"></div>
+        <div id="mmClients"></div>
+        <div class="ui-label">Recent cycles</div>
+        <div id="mmRuns"></div>
+      </div>
+    </div>`;
   host.querySelector('.js-mg-test').addEventListener('click', uiBusyHandler(mgTest));
   host.querySelector('.js-mg-run').addEventListener('click', uiBusyHandler(mgRun));
+  host.querySelector('.js-mm-save').addEventListener('click', uiBusyHandler(mmSaveConfig));
+  host.querySelector('.js-mm-sync').addEventListener('click', uiBusyHandler(mmSyncNow));
   await mgLoadRuns();
+  await mmLoad();
+}
+
+// ---- Mirror (replay) — migration 091 / 092 ------------------------------------------------------------
+const MM_RAG = { green: ['ACTIVE', 'IN SYNC'], amber: ['DRAFT', 'DRIFT'], red: ['FAILED', 'REVIEW'], live: ['POSTED', 'LIVE'] };
+function mmStatus(msg, tone){
+  const el = document.getElementById('mmStatus');
+  if(el) el.innerHTML = msg ? `<div class="ui-banner ui-banner-${tone || 'info'}">${esc(msg)}</div>` : '';
+}
+async function mmLoad(){
+  const host = document.getElementById('mmClients');
+  if(!host) return;
+  const d = await apiGet('/migration/excalibur/mirror');
+  if(!d){ host.innerHTML = uiError('Could not load the mirror status'); return; }
+  const en = document.querySelector('.js-mm-enabled'), iv = document.querySelector('.js-mm-interval');
+  if(en) en.checked = !!d.config.enabled;
+  if(iv) iv.value = d.config.intervalMinutes;
+  const cfg = d.config;
+  mmStatus(!cfg.cursor ? 'No replay cursor yet — run the baseline (scripts/baseline-apply.js) to record it.'
+    : cfg.lastRunAt ? `Cursor ${fmtTimeShort(cfg.cursor)} · last cycle ${fmtTimeShort(cfg.lastRunAt)} — ${cfg.lastStatus || ''}${cfg.lastError ? ': ' + cfg.lastError : ''}${cfg.enabled && cfg.nextRunAt ? ` · next ${fmtTimeShort(cfg.nextRunAt)}` : ' · schedule off'}`
+    : `Cursor ${fmtTimeShort(cfg.cursor)} · no cycle yet — Sync now, or enable the schedule.`, cfg.lastStatus === 'failed' ? 'danger' : 'info');
+  const rows = d.clients || [];
+  const cyc = (c) => { const l = c.lastCycle; if(!l) return '<span class="ui-muted">never</span>'; const parts = [l.docs.Receipt && `${l.docs.Receipt} rcpt`, l.docs.Shipment && `${l.docs.Shipment} ship`, l.docs.Adjustment && `${l.docs.Adjustment} adj`].filter(Boolean); return esc(parts.join(' · ') || 'no documents'); };
+  uiTable(host, {
+    columns: [
+      { key: '_rag', label: '', render: c => uiChip(MM_RAG[c.rag][0], MM_RAG[c.rag][1]) },
+      { key: 'code', label: 'Client', mono: true, render: c => `${uiId(c.code)} <span class="ui-muted">${esc(c.name)}</span> <span class="ui-muted">· Excalibur ${esc(c.excaliburCode)}</span>` },
+      { key: '_sor', label: 'System of record', render: c => c.systemOfRecord === 'wms' ? `WMS${c.wentLiveAt ? ` <span class="ui-muted">since ${esc(fmtTimeShort(c.wentLiveAt))}${c.wentLiveBy ? ' by ' + esc(c.wentLiveBy) : ''}</span>` : ''}` : 'Excalibur (mirror)' },
+      { key: '_last', label: 'Last cycle', render: c => c.lastCycleAt ? `${uiId(fmtTimeShort(c.lastCycleAt))} <span class="ui-muted">${cyc(c)}</span>` : '<span class="ui-muted">never</span>' },
+      { key: '_floor', label: 'Floor vs Excalibur', render: c => c.systemOfRecord === 'wms' ? '' : `<span class="ui-muted">${esc(c.totals.replayed)} replayed</span> · ${esc(c.totals.matched)} match${c.totals.mismatched ? ` · <span class="ui-err-text">${esc(c.totals.mismatched)} mismatch</span>` : ''}${c.totals.failed ? ` · <span class="ui-err-text">${esc(c.totals.failed)} failed</span>` : ''}` },
+      { key: '_drift', label: 'Drift', render: c => c.differences == null ? '<span class="ui-muted">—</span>' : (c.differences - (c.fractional || 0) > 0 ? `<span class="ui-err-text">${esc(c.differences)} line(s)</span> <span class="ui-muted">${esc(c.excaliburQty)} / ${esc(c.wmsQty)}</span>` : `<span class="ui-muted">0${c.fractional ? ` (+${esc(c.fractional)} fractional)` : ''} · ${esc(c.excaliburQty)}</span>`) },
+      { key: '_act', label: '', render: c => `<button type="button" class="ui-btn js-mm-docs" data-id="${esc(c.clientId)}" data-code="${esc(c.code)}">Documents</button> <button type="button" class="ui-btn js-mm-rec" data-id="${esc(c.clientId)}" data-code="${esc(c.code)}">Reconcile</button> ${c.systemOfRecord === 'excalibur' ? `<button type="button" class="ui-btn ui-btn-primary js-mm-golive" data-id="${esc(c.clientId)}" data-code="${esc(c.code)}">Go live</button>` : ''}` },
+    ],
+    rows, rowKey: 'clientId', empty: 'No clients are mapped to Excalibur yet — run a preview and map them above.',
+  });
+  host.querySelectorAll('.js-mm-docs').forEach(b => b.addEventListener('click', uiBusyHandler(() => mmDocs(b.dataset.id, b.dataset.code))));
+  host.querySelectorAll('.js-mm-rec').forEach(b => b.addEventListener('click', uiBusyHandler(() => mmReconcile(b.dataset.id, b.dataset.code))));
+  host.querySelectorAll('.js-mm-golive').forEach(b => b.addEventListener('click', uiBusyHandler(() => mmGoLive(b.dataset.id, b.dataset.code))));
+  uiTable(document.getElementById('mmRuns'), {
+    columns: [
+      { key: 'startedAt', label: 'Started', render: r => uiId(fmtTimeShort(r.startedAt)) },
+      { key: 'trigger', label: 'Trigger' },
+      { key: 'status', label: 'Status', render: r => uiChip(r.status === 'done' ? 'POSTED' : r.status === 'failed' ? 'FAILED' : 'RUNNING', r.status.toUpperCase()) },
+      { key: '_docs', label: 'Documents', render: r => esc(`${r.docs.Receipt || 0} rcpt · ${r.docs.Shipment || 0} ship · ${r.docs.Adjustment || 0} adj`) },
+      { key: '_out', label: 'Outcomes', render: r => esc(`${r.outcomes.replayed || 0} replayed · ${r.outcomes.matched || 0} match · ${r.outcomes.mismatched || 0} mismatch · ${r.outcomes.failed || 0} failed`) },
+      { key: '_cursor', label: 'Cursor', render: r => esc(`${r.cursorFrom ? fmtTimeShort(r.cursorFrom) : '—'} → ${r.cursorTo ? fmtTimeShort(r.cursorTo) : '—'}`) },
+      { key: 'skippedLive', label: 'Live (skipped)', num: true },
+      { key: 'error', label: 'Error', render: r => esc(r.error || '') },
+    ], rows: d.runs || [], rowKey: 'id', empty: 'No cycles yet.',
+  });
+}
+async function mmSaveConfig(){
+  const en = document.querySelector('.js-mm-enabled').checked, iv = Number(document.querySelector('.js-mm-interval').value);
+  const r = await fetch(`${API}/migration/excalibur/mirror/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ intervalMinutes: iv, enabled: en }) });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok) return uiToast(d.error || 'Could not save', 'error');
+  uiToast(en ? `Replay every ${d.intervalMinutes} min — next ${fmtTimeShort(d.nextRunAt)}` : 'Scheduled replay off', 'success');
+  await mmLoad();
+}
+async function mmSyncNow(){
+  mmStatus('Replaying Excalibur\'s posted transactions…');
+  const r = await fetch(`${API}/migration/excalibur/mirror/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: '{}' });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ mmStatus(d.error || 'Sync failed', 'danger'); uiToast(d.error || 'Sync failed', 'error'); return; }
+  const o = d.counts.outcomes || {};
+  uiToast(`Cycle ${d.status}: ${o.replayed || 0} replayed · ${o.matched || 0} match · ${o.mismatched || 0} mismatch · ${o.failed || 0} failed`, d.status === 'done' && !o.failed ? 'success' : 'error');
+  await mmLoad();
+}
+async function mmDocs(clientId, code){
+  const d = await apiGet(`/migration/excalibur/mirror/docs?clientId=${encodeURIComponent(clientId)}`);
+  const rows = d?.rows || [];
+  const m = uiModal({ title: `${code} — replayed documents (${rows.length})`, width: 1040, body: '<div id="mmDocTable"></div>' });
+  const diffs = (r) => { const ds = (r.detail && r.detail.differences) || []; if(!ds.length) return r.error ? `<span class="ui-err-text">${esc(r.error)}</span>` : (r.detail && r.detail.floor ? esc(r.detail.floor) : ''); return ds.map(x => `<div class="ui-err-text">${esc(x.sku)}${x.lot ? ' lot ' + esc(x.lot) : ''}${x.uid ? ' uid ' + esc(x.uid) : ''}: Excalibur ${esc(x.excalibur)} / WMS ${esc(x.wms)}</div>`).join(''); };
+  uiTable(m.el.querySelector('#mmDocTable'), {
+    columns: [
+      { key: 'doc_datetime', label: 'Posted', render: r => uiId(fmtTimeShort(r.doc_datetime)) },
+      { key: 'document_type', label: 'Type' }, { key: 'document', label: 'Document', mono: true },
+      { key: 'outcome', label: 'Outcome', render: r => uiChip(r.outcome === 'replayed' ? 'ACTIVE' : r.outcome === 'matched' ? 'POSTED' : r.outcome === 'skipped' ? 'DRAFT' : 'FAILED', r.outcome.toUpperCase()) },
+      { key: 'header_reference', label: 'Reference', mono: true }, { key: 'consign_name', label: 'Ship to / supplier' },
+      { key: '_wms', label: 'WMS', render: r => r.order_number ? uiId(r.order_number) : r.po_number ? uiId(r.po_number) : '' },
+      { key: '_lines', label: 'Lines', num: true, render: r => esc(`${r.line_count} / ${r.subline_count}`) },
+      { key: '_diff', label: 'Differences / detail', render: diffs },
+    ], rows, rowKey: 'id', empty: 'No documents replayed for this client yet.',
+  });
+}
+function mmDriftModal(code, drift, error){
+  const m = uiModal({ title: `${code} — Excalibur vs WMS`, width: 820, body: `${error ? `<div class="ui-banner ui-banner-danger">${esc(error)}</div>` : ''}<div class="ui-hint">Excalibur ${esc(drift.excaliburQty)} · WMS ${esc(drift.wmsQty)} · ${esc(drift.differences)} line(s) differ${drift.fractional ? ` · ${esc(drift.fractional)} fractional piece(s)` : ''}${drift.mismatches ? ` · ${esc(drift.mismatches)} mismatched document(s)` : ''}</div><div id="mmDriftTable"></div>` });
+  uiTable(m.el.querySelector('#mmDriftTable'), {
+    columns: [
+      { key: 'item', label: 'Item', mono: true }, { key: 'lot', label: 'Lot / carton', mono: true },
+      { key: 'excalibur', label: 'Excalibur', num: true }, { key: 'wms', label: 'WMS', num: true },
+      { key: 'diff', label: 'Diff', num: true, render: r => r.diff === 0 ? '<span class="ui-muted">0</span>' : `<span class="ui-err-text">${esc(r.diff)}</span>` },
+    ], rows: (drift.rows || []).filter(r => r.diff !== 0).concat((drift.rows || []).filter(r => r.diff === 0)), rowKey: 'item', empty: 'Nothing on hand on either side.',
+  });
+}
+async function mmReconcile(clientId, code){
+  const r = await fetch(`${API}/migration/excalibur/mirror/clients/${clientId}/reconcile`, { headers: { Authorization: `Bearer ${T}` } });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok) return uiToast(d.error || 'Reconcile failed', 'error');
+  mmDriftModal(code, d, null);
+}
+async function mmGoLive(clientId, code){
+  const go = await uiConfirm({ title: `Go live: ${code}?`, body: esc('Runs a final reconcile against Excalibur. Refused while any line differs; on success the WMS becomes the system of record and the replay stops for this client.'), confirmLabel: 'Go live' });
+  if(!go) return;
+  const r = await fetch(`${API}/clients/${clientId}/go-live`, { method: 'POST', headers: { Authorization: `Bearer ${T}` } });
+  const d = await r.json().catch(() => ({}));
+  if(r.status === 409 && d.drift){ uiToast(d.error || 'Go live refused', 'error'); mmDriftModal(code, d.drift, d.error); return; }
+  if(!r.ok) return uiToast(d.error || 'Go live failed', 'error');
+  uiToast(`${code} is live — the WMS is the system of record`, 'success');
+  await mmLoad();
 }
 
 function mgStatus(msg, tone){

@@ -207,7 +207,12 @@ function renderClientProfileTab(){
     { k: 'Onboarded', v: c.onboarded_at
         ? uiId(new Date(c.onboarded_at).toLocaleDateString()) : '<span class="ui-muted">—</span>' },
     { k: 'Status', v: cliStatusChip(c) + (c.status_note ? ` <span class="ui-muted">${esc(c.status_note)}</span>` : '') + (cliStatusOf(c) === 'offboarded' ? ' <span class="ui-hint">Offboarded clients are read-only until reactivated.</span>' : '') },
+    { k: 'System of record', v: cliSorCell(c) },
   ]);
+  const goLive = document.getElementById('cliProfileBody').querySelector('.js-cli-golive');
+  if(goLive) goLive.addEventListener('click', uiBusyHandler(() => cliGoLive(c)));
+  const backM = document.getElementById('cliProfileBody').querySelector('.js-cli-backmirror');
+  if(backM) backM.addEventListener('click', uiBusyHandler(() => cliBackToMirror(c)));
 
   // Hazmat panel — only the emergency contact + notes live at client level;
   // per-item hazmat (UN #, class, packing group) is on the SKU.
@@ -231,6 +236,37 @@ function renderClientProfileTab(){
     editBtn._wired = true;
     editBtn.addEventListener('click', () => openClientFormModal(_currentClient));
   }
+}
+
+// System of record (Excalibur replay mirror, migration 091): a mirror client follows Excalibur's
+// posted transactions until "Go live"; the switch runs a final reconcile and refuses on drift.
+function cliSorCell(c){
+  const mirror = (c.system_of_record || 'wms') === 'excalibur';
+  const chip = mirror ? uiChip('DRAFT', 'EXCALIBUR — MIRROR') : uiChip('ACTIVE', 'WMS — LIVE');
+  const when = !mirror && c.went_live_at ? ` <span class="ui-muted">live since ${esc(fmtTimeShort(c.went_live_at))}</span>` : '';
+  const btn = mirror
+    ? '<button type="button" class="ui-btn ui-btn-primary cli-sor-btn js-cli-golive">Go live</button> <span class="ui-hint">Excalibur is the system of record; its posted receipts, shipments and adjustments are replayed here. Go live runs a final reconcile and refuses while anything differs.</span>'
+    : (c.went_live_at ? '<button type="button" class="ui-btn cli-sor-btn js-cli-backmirror">Back to mirror</button>' : '');
+  return `${chip}${when} ${btn}`;
+}
+async function cliGoLive(c){
+  const go = await uiConfirm({ title: `Go live: ${c.code}?`, body: esc('Runs a final reconcile against Excalibur. If Excalibur and the WMS differ on any line the switch is refused and the lines are shown. On success the WMS becomes the system of record and the replay stops for this client.'), confirmLabel: 'Go live' });
+  if(!go) return;
+  const r = await fetch(`${API}/clients/${c.id}/go-live`, { method: 'POST', headers: { Authorization: `Bearer ${T}` } });
+  const d = await r.json().catch(() => ({}));
+  if(r.status === 409 && d.drift){ uiToast(d.error || 'Go live refused', 'error'); mmDriftModal(c.code, d.drift, d.error); return; }
+  if(!r.ok) return uiToast(d.error || 'Go live failed', 'error');
+  uiToast(`${c.code} is live — the WMS is the system of record`, 'success');
+  await openClientDetail(c.id);
+}
+async function cliBackToMirror(c){
+  const reason = await uiPrompt({ title: `Back to mirror: ${c.code}?`, body: esc('Excalibur becomes the system of record again and the next cycle replays whatever it posted meanwhile. Use this only if the cutover is being rolled back.'), label: 'Reason', placeholder: 'why', confirmLabel: 'Back to mirror', danger: true });
+  if(reason === null || reason === false) return;
+  const r = await fetch(`${API}/clients/${c.id}/back-to-mirror`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ reason }) });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok) return uiToast(d.error || 'Could not switch back', 'error');
+  uiToast(`${c.code} is mirroring Excalibur again`, 'success');
+  await openClientDetail(c.id);
 }
 
 // Reactivate — one click for ops. Rendered next to the detail title when the client is not active.
