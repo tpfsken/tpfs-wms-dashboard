@@ -48,12 +48,13 @@
     <div class="nav-portal-only">
       <div class="nav-section">Portal</div>
       <div class="nav-item" data-page="portalHome"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg><span class="nav-label">Home</span></div>
-      <div class="nav-item" data-page="portalNewOrder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg><span class="nav-label">New Order</span></div>
-      <div class="nav-item" data-page="portalIntake"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13l2 2 4-4"/></svg><span class="nav-label">Upload Docs</span></div>
-      <div class="nav-item" data-page="inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8l-9-5L3 8l9 5 9-5z"/><path d="M3 16l9 5 9-5M3 12l9 5 9-5"/></svg><span class="nav-label">Inventory</span></div>
-      <div class="nav-item" data-page="orders"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg><span class="nav-label">Orders</span></div>
-      <div class="nav-item" data-page="billing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg><span class="nav-label">Billing</span></div>
-      <div class="nav-item" data-page="reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 20V10M12 20V4M6 20v-6"/></svg><span class="nav-label">Reports</span></div>
+      <div class="nav-item" data-page="portalNewOrder" data-perm="portal.orders.create"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg><span class="nav-label">New Order</span></div>
+      <div class="nav-item" data-page="portalIntake" data-perm="portal.orders.create"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13l2 2 4-4"/></svg><span class="nav-label">Upload Docs</span></div>
+      <div class="nav-item" data-page="inventory" data-perm="portal.inventory.view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8l-9-5L3 8l9 5 9-5z"/><path d="M3 16l9 5 9-5M3 12l9 5 9-5"/></svg><span class="nav-label">Inventory</span></div>
+      <div class="nav-item" data-page="orders" data-perm="portal.orders.view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg><span class="nav-label">Orders</span></div>
+      <div class="nav-item" data-page="billing" data-perm="portal.invoices.view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg><span class="nav-label">Billing</span></div>
+      <div class="nav-item" data-page="reports" data-perm="portal.reports.run"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 20V10M12 20V4M6 20v-6"/></svg><span class="nav-label">Reports</span></div>
+      <div class="nav-item" data-page="portalUsers" data-perm="portal.users.manage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg><span class="nav-label">Users</span></div>
     </div>
   </div>
   <div class="side-footer">
@@ -787,6 +788,12 @@
           <div id="cliPerformanceBody" style="padding:20px;"></div>
         </div>
       </div>
+      <div class="cli-panel" data-tab="portal" style="display:none;">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Portal access</div><div style="flex:1"></div><button class="btn btn-ghost" onclick="uiRun(this, () => loadClientPortalTab())">Refresh</button></div>
+          <div id="cliPortalBody"></div>
+        </div>
+      </div>
     </div>
   </div>
   <!-- INVOICES — billing_invoices + billing_invoice_lines (design system: D2) -->
@@ -1254,6 +1261,20 @@
   </div>
 </div>
 
+<!-- PORTAL USERS — client admins manage their own company's accounts (portal.users.manage). js/portalAccess.js -->
+<div class="page" id="page-portalUsers">
+  <div class="page-header">
+    <div><div class="page-title">Users</div><div class="page-subtitle">Who at your company can sign in to the portal, and what they can do</div></div>
+    <div style="flex:1"></div>
+    <button class="ui-btn" onclick="navigateTo('portalHome')">← Home</button>
+    <button class="ui-btn" onclick="uiRun(this, () => loadPortalUsers())">Refresh</button>
+    <button class="ui-btn ui-btn-primary" data-perm="portal.users.manage" onclick="uiRun(this, () => openAddPortalUserModal())">Add user</button>
+  </div>
+  <div class="card">
+    <div id="portalUsersBody"></div>
+  </div>
+</div>
+
 </div><!-- /main -->
 </div><!-- /shell -->
 
@@ -1522,6 +1543,7 @@
 <script src="js/floor.js"></script>
 <script src="js/compliance.js"></script>
 <script src="js/users.js"></script>
+<script src="js/portalAccess.js"></script>
 <script src="js/invoices.js"></script>
 <!-- Before app.js: app.js's DOMContentLoaded wiring calls pwOpenForgot /
      pwOpenResetFromUrl, and doLogin() calls pwForcedChange(). -->

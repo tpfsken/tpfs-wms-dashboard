@@ -17,6 +17,12 @@ async function apiGet(p){
       // generic "could not load" (js/perms.js). Other 403s stay silent.
       const body = await r.json().catch(() => null);
       if(body && body.code === 'PERMISSION_DENIED' && typeof permDeniedToast === 'function') permDeniedToast(body);
+      // The company's portal access was switched off under a live session:
+      // back to the login screen, which shows why (audit H-3).
+      if(body && body.code === 'CLIENT_INACTIVE'){
+        try { sessionStorage.clear(); sessionStorage.setItem('tpfs_login_notice', body.error || 'Portal access is inactive'); } catch(_) {}
+        location.reload();
+      }
       return null;
     }
     if(!r.ok) return null;
@@ -73,7 +79,7 @@ function closeModal(id){
 const titles = {
   dashboard:'Dashboard', inventory:'Inventory', orders:'Orders', waves:'Waves',
   inbound:'Receiving', intake:'Intake', clients:'Clients',
-  billing:'Billing', invoices:'Invoices', settings:'Settings', reports:'Reports', compliance:'Compliance', users:'Users',
+  billing:'Billing', invoices:'Invoices', settings:'Settings', reports:'Reports', compliance:'Compliance', users:'Users', portalUsers:'Users',
   portalHome:'Customer Portal', portalNewOrder:'Place an Order', portalIntake:'Upload Documents',
   // Floor mode (phone-first ops shell)
   floorHome:'Warehouse Floor', floorPickList:'Orders to Pick',
@@ -96,6 +102,7 @@ const loaders = {
   reports:        loadReports,
   compliance:     loadCompliance,
   users:          loadUsers,
+  portalUsers:    loadPortalUsers,
   portalHome:     loadPortalHome,
   portalNewOrder: loadPortalNewOrder,
   portalIntake:   loadPortalIntake,
@@ -236,6 +243,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   document.getElementById('loginForgotBtn')?.addEventListener('click', pwOpenForgot);
+  // Left over by apiGet when the API refused a live session (client inactive / offboarded).
+  try {
+    const _notice = sessionStorage.getItem('tpfs_login_notice');
+    if(_notice){ document.getElementById('loginError').textContent = _notice; sessionStorage.removeItem('tpfs_login_notice'); }
+  } catch(_) {}
 
   // A reset link from the email lands here as /?reset=<token>. Handle it BEFORE
   // any session restore — someone resetting their password may well already have

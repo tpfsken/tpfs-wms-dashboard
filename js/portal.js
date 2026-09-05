@@ -70,36 +70,52 @@ function bootPortal() {
  * ------------------------------------------------------------------------- */
 // No icons. This is a warehouse system a customer runs their business on, not
 // an app store — the words carry the meaning.
+// Each card carries the portal permission it needs (js/perms.js can():
+// portal role AND company entitlement). Cards the user lacks are hidden by
+// applyPermGates, both at first render and again once /auth/me has answered.
 const PORTAL_CARDS = [
-  { id: 'portalNewOrder', title: 'Place an order',
+  { id: 'portalNewOrder', perm: 'portal.orders.create', title: 'Place an order',
     desc: 'Manual outbound order — choose SKUs, quantities and a ship-to.' },
-  { id: 'portalIntake', title: 'Upload documents',
+  { id: 'portalIntake', perm: 'portal.orders.create', title: 'Upload documents',
     desc: 'Drop a PDF (PO, BOL, ASN, packing slip). It is read automatically and turned into an order.' },
-  { id: 'inventory', title: 'Inventory',
+  { id: 'inventory', perm: 'portal.inventory.view', title: 'Inventory',
     desc: 'On-hand SKUs, lots and licence plates held at the warehouse.' },
-  { id: 'orders', title: 'Orders',
+  { id: 'orders', perm: 'portal.orders.view', title: 'Orders',
     desc: 'Status of every order placed — open, picking, shipped.' },
-  { id: 'billing', title: 'Billing',
+  { id: 'billing', perm: 'portal.invoices.view', title: 'Billing',
     desc: 'Charges accrued on the account, by period.' },
-  { id: 'reports', title: 'Reports',
+  { id: 'reports', perm: 'portal.reports.run', title: 'Reports',
     desc: 'Activity, receiving, shipments and full lot traceability.' },
+  { id: 'portalUsers', perm: 'portal.users.manage', title: 'Users',
+    desc: 'Who at your company can sign in, and what they can do.' },
 ];
 
 async function loadPortalHome() {
   const grid = document.getElementById('portalHomeGrid');
   grid.innerHTML = PORTAL_CARDS.map(c => `
-    <button class="portal-card" data-target="${esc(c.id)}">
+    <button class="portal-card" data-target="${esc(c.id)}" data-perm="${esc(c.perm)}">
       <span class="portal-card-title">${esc(c.title)}</span>
       <span class="portal-card-desc">${esc(c.desc)}</span>
       <span class="portal-card-go">Open →</span>
     </button>`).join('');
   grid.querySelectorAll('.portal-card').forEach(card =>
     card.addEventListener('click', () => navigateTo(card.dataset.target)));
+  if (typeof applyPermGates === 'function') applyPermGates(grid);
 
   const hi = document.getElementById('portalHomeGreeting');
   if (hi && U) hi.textContent = `Welcome, ${U.fullName || U.email || ''}`;
 
   if (!U || !U.clientId) return;
+
+  // SLA metrics and terms are report data: hidden (not 403-toasted) when the
+  // company is not entitled to reports or the role lacks them.
+  const slaCard = document.getElementById('portalSlaTermsCard');
+  const metricsRow = document.getElementById('portalMetricsRow');
+  if (!can('portal.reports.run')) {
+    if (slaCard) slaCard.style.display = 'none';
+    if (metricsRow) metricsRow.innerHTML = '';
+    return;
+  }
 
   // /clients/:id/performance returns one item per ENABLED metric with its
   // value, target, and a server-derived status (good/warn/breach/info) — no

@@ -29,7 +29,7 @@ async function loadRolesCard(){
 }
 
 function _roleRow(key){ return (_rolesGrid.roles || []).find(r => r.key === key); }
-function _roleDefault(key, perm){ const r = _roleRow(key); return !!r && (_rolesGrid.defaults[r.base_role] || []).includes(perm); }
+function _roleDefault(key, perm){ const r = _roleRow(key); return !!r && (_rolesGrid.defaults[r.defaults_key || r.base_role] || []).includes(perm); }
 function _roleEffective(role, key){
   const dirty = _rolesDirty[`${role}|${key}`];
   if(dirty === true || dirty === false) return dirty;
@@ -46,13 +46,19 @@ function renderRolesGrid(){
     return;
   }
   const cols = (g.roles || []).filter(r => r.base_role !== 'portal');   // admin first, then supervisor, floor, customs
-  const configurable = cols.filter(r => r.configurable).map(r => r.key);
-  const groups = [];
-  for(const p of g.permissions){
-    let grp = groups.find(x => x.name === p.group);
-    if(!grp){ grp = { name: p.group, rows: [] }; groups.push(grp); }
-    grp.rows.push(p);
-  }
+  const portalCols = (g.roles || []).filter(r => r.base_role === 'portal');   // client_admin, client_viewer, custom portal roles
+  const configurable = (g.roles || []).filter(r => r.configurable).map(r => r.key);
+  const groupsOf = (perms) => {
+    const out = [];
+    for(const p of perms){
+      let grp = out.find(x => x.name === p.group);
+      if(!grp){ grp = { name: p.group, rows: [] }; out.push(grp); }
+      grp.rows.push(p);
+    }
+    return out;
+  };
+  const groups = groupsOf(g.permissions.filter(p => !p.portal));
+  const portalGroups = groupsOf(g.permissions.filter(p => p.portal));
   const dirtyCount = Object.keys(_rolesDirty).length;
   const header = (r) => `<th class="roles-col">
       <div class="roles-head">${esc(r.name)}${r.is_system ? '' : ` <span class="ui-hint">custom · ${esc(r.base_role)}</span>`}</div>
@@ -62,6 +68,28 @@ function renderRolesGrid(){
       </div>`}
       ${r.user_count != null ? `<div class="ui-hint">${esc(r.user_count)} user${r.user_count === 1 ? '' : 's'}</div>` : ''}
     </th>`;
+  const table = (tableCols, tableGroups) => `
+    <div class="roles-grid-wrap">
+      <table class="ui-table roles-grid">
+        <thead><tr><th>Permission</th>${tableCols.map(header).join('')}<th></th></tr></thead>
+        <tbody>
+          ${tableGroups.map(grp => `
+            <tr class="roles-group"><td colspan="${tableCols.length + 2}">${esc(grp.name)}</td></tr>
+            ${grp.rows.map(p => `
+              <tr data-key="${esc(p.key)}">
+                <td><div>${esc(p.label)}${p.reserved ? ' <span class="ui-hint">(no portal screen uses this yet)</span>' : ''}</div><div class="ui-hint ui-mono">${esc(p.key)}</div></td>
+                ${tableCols.map(r => {
+                  if(!r.configurable) return `<td class="roles-col"><span class="roles-lock" title="Admin always has this">✓</span></td>`;
+                  if(p.locked) return `<td class="roles-col"><span class="roles-lock roles-lock-off" title="Admin-only — cannot be granted">—</span></td>`;
+                  const eff = _roleEffective(r.key, p.key), ov = _roleIsOverride(r.key, p.key);
+                  return `<td class="roles-col"><label class="roles-cell"><input type="checkbox" class="js-roles-cb" data-role="${esc(r.key)}" data-key="${esc(p.key)}" ${eff ? 'checked' : ''}>${ov ? '<span class="idn-tag idn-tag-primary">override</span>' : ''}</label></td>`;
+                }).join('')}
+                <td>${(!p.locked && tableCols.some(r => r.configurable && _roleIsOverride(r.key, p.key))) ? `<button type="button" class="ui-btn js-roles-reset" data-key="${esc(p.key)}" title="Back to the defaults for this permission">Reset</button>` : ''}</td>
+              </tr>`).join('')}
+          `).join('')}
+        </tbody>
+      </table>
+    </div>`;
   host.innerHTML = `
     <div class="roles-toolbar">
       <span class="ui-hint">Admin always has everything. Every other role starts from its base (Supervisor or Floor) defaults; tick or untick to override for this warehouse. Locked rows are admin-only.</span>
@@ -71,27 +99,14 @@ function renderRolesGrid(){
       <button type="button" class="ui-btn js-roles-reload">Discard</button>
       <button type="button" class="ui-btn ui-btn-primary js-roles-save" ${dirtyCount ? '' : 'disabled'}>Save changes</button>
     </div>
-    <div class="roles-grid-wrap">
-      <table class="ui-table roles-grid">
-        <thead><tr><th>Permission</th>${cols.map(header).join('')}<th></th></tr></thead>
-        <tbody>
-          ${groups.map(grp => `
-            <tr class="roles-group"><td colspan="${cols.length + 2}">${esc(grp.name)}</td></tr>
-            ${grp.rows.map(p => `
-              <tr data-key="${esc(p.key)}">
-                <td><div>${esc(p.label)}</div><div class="ui-hint ui-mono">${esc(p.key)}</div></td>
-                ${cols.map(r => {
-                  if(!r.configurable) return `<td class="roles-col"><span class="roles-lock" title="Admin always has this">✓</span></td>`;
-                  if(p.locked) return `<td class="roles-col"><span class="roles-lock roles-lock-off" title="Admin-only — cannot be granted">—</span></td>`;
-                  const eff = _roleEffective(r.key, p.key), ov = _roleIsOverride(r.key, p.key);
-                  return `<td class="roles-col"><label class="roles-cell"><input type="checkbox" class="js-roles-cb" data-role="${esc(r.key)}" data-key="${esc(p.key)}" ${eff ? 'checked' : ''}>${ov ? '<span class="idn-tag idn-tag-primary">override</span>' : ''}</label></td>`;
-                }).join('')}
-                <td>${(!p.locked && configurable.some(k => _roleIsOverride(k, p.key))) ? `<button type="button" class="ui-btn js-roles-reset" data-key="${esc(p.key)}" title="Back to the defaults for this permission">Reset</button>` : ''}</td>
-              </tr>`).join('')}
-          `).join('')}
-        </tbody>
-      </table>
-    </div>`;
+    ${table(cols, groups)}
+    <div class="roles-section-head" id="rolesPortalSection">
+      <div><div class="card-title">Portal roles</div>
+        <div class="ui-hint">What each portal role may do for client users. A client also needs the feature switched on under Clients → Portal access; off there beats any role. Client admin starts with everything, Client viewer with the read-only keys.</div></div>
+      <span style="flex:1"></span>
+      <button type="button" class="ui-btn js-role-new-portal">+ New portal role</button>
+    </div>
+    ${table(portalCols, portalGroups)}`;
 
   host.querySelectorAll('.js-roles-cb').forEach(cb => cb.addEventListener('change', () => {
     const role = cb.dataset.role, key = cb.dataset.key;
@@ -114,7 +129,8 @@ function renderRolesGrid(){
   })));
   host.querySelector('.js-roles-reload').addEventListener('click', uiBusyHandler(() => loadRolesCard()));
   host.querySelector('.js-roles-save').addEventListener('click', uiBusyHandler(() => saveRolesGrid()));
-  host.querySelector('.js-role-new').addEventListener('click', uiBusyHandler(() => openNewRoleModal()));
+  host.querySelector('.js-role-new').addEventListener('click', uiBusyHandler(() => openNewRoleModal('ops')));
+  host.querySelector('.js-role-new-portal').addEventListener('click', uiBusyHandler(() => openNewRoleModal('portal')));
   host.querySelectorAll('.js-role-rename').forEach(b => b.addEventListener('click', uiBusyHandler(() => renameRole(b.dataset.key))));
   host.querySelectorAll('.js-role-delete').forEach(b => b.addEventListener('click', uiBusyHandler(() => deleteRole(b.dataset.key))));
 }
@@ -133,15 +149,18 @@ async function saveRolesGrid(){
 
 // ---- custom roles ----------------------------------------------------------------
 
-async function openNewRoleModal(){
-  const sources = (_rolesGrid.roles || []).filter(r => r.base_role !== 'admin' && r.base_role !== 'portal');
+async function openNewRoleModal(kind = 'ops'){
+  const portal = kind === 'portal';
+  const sources = (_rolesGrid.roles || []).filter(r => r.base_role !== 'admin' && (r.base_role === 'portal') === portal);
   const m = uiModal({
-    title: 'New role',
+    title: portal ? 'New portal role' : 'New role',
     width: 520,
     body: `
-      ${uiField({ id: 'nrName', label: 'Name *', placeholder: 'e.g. CSR, Dock lead, Inventory control' })}
-      ${uiFieldSelect({ id: 'nrBase', label: 'Base role *', options: [{ value: 'floor', label: 'Floor — starts from the floor defaults' }, { value: 'supervisor', label: 'Supervisor — starts from the supervisor defaults' }], value: 'floor',
-                        hint: 'Sets the defaults the new role starts from and who may assign it (floor roles can be assigned by supervisors with Onboard).' })}
+      ${uiField({ id: 'nrName', label: 'Name *', placeholder: portal ? 'e.g. Client CSR, Client accounting' : 'e.g. CSR, Dock lead, Inventory control' })}
+      ${portal
+        ? `<input type="hidden" id="nrBase" value="portal"><div class="ui-hint" style="margin-bottom:12px;">Portal roles start from the Client viewer keys (read-only). Copy from Client admin to start with everything.</div>`
+        : uiFieldSelect({ id: 'nrBase', label: 'Base role *', options: [{ value: 'floor', label: 'Floor — starts from the floor defaults' }, { value: 'supervisor', label: 'Supervisor — starts from the supervisor defaults' }], value: 'floor',
+                          hint: 'Sets the defaults the new role starts from and who may assign it (floor roles can be assigned by supervisors with Onboard).' })}
       ${uiFieldSelect({ id: 'nrCopy', label: 'Copy permissions from', options: [{ value: '', label: '— base defaults only —' }].concat(sources.map(r => ({ value: r.key, label: r.name }))), value: '',
                         hint: 'Copies that role\'s current effective permissions as overrides on top of the base.' })}`,
     actions: [

@@ -1575,3 +1575,21 @@ body.floor-mode .fs-gross-input{font-size:var(--fl-base);min-height:48px;}
 .roles-head-acts .ui-btn{padding:2px 8px;font-size:11px;}
 .side-user{padding:8px 14px 2px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #shell.collapsed .side-user{display:none;}
+
+/* --- Portal access switches (js/portalAccess.js) + portal roles section (js/roles.js) --- */
+.roles-section-head{display:flex;align-items:flex-start;gap:var(--sp-3);padding:14px 16px 10px;border-top:1px solid var(--border);margin-top:var(--sp-3);}
+.roles-section-head .card-title{margin-bottom:2px;}
+.pa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--sp-3);padding:12px 16px 16px;}
+.pa-group{border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
+.pa-group-title{font-size:var(--fs-caps);font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+.pa-switch{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--border);cursor:pointer;}
+.pa-switch:first-of-type{border-top:0;}
+.pa-switch input{position:absolute;opacity:0;width:0;height:0;}
+.pa-switch-track{flex:0 0 auto;width:34px;height:18px;border-radius:9px;background:var(--border);position:relative;transition:background .15s;margin-top:2px;}
+.pa-switch-knob{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--panel);transition:left .15s;}
+.pa-switch input:checked + .pa-switch-track{background:var(--blue);}
+.pa-switch input:checked + .pa-switch-track .pa-switch-knob{left:18px;}
+.pa-switch input:disabled + .pa-switch-track{opacity:.5;}
+.pa-switch-text{display:flex;flex-direction:column;gap:1px;min-width:0;}
+.pa-switch-label{font-weight:500;}
+.pa-switch-reserved .pa-switch-label{color:var(--muted);}
