@@ -141,7 +141,9 @@ function pwOpenChange() {
     body: `
       ${uiField({ id: 'pwChCur',  label: 'Current password', type: 'password' })}
       ${uiField({ id: 'pwChNew',  label: 'New password',     type: 'password', hint: `At least ${PW_MIN_LEN} characters` })}
-      ${uiField({ id: 'pwChConf', label: 'Confirm new password', type: 'password' })}`,
+      ${uiField({ id: 'pwChConf', label: 'Confirm new password', type: 'password' })}
+      <label class="ui-check"><input type="checkbox" id="pwChOthers" checked> Sign out my other devices</label>
+      <div class="ui-hint">Every other tablet, phone or browser signed in as you is signed out at once. This one stays signed in.</div>`,
     actions: [
       { label: 'Cancel' },
       { label: 'Change password', primary: true, onClick: (api) => pwSubmitChange(api, false) },
@@ -212,7 +214,7 @@ async function pwSubmitChange(api, onForcedSuccess) {
   const r = await fetch(`${API}/auth/change-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${T}` },
-    body: JSON.stringify({ currentPassword: cur, newPassword: pw }),
+    body: JSON.stringify({ currentPassword: cur, newPassword: pw, signOutOthers: api.el.querySelector('#pwChOthers') ? api.el.querySelector('#pwChOthers').checked : true }),
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) {

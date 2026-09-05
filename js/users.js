@@ -189,6 +189,7 @@ async function openUserModal(userId){
         <div class="usr-actions">
           <button type="button" class="ui-btn ui-btn-primary js-usr-save">Save changes</button>
           ${u.isActive && u.id !== U?.id ? '<button type="button" class="ui-btn js-usr-reset">Reset password</button>' : ''}
+          ${u.isActive ? '<button type="button" class="ui-btn js-usr-signout" title="Revoke every active session of this account — they must sign in again everywhere">Sign out everywhere</button>' : ''}
           <span style="flex:1"></span>
           ${u.id === U?.id ? '<span class="ui-hint">This is you — role and status are changed by another admin.</span>'
             : (u.isActive ? '<button type="button" class="ui-btn ui-btn-danger js-usr-deactivate">Deactivate</button>'
@@ -236,6 +237,7 @@ async function openUserModal(userId){
       CERT_M.close(); loadUsers();
     }));
     el.querySelector('.js-usr-reset')?.addEventListener('click', uiBusyHandler(async () => { await pwAdminReset(u.id, u.fullName || u.email); return false; }));
+    el.querySelector('.js-usr-signout')?.addEventListener('click', uiBusyHandler(() => signOutEverywhere(u)));
     el.querySelector('.js-usr-deactivate')?.addEventListener('click', uiBusyHandler(() => setUserActive(u, false)));
     el.querySelector('.js-usr-reactivate')?.addEventListener('click', uiBusyHandler(() => setUserActive(u, true)));
   }
@@ -247,6 +249,22 @@ async function openUserModal(userId){
     document.getElementById('certGrantBtn').addEventListener('click', uiBusyHandler(openGrantCertForm));
     await renderUserCertList(userId);
   }
+}
+
+async function signOutEverywhere(u){
+  const self = u.id === U?.id;
+  const ok = await uiConfirm({
+    title: `Sign ${self ? 'yourself' : (u.fullName || u.email)} out everywhere?`,
+    body: self ? 'Every device signed in as you, including this one, is signed out at once. You will land on the login screen.'
+               : 'Every tablet, phone or browser signed in as this account is signed out at once. They can sign in again with their password.',
+    confirmLabel: 'Sign out everywhere', danger: true,
+  });
+  if(!ok) return false;
+  const r = await fetch(`${API}/users/${u.id}/sign-out-everywhere`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: '{}' });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ if(d.code === 'PERMISSION_DENIED') permDeniedToast(d); else uiToast(d.error || 'Could not sign the account out', 'error'); return false; }
+  if(self){ try { sessionStorage.clear(); } catch(_) {} location.reload(); return; }
+  uiToast(`${u.fullName || u.email} signed out everywhere`);
 }
 
 async function setUserActive(u, active){

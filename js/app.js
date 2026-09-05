@@ -35,6 +35,7 @@ async function apiGet(p){
       const body = await r.json().catch(() => null);
       sessionStorage.clear();
       if(body && body.code === 'PREVIEW_ENDED'){ try { sessionStorage.setItem('tpfs_login_notice', 'This portal preview has ended — you can close this tab.'); } catch(_) {} }
+      if(body && body.code === 'TOKEN_REVOKED'){ try { sessionStorage.setItem('tpfs_login_notice', body.error || 'You were signed out — please sign in again.'); } catch(_) {} }
       location.reload(); return null;
     }
     if(r.status === 403){

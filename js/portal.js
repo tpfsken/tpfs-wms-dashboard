@@ -40,7 +40,8 @@ function bootPortal() {
     if (bar) {
       bar.hidden = false;
       const who = U.preview.impersonatorName || U.fullName || U.email || '';
-      document.getElementById('portalPreviewText').textContent = `Viewing ${U.clientName || U.clientCode || 'client'} portal as ${who}`;
+      const modeLabel = U.preview.mode === 'act' ? 'acting as the client' : 'view only';
+      document.getElementById('portalPreviewText').textContent = `Viewing ${U.clientName || U.clientCode || 'client'} portal as ${who} · ${modeLabel}`;
       const endBtn = bar.querySelector('.js-preview-end');
       if (endBtn && !endBtn._wired) { endBtn._wired = true; endBtn.addEventListener('click', uiBusyHandler(() => endPortalPreview())); }
     }

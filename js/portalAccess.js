@@ -59,7 +59,8 @@ function renderClientPortalTab(){
       <span class="ui-hint">What ${esc(d.client.code)} may use in the portal. A feature that is off here is off for every portal user of this client, whatever their portal role. ${esc(users)}.</span>
       <span style="flex:1"></span>
       <span class="ui-hint js-pa-dirty">${dirtyCount ? esc(dirtyCount + ' unsaved change' + (dirtyCount === 1 ? '' : 's')) : ''}</span>
-      <button type="button" class="ui-btn js-pa-preview" data-perm="clients.portal_preview" ${d.client.status === 'active' ? '' : 'disabled'} title="${d.client.status === 'active' ? 'Open this client\'s portal in a new tab, as they see it (60 minutes, audited)' : 'Only an active client can be previewed'}">View portal as client</button>
+      <button type="button" class="ui-btn js-pa-preview" data-mode="view" data-perm="clients.portal_preview" ${d.client.status === 'active' ? '' : 'disabled'} title="${d.client.status === 'active' ? 'Open this client\'s portal in a new tab, read-only, as they see it (60 minutes, audited)' : 'Only an active client can be previewed'}">View portal (read-only)</button>
+      <button type="button" class="ui-btn js-pa-preview" data-mode="act" data-perm="clients.portal_act" ${d.client.status === 'active' ? '' : 'disabled'} title="${d.client.status === 'active' ? 'Open this client\'s portal in a new tab and act as them — place orders, create their users (60 minutes, audited)' : 'Only an active client can be previewed'}">Act as client</button>
       <button type="button" class="ui-btn js-pa-reload">Discard</button>
       <button type="button" class="ui-btn ui-btn-primary js-pa-save" ${dirtyCount && d.migrated ? '' : 'disabled'}>Save changes</button>
     </div>
@@ -86,7 +87,7 @@ function renderClientPortalTab(){
   }));
   host.querySelector('.js-pa-reload').addEventListener('click', uiBusyHandler(() => loadClientPortalTab()));
   host.querySelector('.js-pa-save').addEventListener('click', uiBusyHandler(() => saveClientPortalTab()));
-  host.querySelector('.js-pa-preview').addEventListener('click', uiBusyHandler(() => openPortalPreview()));
+  host.querySelectorAll('.js-pa-preview').forEach(b => b.addEventListener('click', uiBusyHandler(() => openPortalPreview(b.dataset.mode === 'act' ? 'act' : 'view'))));
   if(typeof applyPermGates === 'function') applyPermGates(host);
 }
 
@@ -96,12 +97,12 @@ function renderClientPortalTab(){
  * blockers) and pointed at ?portalPreview=1 once the token is in the one-shot
  * localStorage handoff that js/app.js consumes on load.
  */
-async function openPortalPreview(){
+async function openPortalPreview(mode = 'view'){
   const c = _paData && _paData.client;
   if(!c) return;
   const w = window.open('', '_blank');
   if(w){ try { w.document.write('<title>Portal preview</title><p style="font:14px system-ui;padding:24px;">Preparing the portal preview…</p>'); } catch(_) {} }
-  const r = await fetch(`${API}/clients/${c.id}/portal-session`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: '{}' });
+  const r = await fetch(`${API}/clients/${c.id}/portal-session`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ mode }) });
   const d = await r.json().catch(() => ({}));
   if(!r.ok){
     if(w) w.close();
@@ -112,7 +113,7 @@ async function openPortalPreview(){
   catch(_) { if(w) w.close(); uiToast('Could not hand the preview to a new tab (browser storage is blocked)', 'error'); return false; }
   const url = `${location.pathname}?portalPreview=1`;
   if(w) w.location.href = url; else window.open(url, '_blank');
-  uiToast(`Portal preview for ${c.code} opened in a new tab — it ends after 60 minutes or when you press End there`);
+  uiToast(`${mode === 'act' ? 'Acting as' : 'Viewing'} ${c.code} in a new tab — it ends after 60 minutes or when you press End there`);
 }
 
 async function saveClientPortalTab(){
