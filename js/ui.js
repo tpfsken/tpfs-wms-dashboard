@@ -450,18 +450,22 @@ function uiTable(container, opts) {
       }));
   };
 
-  if (!view.length) {
-    el.innerHTML = `<table class="ui-table"><thead><tr>${head}</tr></thead>
-      <tbody><tr><td colspan="${columns.length}"><div class="ui-empty">${esc(empty)}</div></td></tr></tbody></table>`;
-    wireSort();
-    return;
-  }
-
-  el.innerHTML = `<table class="ui-table"><thead><tr>${head}</tr></thead><tbody>
+  const html = !view.length
+    ? `<table class="ui-table"><thead><tr>${head}</tr></thead>
+      <tbody><tr><td colspan="${columns.length}"><div class="ui-empty">${esc(empty)}</div></td></tr></tbody></table>`
+    : `<table class="ui-table"><thead><tr>${head}</tr></thead><tbody>
     ${view.map(r => `<tr${onRowClick ? ` class="ui-row-click" data-key="${esc(r[rowKey])}"` : ''}>
       ${columns.map(c => `<td class="${c.money || c.num ? 'right' : ''}">${_uiCell(c, r)}</td>`).join('')}
     </tr>`).join('')}
   </tbody></table>`;
+
+  // patch:true (background refreshes): identical markup is left alone — no
+  // DOM churn, no lost scroll/hover, handlers already wired stay valid. Only
+  // a real change touches the DOM, and then as ONE swap with scroll kept.
+  if (opts.patch) { if (!uiSwapHtml(el, html)) return; }
+  else el.innerHTML = html;
+
+  if (!view.length) { wireSort(); return; }
 
   if (onRowClick) {
     const byKey = Object.fromEntries(view.map(r => [String(r[rowKey]), r]));
@@ -706,4 +710,32 @@ function uiFilterBarClientOptions(key, clients){
     initCombo(`${k}ClientFilterWrap`, opts, { placeholder: 'All clients', value: stored, onChange: (v, l) => _fbClientChanged(k, v, l) });
     if(stored !== before && cfg.page && document.getElementById('page-' + cfg.page)?.classList.contains('active')) (cfg.onChange || (() => {}))();
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * SEAMLESS REFRESH — for anything that re-renders on a timer.
+ *
+ *   uiSwapHtml(el, html)  -> false when `html` is what the element already
+ *   shows (nothing touched); otherwise ONE innerHTML swap with the scroll
+ *   position of the element (and its nearest .scroll-area) kept. Callers
+ *   never clear first and never show a loading state on a background pass —
+ *   old content stays on screen until the new markup is ready.
+ *   uiSetText(el|id, text) -> same idea for a single text node.
+ * ------------------------------------------------------------------------- */
+function uiSwapHtml(container, html) {
+  const el = typeof container === 'string' ? document.getElementById(container) : container;
+  if (!el) return false;
+  if (el._uiLastHtml === html) return false;
+  const scroller = el.classList.contains('scroll-area') ? el : (el.closest('.scroll-area') || el);
+  const top = scroller.scrollTop, left = scroller.scrollLeft;
+  el.innerHTML = html;
+  el._uiLastHtml = html;
+  if (top || left) { scroller.scrollTop = top; scroller.scrollLeft = left; }
+  return true;
+}
+function uiSetText(target, text) {
+  const el = typeof target === 'string' ? document.getElementById(target) : target;
+  if (!el) return;
+  const s = String(text ?? '');
+  if (el.textContent !== s) el.textContent = s;
 }

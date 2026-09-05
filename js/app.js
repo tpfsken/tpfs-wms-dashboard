@@ -196,7 +196,10 @@ function boot(){
 
   setupIntakeDropzone();
   loadDashboard();
-  setInterval(loadDashboard, 30000);
+  // Seamless 30s refresh (js/dashboard.js): skips hidden tabs and other pages,
+  // catches up once when the tab is visible again.
+  setInterval(dashTick, 30000);
+  document.addEventListener('visibilitychange', dashOnVisibility);
 }
 
 // ----- DOM-ready wiring -----

@@ -1,22 +1,62 @@
 // =============================================================================
 // DASHBOARD
 // =============================================================================
+// Refreshes every 30s (app.js -> dashTick). Refreshes are SEAMLESS:
+//   * nothing is cleared before data arrives — a failed fetch leaves the
+//     last good panel on screen;
+//   * every panel renders its markup to a string and swaps it in only when it
+//     differs from what is showing (uiSwapHtml / uiTable patch:true), so an
+//     unchanged panel is not touched at all and a changed one is one swap
+//     with scroll kept;
+//   * the skeleton / loading state is shown on the very first paint only;
+//   * a hidden tab does not poll — the tab becoming visible again catches up
+//     once.
+// The old loop re-rendered all nine panels with innerHTML and put the
+// "Performance by client" table into a skeleton before every fetch — that
+// skeleton, plus the wholesale re-creation of tiles and rows, was the blink.
+
+let _dashStale = false;     // a tick was skipped while the tab was hidden
+let _dashBusy  = false;     // one refresh at a time
+
+function dashIsOnScreen(){
+  return !document.hidden && !!document.getElementById('page-dashboard')?.classList.contains('active');
+}
+
+/** 30s interval handler. Skips hidden tabs and pages that aren't showing. */
+function dashTick(){
+  if(document.hidden){ _dashStale = true; return; }
+  if(!dashIsOnScreen()) return;          // navigating back runs loaders.dashboard anyway
+  loadDashboard();
+}
+
+/** visibilitychange: one catch-up refresh when a hidden tab comes back. */
+function dashOnVisibility(){
+  if(document.hidden || !_dashStale) return;
+  _dashStale = false;
+  if(dashIsOnScreen()) loadDashboard();
+}
 
 async function loadDashboard(){
-  const d = await apiGet('/dashboard/summary');
-  if(!d) return;
-  if(d.kpis)         renderKPIs(d.kpis);
-  if(d.sla)          renderSLA(d.sla);
-  if(d.liveOrders)   renderQ(d.liveOrders);
-  if(d.alerts)       renderAlerts(d.alerts);
-  if(d.waves)        renderWaves(d.waves);
-  if(d.dockSchedule) renderDock(d.dockSchedule);
-  if(d.inventorySnap)renderDI(d.inventorySnap);
-  if(d.carriers)     renderCarriers(d.carriers);
-  if(d.throughput)   renderTP(d.throughput);
-  if(d.labor){
-    document.getElementById('laborUnitsHr').textContent = d.labor.summary?.avg_units_per_hour || '—';
-    document.getElementById('laborWorkers').textContent = d.labor.summary?.active_workers || '0';
+  if(_dashBusy) return;
+  _dashBusy = true;
+  try {
+    const d = await apiGet('/dashboard/summary');
+    if(!d) return;                        // keep what is on screen
+    if(d.kpis)         renderKPIs(d.kpis);
+    if(d.sla)          renderSLA(d.sla);
+    if(d.liveOrders)   renderQ(d.liveOrders);
+    if(d.alerts)       renderAlerts(d.alerts);
+    if(d.waves)        renderWaves(d.waves);
+    if(d.dockSchedule) renderDock(d.dockSchedule);
+    if(d.inventorySnap)renderDI(d.inventorySnap);
+    if(d.carriers)     renderCarriers(d.carriers);
+    if(d.throughput)   renderTP(d.throughput);
+    if(d.labor){
+      uiSetText('laborUnitsHr', d.labor.summary?.avg_units_per_hour || '—');
+      uiSetText('laborWorkers', d.labor.summary?.active_workers || '0');
+    }
+  } finally {
+    _dashBusy = false;
   }
   // Per-client SLA rollup — separate request so the main dashboard
   // doesn't slow down if this is heavy.
@@ -63,13 +103,19 @@ async function loadClientsPerformance(){
   const host = document.getElementById('clientsPerformanceBody');
   if(!host) return;
 
-  uiTableLoading(host, CLI_PERF_COLS);
+  // Skeleton on the FIRST paint only. Every later pass (30s tick, the panel's
+  // Refresh button) keeps the current table until the new one is ready.
+  const firstPaint = !host.querySelector('table');
+  if(firstPaint) uiTableLoading(host, CLI_PERF_COLS);
   const rows = await apiGet('/dashboard/clients-performance');
-  if(rows === null) return uiTableError(host, CLI_PERF_COLS, 'Could not load client performance', loadClientsPerformance);
+  if(rows === null){
+    if(firstPaint) uiTableError(host, CLI_PERF_COLS, 'Could not load client performance', loadClientsPerformance);
+    return;                               // background failure: stale beats blank
+  }
 
   uiTable(host, {
     columns: CLI_PERF_COLS, rows, rowKey: 'client_id',
-    sortable: true,
+    sortable: true, patch: true,
     onRowClick: (r) => { navigateTo('clients'); openClientDetail(r.client_id); },
     empty: 'No active clients.',
   });
@@ -83,7 +129,7 @@ function renderSLA(s){
   const pct = s.onTimePct;
   // Past-due leads. On-time % is a score you review; a past-due order is work
   // that is already late and needs somebody to move.
-  wrap.innerHTML =
+  uiSwapHtml(wrap,
     uiTile({ label: 'Past due', value: s.pastDue ?? 0,
              tone: (s.pastDue > 0 ? 'danger' : 'ok'),
              sub: 'open orders past their required ship date' }) +
@@ -102,25 +148,24 @@ function renderSLA(s){
                       : s.avgPickMinutes + 'm',
              sub: Number(s.picksCount) < 5
                     ? `not enough data (${s.picksCount || 0} orders, last 30 days)`
-                    : `${s.picksCount} orders picked, last 30 days` });
+                    : `${s.picksCount} orders picked, last 30 days` }));
 }
 
 function renderKPIs(k){
   const row = document.getElementById('kpiRow');
   row.className = 'ui-tiles';
-  row.innerHTML =
+  uiSwapHtml(row,
     uiTile({ label: 'Orders today', value: k.ordersToday?.value ?? 0 }) +
     uiTile({ label: 'Shipped', value: k.shipped?.value ?? 0 }) +
     uiTile({ label: 'In progress', value: k.inProgress?.value ?? 0 }) +
     uiTile({ label: 'Total SKUs', value: k.totalSKUs?.value ?? 0 }) +
     uiTile({ label: 'Total units', value: (k.totalUnits?.value ?? 0).toLocaleString() }) +
     uiTile({ label: 'Licence plates', value: k.licensePlates?.active ?? 0,
-             sub: `${k.licensePlates?.original ?? 0} original · ${k.licensePlates?.child ?? 0} child` });
+             sub: `${k.licensePlates?.original ?? 0} original · ${k.licensePlates?.child ?? 0} child` }));
 }
 
 function renderQ(list){
-  const b = document.getElementById('orderCountBadge');
-  b.textContent = (list?.length || 0) + ' open';
+  uiSetText('orderCountBadge', (list?.length || 0) + ' open');
 
   uiTable('orderQueue', {
     columns: [
@@ -139,7 +184,7 @@ function renderQ(list){
       { key: 'line_count', label: 'Lines', num: true },
       { key: 'total_units', label: 'Units', num: true },
     ],
-    rows: list || [], rowKey: 'id',
+    rows: list || [], rowKey: 'id', patch: true,
     onRowClick: (o) => { navigateTo('orders'); openOrderDetail(o.id); },
     empty: 'No open orders.',
   });
@@ -147,11 +192,10 @@ function renderQ(list){
 
 function renderAlerts(a){
   const c = document.getElementById('alertList');
-  const b = document.getElementById('alertBadge');
-  b.textContent = a?.length || 0;
-  if(!a?.length){ c.innerHTML = uiEmpty('No alerts.'); return; }
+  uiSetText('alertBadge', a?.length || 0);
+  if(!a?.length){ uiSwapHtml(c, uiEmpty('No alerts.')); return; }
 
-  c.innerHTML = a.slice(0, 6).map(x => {
+  uiSwapHtml(c, a.slice(0, 6).map(x => {
     const tone = x.severity === 'critical' ? 'danger'
                : x.severity === 'warning'  ? 'warn'
                : 'info';
@@ -163,25 +207,23 @@ function renderAlerts(a){
           <span class="ui-hint">${esc(x.client_name || '')}</span>
         </span>
       </div>`;
-  }).join('');
+  }).join(''));
 }
 
 function renderWaves(w){
   const c = document.getElementById('waveList');
-  const b = document.getElementById('waveBadge');
-  b.textContent = w?.length || 0;
-  if(!w?.length){ c.innerHTML = uiEmpty('No active waves.'); return; }
+  uiSetText('waveBadge', w?.length || 0);
+  if(!w?.length){ uiSwapHtml(c, uiEmpty('No active waves.')); return; }
 
-  c.innerHTML = w.map(v => `
+  uiSwapHtml(c, w.map(v => `
     <div class="dash-row">
       ${uiId(v.wave_number || '')}
       <span class="ui-hint">${esc(v.status)} · ${esc(v.order_count || 0)} order(s)</span>
-    </div>`).join('');
+    </div>`).join(''));
 }
 
 function renderDock(s){
-  const b = document.getElementById('dockBadge');
-  b.textContent = s?.length || 0;
+  uiSetText('dockBadge', s?.length || 0);
 
   uiTable('dockList', {
     columns: [
@@ -195,7 +237,7 @@ function renderDock(s){
           : '<span class="ui-muted">—</span>' },
       { key: 'status', label: 'Status', render: d => uiChip(d.status) },
     ],
-    rows: s || [], rowKey: 'id',
+    rows: s || [], rowKey: 'id', patch: true,
     empty: 'No appointments today.',
   });
 }
@@ -213,7 +255,7 @@ function renderDI(items){
           return `<span class="ui-chip ui-chip-${tone}">${esc(s.toUpperCase())}</span>`;
         } },
     ],
-    rows: items || [], rowKey: 'sku_code',
+    rows: items || [], rowKey: 'sku_code', patch: true,
     onRowClick: () => navigateTo('inventory'),
     empty: 'No inventory.',
   });
@@ -221,13 +263,13 @@ function renderDI(items){
 
 function renderCarriers(cs){
   const c = document.getElementById('carrierList');
-  if(!cs?.length){ c.innerHTML = uiEmpty('No shipments.'); return; }
+  if(!cs?.length){ uiSwapHtml(c, uiEmpty('No shipments.')); return; }
 
   // Bars are relative to the busiest carrier, not to a fixed 100 — the old
   // version capped the width at the raw shipment count, so any carrier with
   // 100+ shipments pegged the bar and they all looked identical.
   const max = Math.max(...cs.map(x => Number(x.total_shipments) || 0), 1);
-  c.innerHTML = cs.map(x => {
+  uiSwapHtml(c, cs.map(x => {
     const n = Number(x.total_shipments) || 0;
     return `
       <div class="dash-bar-row">
@@ -235,23 +277,22 @@ function renderCarriers(cs){
         <span class="dash-bar-track"><span class="dash-bar-fill" style="width:${Math.round((n / max) * 100)}%;"></span></span>
         <span class="dash-bar-val">${uiNum(n)}</span>
       </div>`;
-  }).join('');
+  }).join(''));
 }
 
 function renderTP(data){
   const ch = document.getElementById('throughputChart');
-  const t  = document.getElementById('throughputTotal');
   if(!data?.length){
-    ch.innerHTML = '<div class="empty-state" style="width:100%">No data</div>';
-    t.textContent = '';
+    uiSwapHtml(ch, '<div class="empty-state" style="width:100%">No data</div>');
+    uiSetText('throughputTotal', '');
     return;
   }
   const v = data.map(d => parseInt(d.orders_shipped) || 0);
   const tot = v.reduce((a, b) => a + b, 0);
-  t.textContent = 'Total: ' + tot;
+  uiSetText('throughputTotal', 'Total: ' + tot);
   const mx = Math.max(...v, 1);
   const dn = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  ch.innerHTML = data.map((d, i) => {
+  uiSwapHtml(ch, data.map((d, i) => {
     const h = Math.round((v[i] / mx) * 60);
     const color = i === data.length - 1 ? 'var(--blue)' : 'var(--border)';
     const day = d.ship_date ? dn[new Date(d.ship_date).getDay()] : '';
@@ -260,5 +301,5 @@ function renderTP(data){
         <div class="bar" style="height:${h}px;background:${color};" title="${esc(v[i])}"></div>
         <div class="bar-day">${esc(day)}</div>
       </div>`;
-  }).join('');
+  }).join(''));
 }
