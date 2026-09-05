@@ -1624,3 +1624,6 @@ tr.ii-row-error td{background:var(--st-danger-bg);}
 .ii-history td{vertical-align:top;font-size:12px;}
 .ii-history-title{font-size:var(--fs-caps);font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px;}
 .ii-history-empty{padding:10px 0 0;}
+.ii-hist-acts{display:flex;gap:4px;flex-wrap:wrap;}
+.ii-hist-acts .ui-btn{padding:2px 8px;font-size:11px;}
+.ii-client-warn{margin-bottom:12px;}

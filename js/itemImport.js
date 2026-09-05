@@ -53,7 +53,7 @@ async function openItemImportWizard(){
   _ii.m = uiModal({
     title: `Import items — ${c.code}`,
     width: 960,
-    body: `<div class="ii-steps" id="iiSteps"></div><div id="iiBody"></div>`,
+    body: `<div class="ii-steps" id="iiSteps"></div><div id="iiWarn"></div><div id="iiBody"></div>`,
     actions: [{ label: 'Close' }],
     onClose: () => { _ii = null; if(typeof loadItemImportHistory === 'function') loadItemImportHistory(); },
   });
@@ -64,9 +64,69 @@ function _iiRender(){
   if(!_ii) return;
   const steps = document.getElementById('iiSteps');
   if(steps) steps.innerHTML = II_STEPS.map((s, i) => `<div class="ii-step${i + 1 === _ii.step ? ' active' : ''}${i + 1 < _ii.step ? ' done' : ''}"><span class="ii-step-n">${i + 1}</span>${esc(s)}</div>`).join('');
+  const warn = document.getElementById('iiWarn');
+  if(warn){
+    const w = _ii.clientWarning;
+    warn.innerHTML = (w && _ii.step > 1)
+      ? `<div class="ui-banner ui-banner-warn ii-client-warn"><strong>Check the client.</strong> This file mentions <strong>${esc(w.other.code)} — ${esc(w.other.name)}</strong> (${esc(w.where)}: "${esc(String(w.value).slice(0, 60))}"). You are importing into <strong>${esc(w.current.code)} — ${esc(w.current.name)}</strong>. Continue only if that is intended.</div>`
+      : '';
+  }
   const body = document.getElementById('iiBody');
   if(!body) return;
   ({ 1: _iiStepUpload, 2: _iiStepMap, 3: _iiStepValidate, 4: _iiStepCommit, 5: _iiStepResult })[_ii.step](body);
+}
+
+/** Resume an uncommitted import at its furthest completed step (history → Resume). */
+async function resumeItemImport(importId){
+  const c = typeof _currentClient !== 'undefined' ? _currentClient : null;
+  if(!c) return;
+  const d = await apiGet(`/clients/${c.id}/item-imports/${importId}`);
+  if(!d) return uiToast('Could not load that import', 'error');
+  if(d.status === 'committed') return openItemImportResult(importId, d);
+  _ii = { clientId: c.id, clientCode: c.code, importId: d.id, fileName: d.fileName, headers: d.headers, preview: d.preview || [], rowCount: d.rowCount,
+          fields: d.fields || [], required: d.required || [], hints: d.hints || {}, mapping: { ...(d.mapping || {}) }, templateId: d.templateId || null,
+          mode: d.mode || 'update', clientWarning: d.clientWarning || null, templates: [], step: d.resumeStep || 2,
+          validation: d.status === 'validated' && Array.isArray(d.validation) ? { id: d.id, mode: d.mode, counts: d.counts, rows: d.validation } : null };
+  _ii.templates = ((await apiGet(`/clients/${c.id}/item-imports/templates`)) || {}).rows || [];
+  _ii.m = uiModal({
+    title: `Import items — ${c.code} · resumed ${d.fileName}`,
+    width: 960,
+    body: `<div class="ii-steps" id="iiSteps"></div><div id="iiWarn"></div><div id="iiBody"></div>`,
+    actions: [{ label: 'Close' }],
+    onClose: () => { _ii = null; if(typeof loadItemImportHistory === 'function') loadItemImportHistory(); },
+  });
+  _iiRender();
+  if(_ii.step === 3 && !_ii.validation) _iiValidate();   // mapped but never validated: run the dry run now
+}
+
+/** Committed import: counts, failed rows, error file (history → View result). */
+async function openItemImportResult(importId, detail){
+  const c = typeof _currentClient !== 'undefined' ? _currentClient : null;
+  if(!c) return;
+  const d = detail || await apiGet(`/clients/${c.id}/item-imports/${importId}`);
+  if(!d) return uiToast('Could not load that import', 'error');
+  const counts = d.counts || {};
+  const rows = Array.isArray(d.validation) ? d.validation : [];
+  _ii = { clientId: c.id, clientCode: c.code, importId, fileName: d.fileName, step: 5, mode: d.mode, result: { counts: { created: counts.created || 0, updated: counts.updated || 0, skipped: counts.skipped || 0, errors: counts.errors || 0 }, rows, errorFile: d.errorFile || null } };
+  _ii.m = uiModal({
+    title: `Import result — ${c.code} · ${d.fileName}`,
+    width: 800,
+    body: `<div class="ii-steps" id="iiSteps"></div><div id="iiWarn"></div><div id="iiBody"></div>`,
+    actions: [{ label: 'Close' }],
+    onClose: () => { _ii = null; },
+  });
+  _iiRender();
+}
+
+async function deleteItemImport(importId, fileName){
+  const c = typeof _currentClient !== 'undefined' ? _currentClient : null;
+  if(!c) return false;
+  const ok = await uiConfirm({ title: `Delete the import of ${fileName || 'this file'}?`, body: 'The uploaded rows and any mapping or validation are removed. Nothing was written to the item master by this import.', confirmLabel: 'Delete import', danger: true });
+  if(!ok) return false;
+  const d = await _iiJson(`/clients/${c.id}/item-imports/${importId}`, { method: 'DELETE' });
+  if(!d) return false;
+  uiToast('Import deleted');
+  loadItemImportHistory();
 }
 
 // ---- 1 Upload -------------------------------------------------------------------------------
@@ -100,7 +160,7 @@ async function _iiUpload(file){
     if(errEl){ errEl.textContent = d.error || 'Upload failed'; errEl.style.display = 'block'; }
     return;
   }
-  Object.assign(_ii, { importId: d.id, fileName: d.fileName, headers: d.headers, preview: d.preview || [], rowCount: d.rowCount, fields: d.fields || [], required: d.required || [], hints: d.hints || {}, mapping: { ...(d.suggested || {}) }, step: 2 });
+  Object.assign(_ii, { importId: d.id, fileName: d.fileName, headers: d.headers, preview: d.preview || [], rowCount: d.rowCount, fields: d.fields || [], required: d.required || [], hints: d.hints || {}, mapping: { ...(d.suggested || {}) }, clientWarning: d.clientWarning || null, step: 2 });
   _ii.templates = ((await _iiJson(`/clients/${_ii.clientId}/item-imports/templates`)) || {}).rows || [];
   _iiRender();
 }
@@ -323,7 +383,7 @@ async function loadItemImportHistory(){
   host.innerHTML = `
     <div class="ii-history-title">Import history</div>
     <table class="ui-table ii-history">
-      <thead><tr><th>When</th><th>Who</th><th>File</th><th>Status</th><th>Result</th><th>Template</th><th></th></tr></thead>
+      <thead><tr><th>When</th><th>Who</th><th>File</th><th>Status</th><th>Result</th><th>Template</th><th>Actions</th></tr></thead>
       <tbody>${d.rows.map(r => {
         const cnt = r.counts || {};
         const res = r.status === 'committed' ? `${cnt.created || 0} created · ${cnt.updated || 0} updated · ${cnt.skipped || 0} skipped · ${cnt.errors || 0} errors`
@@ -335,8 +395,14 @@ async function loadItemImportHistory(){
           <td>${uiChip(r.status, r.status)}</td>
           <td class="ui-hint">${esc(res)}</td>
           <td class="ui-hint">${esc(r.templateName || '')}</td>
-          <td>${r.hasErrorFile ? `<button type="button" class="ui-btn js-ii-hist-err" data-id="${esc(r.id)}">Error file</button>` : ''}</td>
+          <td class="ii-hist-acts">${r.status === 'committed'
+            ? `<button type="button" class="ui-btn js-ii-hist-view" data-id="${esc(r.id)}">View result</button>${r.hasErrorFile ? `<button type="button" class="ui-btn js-ii-hist-err" data-id="${esc(r.id)}">Error file</button>` : ''}`
+            : `<button type="button" class="ui-btn ui-btn-primary js-ii-hist-resume" data-id="${esc(r.id)}">Resume</button><button type="button" class="ui-btn ui-btn-danger js-ii-hist-del" data-id="${esc(r.id)}" data-file="${esc(r.fileName)}">Delete</button>`}</td>
         </tr>`; }).join('')}</tbody>
-    </table>`;
+    </table>
+    <div class="ui-hint">Uncommitted imports are removed automatically after 7 days. Committed imports stay in the history.</div>`;
   host.querySelectorAll('.js-ii-hist-err').forEach(b => b.addEventListener('click', uiBusyHandler(() => _iiDownload(`/clients/${c.id}/item-imports/${b.dataset.id}/error-file.csv`, 'item-import-errors.csv'))));
+  host.querySelectorAll('.js-ii-hist-view').forEach(b => b.addEventListener('click', uiBusyHandler(() => openItemImportResult(b.dataset.id))));
+  host.querySelectorAll('.js-ii-hist-resume').forEach(b => b.addEventListener('click', uiBusyHandler(() => resumeItemImport(b.dataset.id))));
+  host.querySelectorAll('.js-ii-hist-del').forEach(b => b.addEventListener('click', uiBusyHandler(() => deleteItemImport(b.dataset.id, b.dataset.file))));
 }
