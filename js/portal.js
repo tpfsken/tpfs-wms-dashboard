@@ -32,6 +32,20 @@ function isPortalMode() {
 function bootPortal() {
   document.body.classList.add('portal-mode');
 
+  // Ops user looking at this client's portal ("View portal as client"):
+  // persistent bar naming the client and the ops user, with End.
+  if (U && U.preview) {
+    document.body.classList.add('portal-preview');
+    const bar = document.getElementById('portalPreviewBar');
+    if (bar) {
+      bar.hidden = false;
+      const who = U.preview.impersonatorName || U.fullName || U.email || '';
+      document.getElementById('portalPreviewText').textContent = `Viewing ${U.clientName || U.clientCode || 'client'} portal as ${who}`;
+      const endBtn = bar.querySelector('.js-preview-end');
+      if (endBtn && !endBtn._wired) { endBtn._wired = true; endBtn.addEventListener('click', uiBusyHandler(() => endPortalPreview())); }
+    }
+  }
+
   // Client name from the JWT (login LEFT JOINs clients). Falls back to the
   // client code, then a generic label — the UI never shows the word "client".
   const clientLabel = (U && (U.clientName || U.clientCode)) || 'Customer';
@@ -64,6 +78,18 @@ function bootPortal() {
 
   navigateTo('portalHome');
 }
+
+/** End the preview: revoke the token server-side, then close the tab (or fall back to the login screen). */
+async function endPortalPreview() {
+  try {
+    await fetch(`${API}/auth/portal-session/end`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: '{}' });
+  } catch (_) {}
+  try { sessionStorage.clear(); sessionStorage.setItem('tpfs_login_notice', 'Portal preview ended — you can close this tab.'); } catch (_) {}
+  window.close();
+  setTimeout(portalPreviewLeave, 300);   // a tab the user opened by hand cannot be closed by script
+}
+/** Fallback after End when the tab could not close: back to the login screen (shows the notice). */
+function portalPreviewLeave() { if (!window.closed) location.href = location.pathname; }
 
 /* ---------------------------------------------------------------------------
  * PORTAL HOME — KPI tiles, SLA terms, card hub

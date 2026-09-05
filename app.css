@@ -1593,3 +1593,8 @@ body.floor-mode .fs-gross-input{font-size:var(--fl-base);min-height:48px;}
 .pa-switch-text{display:flex;flex-direction:column;gap:1px;min-width:0;}
 .pa-switch-label{font-weight:500;}
 .pa-switch-reserved .pa-switch-label{color:var(--muted);}
+
+/* --- "View portal as client" bar (js/portal.js bootPortal) --- */
+.portal-preview-bar{display:flex;align-items:center;gap:var(--sp-3);padding:8px 16px;background:var(--st-warn-bg);color:var(--text);border-bottom:1px solid var(--border);font-size:13px;font-weight:600;}
+.portal-preview-bar[hidden]{display:none;}
+body.portal-mode.portal-preview .main{grid-template-rows:auto 60px auto 1fr;}

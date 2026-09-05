@@ -4,6 +4,25 @@
 
 const API = 'https://tpfs-wms-api-production.up.railway.app/api';
 
+// "View portal as client" (js/portalAccess.js) opens this page in a new tab
+// with ?portalPreview=1 and leaves the preview token in a one-shot
+// localStorage handoff. Install it as THIS tab's session before the restore
+// below; the opener's ops session (copied by the browser into a
+// script-opened tab) is dropped so the tab is the client's portal only.
+(function installPortalPreview(){
+  try {
+    if(new URLSearchParams(location.search).get('portalPreview') !== '1') return;
+    const raw = localStorage.getItem('tpfs_preview_handoff');
+    localStorage.removeItem('tpfs_preview_handoff');
+    sessionStorage.clear();
+    if(raw){
+      const h = JSON.parse(raw);
+      if(h && h.token && h.user){ sessionStorage.setItem('tpfs_token', h.token); sessionStorage.setItem('tpfs_user', JSON.stringify(h.user)); }
+    }
+    history.replaceState(null, '', location.pathname);
+  } catch(_) {}
+})();
+
 // Session state — populated by login or restored from sessionStorage.
 let T = sessionStorage.getItem('tpfs_token');
 let U = JSON.parse(sessionStorage.getItem('tpfs_user') || 'null');
@@ -11,7 +30,13 @@ let U = JSON.parse(sessionStorage.getItem('tpfs_user') || 'null');
 async function apiGet(p){
   try {
     const r = await fetch(`${API}${p}`, {headers:{'Authorization':`Bearer ${T}`}});
-    if(r.status === 401){ sessionStorage.clear(); location.reload(); return null; }
+    if(r.status === 401){
+      // A revoked / expired portal preview says so on the login screen.
+      const body = await r.json().catch(() => null);
+      sessionStorage.clear();
+      if(body && body.code === 'PREVIEW_ENDED'){ try { sessionStorage.setItem('tpfs_login_notice', 'This portal preview has ended — you can close this tab.'); } catch(_) {} }
+      location.reload(); return null;
+    }
     if(r.status === 403){
       // A permission denial names the missing ability — say so instead of a
       // generic "could not load" (js/perms.js). Other 403s stay silent.
