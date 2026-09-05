@@ -1547,3 +1547,15 @@ body.floor-mode .fs-gross-input{font-size:var(--fl-base);min-height:48px;}
 .fb-status{max-width:160px;}
 .fb-extra{max-width:160px;}
 .fb-refresh{flex:0 0 auto;}
+
+/* --- Permissions (js/perms.js applyPermGates; js/roles.js grid) --- */
+.perm-denied{display:none !important;}
+.roles-toolbar{display:flex;align-items:center;gap:var(--sp-2);padding:10px 16px;border-bottom:1px solid var(--border);}
+.roles-grid-wrap{overflow:auto;max-height:70vh;}
+.roles-grid td.roles-col,.roles-grid th.roles-col{text-align:center;width:120px;}
+.roles-grid tr.roles-group td{background:var(--stripe);font-size:var(--fs-caps);font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);height:28px;}
+.roles-grid td{height:auto;padding-top:6px;padding-bottom:6px;}
+.roles-cell{display:inline-flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;}
+.roles-cell input{width:16px;height:16px;accent-color:var(--blue);}
+.roles-lock{color:var(--st-ok);font-weight:700;}
+.roles-lock-off{color:var(--muted);font-weight:500;}

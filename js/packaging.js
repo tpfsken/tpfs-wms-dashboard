@@ -32,6 +32,7 @@ async function pkgMount(){
     </div>
     <div id="pkgBoxesTable"></div>`;
   host.querySelector('.js-pkg-add').addEventListener('click', uiBusyHandler(() => pkgEditBox(null)));
+  if(!can('settings.packaging')) host.querySelector('.js-pkg-add').classList.add('perm-denied');
   host.querySelector('.js-pkg-sheet').addEventListener('click', uiBusyHandler(pkgPrintSheet));
   host.querySelector('.js-pkg-inactive').addEventListener('change', (e) => { _pkgShowInactive = e.target.checked; pkgRenderTable(); });
   await pkgRenderTable();

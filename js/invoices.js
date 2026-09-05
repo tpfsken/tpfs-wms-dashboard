@@ -115,7 +115,7 @@ async function openInvoice(id) {
   // Actions depend on where the invoice sits in its lifecycle.
   const acts = document.getElementById('invDetActions');
   const next = INV_NEXT[d.status];
-  acts.innerHTML =
+  acts.innerHTML = !can('billing.invoices') ? '' :
     (next ? `<button class="ui-btn ui-btn-primary" id="invAdvBtn">Mark ${esc(next)}</button>` : '') +
     (d.status !== 'VOID' && d.status !== 'PAID'
       ? '<button class="ui-btn ui-btn-danger" id="invVoidBtn">Void</button>' : '');

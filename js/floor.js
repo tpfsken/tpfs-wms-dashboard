@@ -52,6 +52,7 @@ function toggleFloorTextSize(){
 
 function bootFloor(){
   document.body.classList.add('floor-mode');
+  if(typeof loadMe === 'function') loadMe();   // role + permission gates (js/perms.js)
   floorWirePressFeedback();
   applyFloorTextSize(floorTextSize());
   document.querySelectorAll('.js-floor-textsize').forEach(b => {

@@ -23,6 +23,9 @@ js/reports.js       — Reports page. Reports are DEFINITIONS in the API's
                       by /reports/catalog. Adding a report = adding a definition.
 js/password.js      — Password recovery: forgot / reset / change / admin reset /
                       forced-change gate. Loads before app.js.
+js/perms.js         — can(key), applyPermGates(root), loadMe() (GET /auth/me),
+                      permDeniedToast(). Mirrors the API's role/permission model.
+js/roles.js         — Settings → Roles & permissions grid (admin only).
 js/app.js           — API base, auth (T, U, apiGet, doLogin), navigation,
                       boot(), DOMContentLoaded wiring. Loads LAST.
 ```
@@ -233,6 +236,16 @@ Rules:
    with `uiFieldError()` for validation — never a `prompt()` chain.
 9. `esc()` discipline is unchanged and applies inside anything you pass to
    these components as HTML.
+11. **Permissions.** Roles are admin / supervisor / floor / portal and every
+    ops route is guarded by a permission key (API `src/auth/permissions.js`,
+    map in the API's `docs/ROLE-MAP.md`). The API is the boundary; the UI only
+    keeps people from clicking into a 403: static markup gets
+    `data-perm="key"` (or `"key1|key2"`, any passes) and `applyPermGates()`
+    hides it; anything built in JS checks `can('key')` before rendering the
+    control. New nav items, Settings cards and page actions MUST carry one.
+    Portal users always fail `can()`; if `/auth/me` is unavailable the UI
+    fails open for ops (the API still enforces). A 403 with
+    `code: PERMISSION_DENIED` goes through `permDeniedToast()`.
 10. **List-page headers** through `uiFilterBar()` (Inventory, Orders,
     Receiving): title, Client (ops-only, ONE selection for the whole session
     via `tpfs_filter_client`), search, Status, page-specific combos, Refresh,

@@ -77,10 +77,10 @@ async function openUserCertModal(userId, userObj){
       // For floor staff with no work email, this is the ONLY recovery path —
       // an emailed reset link is useless to a picker holding a scanner. Issues
       // a temp password, shown once, and forces a change at their next login.
-      { label: 'Reset password', onClick: async () => {
+      ...(can('users.manage') ? [{ label: 'Reset password', onClick: async () => {
         await pwAdminReset(userId, userObj?.full_name || userObj?.email);
         return false;   // keep the user modal open behind it
-      } },
+      } }] : []),
       { label: 'Close' },
     ],
     onClose: () => { CERT_M = null; },

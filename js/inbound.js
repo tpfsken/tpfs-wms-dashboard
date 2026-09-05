@@ -54,7 +54,7 @@ function initInboundFilterBar(){
     title: 'Receiving', subtitle: 'Purchase orders and inbound',
     search: { placeholder: 'Search receipt #, customer PO, or supplier…' },
     statuses: INB_STATUS_OPTIONS,
-    actions: `<button class="ui-btn ui-btn-primary" onclick="uiRun(this, () => showNewPoModal())">New PO</button>`,
+    actions: `<button class="ui-btn ui-btn-primary" data-perm="receiving.receive" onclick="uiRun(this, () => showNewPoModal())">New PO</button>`,
     onChange: () => loadInbound(),
   });
 }

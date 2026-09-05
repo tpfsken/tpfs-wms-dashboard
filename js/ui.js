@@ -663,6 +663,7 @@ function uiFilterBar(hostId, cfg){
   }
   if(search) host.querySelector(`#${CSS.escape(key + 'Search')}`).addEventListener('input', debounce(() => onChange(), 400));
   host.querySelector('.fb-refresh').addEventListener('click', uiBusyHandler(() => (cfg.onRefresh || onChange)()));
+  if(typeof applyPermGates === 'function') applyPermGates(host);   // [data-perm] on page actions
   return {
     values(){
       const out = {

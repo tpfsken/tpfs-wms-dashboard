@@ -60,8 +60,8 @@ function spRenderHost(st){
         ? 'Profiles are tried top-down by priority, then the tenant-wide ones, then exact LP / location / SKU / order lookups.'
         : 'Templates never resolve a scan. Clients get a copy when a template is assigned; editing a template afterwards leaves those copies alone.'}</div>
       <div class="sp-toolbar-actions">
-        ${isClient ? '<button type="button" class="ui-btn js-sp-from-template">Add from template</button>' : ''}
-        <button type="button" class="ui-btn ui-btn-primary js-sp-new">${isClient ? 'New profile' : 'New template'}</button>
+        ${isClient ? '<button type="button" class="ui-btn js-sp-from-template" data-perm="settings.scan_profiles">Add from template</button>' : ''}
+        <button type="button" class="ui-btn ui-btn-primary js-sp-new" data-perm="settings.scan_profiles">${isClient ? 'New profile' : 'New template'}</button>
       </div>
     </div>
     <div class="sp-list"></div>
@@ -88,6 +88,7 @@ function spRenderHost(st){
     cb.addEventListener('change', () => spToggleActive(st, cb.dataset.id, cb.checked));
   });
   st.host.querySelector('.js-sp-new').addEventListener('click', () => spOpenEditor(st, null));
+  if(typeof applyPermGates === 'function') applyPermGates(st.host);
   const ft = st.host.querySelector('.js-sp-from-template');
   if(ft) ft.addEventListener('click', uiBusyHandler(() => spFromTemplate(st)));
 

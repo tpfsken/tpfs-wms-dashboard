@@ -60,7 +60,7 @@ async function loadReports(){
   const d = await apiGet('/reports/catalog');
   _reportCatalog = d?.rows || [];
   renderReportsIndex();
-  rpRenderSchedules();
+  if(can('reports.schedules')) rpRenderSchedules();   // the card itself is [data-perm] in index.html
 }
 
 /* The report catalog is a working index, not a landing page. Grouped rows,

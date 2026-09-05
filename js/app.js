@@ -12,6 +12,13 @@ async function apiGet(p){
   try {
     const r = await fetch(`${API}${p}`, {headers:{'Authorization':`Bearer ${T}`}});
     if(r.status === 401){ sessionStorage.clear(); location.reload(); return null; }
+    if(r.status === 403){
+      // A permission denial names the missing ability — say so instead of a
+      // generic "could not load" (js/perms.js). Other 403s stay silent.
+      const body = await r.json().catch(() => null);
+      if(body && body.code === 'PERMISSION_DENIED' && typeof permDeniedToast === 'function') permDeniedToast(body);
+      return null;
+    }
     if(!r.ok) return null;
     return r.json();
   } catch(e){
@@ -48,6 +55,8 @@ async function doLogin(){
     if(U && U.userType === 'client') bootPortal();
     else if(typeof shouldUseFloorMode === 'function' && shouldUseFloorMode()) bootFloor();
     else boot();
+    // Role + effective permissions (js/perms.js): hides what this user may not do.
+    if(typeof loadMe === 'function') loadMe();
   } catch(x){
     err.textContent = 'Network error';
   }
@@ -175,9 +184,10 @@ function boot(){
     document.getElementById('userName').textContent = U.fullName || U.email;
   }
 
-  // Reveal admin/supervisor-only nav items
-  const isAdmin = U?.userType === 'admin';
-  const isSup   = !!U?.isSupervisor;
+  // Reveal admin/supervisor-only nav items (role from the JWT / /auth/me; the
+  // legacy flags still count for tokens minted before roles shipped).
+  const isAdmin = U?.userType === 'admin' || U?.role === 'admin';
+  const isSup   = !!U?.isSupervisor || U?.role === 'supervisor';
   if(isAdmin || isSup){
     const usersNav = document.getElementById('navUsersItem');
     if(usersNav) usersNav.style.display = '';
@@ -277,7 +287,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if(U.userType === 'client') bootPortal();
     else if(typeof shouldUseFloorMode === 'function' && shouldUseFloorMode()) bootFloor();
     else boot();
+    if(typeof loadMe === 'function') loadMe();
   }
+
+  // Own-password change lives in the sidebar footer so floor users, who do
+  // not see Settings, still have it.
+  document.querySelectorAll('.js-change-pw').forEach(el =>
+    el.addEventListener('click', uiBusyHandler(() => pwOpenChange())));
 
   // PWA: register the service worker so the app is installable to the
   // tablet's home screen and the static shell loads instantly even on

@@ -153,7 +153,7 @@ const CLI_TABS = [
 ];
 
 function wireClientTabs(){
-  uiTabs('cliTabs', CLI_TABS, { active: 'profile', onChange: switchClientTab });
+  uiTabs('cliTabs', CLI_TABS.filter(t => t.id !== 'ratecard' || can('billing.view')), { active: 'profile', onChange: switchClientTab });   // rate card = billing data
 
   // KPI tab buttons (Save / Reset to defaults). Idempotent.
   const saveBtn = document.getElementById('cliKpiSaveBtn');
@@ -235,6 +235,7 @@ function renderClientProfileTab(){
   if(editBtn && !editBtn._wired){
     editBtn._wired = true;
     editBtn.addEventListener('click', () => openClientFormModal(_currentClient));
+    if(!can('clients.manage')) editBtn.classList.add('perm-denied');
   }
 }
 
@@ -244,7 +245,7 @@ function cliSorCell(c){
   const mirror = (c.system_of_record || 'wms') === 'excalibur';
   const chip = mirror ? uiChip('DRAFT', 'EXCALIBUR — MIRROR') : uiChip('ACTIVE', 'WMS — LIVE');
   const when = !mirror && c.went_live_at ? ` <span class="ui-muted">live since ${esc(fmtTimeShort(c.went_live_at))}</span>` : '';
-  const btn = mirror
+  const btn = !can('integrations.excalibur') ? '' : mirror
     ? '<button type="button" class="ui-btn ui-btn-primary cli-sor-btn js-cli-golive">Go live</button> <span class="ui-hint">Excalibur is the system of record; its posted receipts, shipments and adjustments are replayed here. Go live runs a final reconcile and refuses while anything differs.</span>'
     : (c.went_live_at ? '<button type="button" class="ui-btn cli-sor-btn js-cli-backmirror">Back to mirror</button>' : '');
   return `${chip}${when} ${btn}`;
@@ -970,6 +971,7 @@ async function loadClientItemsTab(){
   const addBtn = document.getElementById('cliItemsAddBtn');
   if(addBtn && !addBtn._wired){
     addBtn._wired = true;
+    if(!can('items.edit')) addBtn.classList.add('perm-denied');
     addBtn.addEventListener('click', uiBusyHandler(async () => {
       // Open the existing New Item modal, then preselect this client.
       // openItemFormModal lives in inventory.js — relies on globals.

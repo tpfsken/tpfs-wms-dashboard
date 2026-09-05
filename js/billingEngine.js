@@ -521,11 +521,14 @@ async function beSaveCardLines() {
  * SETTINGS — Billable Service Catalog
  * ------------------------------------------------------------------------- */
 function loadSettingsPage() {
-  loadChargeCodesTab();
-  if (typeof spMountTemplates === 'function') spMountTemplates();   // js/scanProfiles.js
-  if (typeof mgMount === 'function') { mgLoadLocations().finally(mgMount); }  // js/migration.js — mount even if /locations fails
-  if (typeof ssiMount === 'function') ssiMount();   // js/shipstation.js
-  if (typeof pkgMount === 'function') pkgMount();   // js/packaging.js — Settings → Packaging (box catalog)
+  // Mount only what this role may read — every card is [data-perm] in index.html,
+  // and an unmounted card never fires the admin-only GET behind it.
+  if (can('billing.rate_cards')) loadChargeCodesTab();
+  if (typeof spMountTemplates === 'function' && can('settings.scan_view')) spMountTemplates();   // js/scanProfiles.js
+  if (typeof mgMount === 'function' && can('integrations.excalibur')) { mgLoadLocations().finally(mgMount); }  // js/migration.js — mount even if /locations fails
+  if (typeof ssiMount === 'function' && can('integrations.shipstation')) ssiMount();   // js/shipstation.js
+  if (typeof pkgMount === 'function' && can('packing.pack')) pkgMount();   // js/packaging.js — Settings → Packaging (box catalog)
+  if (typeof loadRolesCard === 'function' && can('settings.roles')) loadRolesCard();   // js/roles.js — admin only
 }
 
 async function loadChargeCodesTab() {

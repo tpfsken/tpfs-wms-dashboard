@@ -118,7 +118,7 @@ function initInventoryFilterBar(){
               title="Type or scan a unit code and press Enter to open its LP"
               autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-form-type="other"
               onkeydown="if(event.key==='Enter'){event.preventDefault();uiRun(this, () => invFindUnit(this.value));}">`,
-    actions: `<button class="ui-btn ui-btn-primary ops-only" onclick="uiRun(this, () => showCaseBreakModal())">Case break</button>`,
+    actions: `<button class="ui-btn ui-btn-primary ops-only" data-perm="inventory.case_break" onclick="uiRun(this, () => showCaseBreakModal())">Case break</button>`,
     onChange: () => loadInventory(),
   });
 }
@@ -2495,7 +2495,7 @@ async function openInventoryDetail(invId, opts = {}){
   if(!(typeof isPortalMode === 'function' && isPortalMode())){
     const acts = m.el.querySelector('.ui-dialog-actions');
 
-    if(canCaseBreak(inv)){
+    if(canCaseBreak(inv) && can('inventory.case_break')){
       const brk = document.createElement('button');
       brk.className = 'ui-btn ui-btn-primary';
       brk.textContent = 'Case break';
@@ -2507,7 +2507,7 @@ async function openInventoryDetail(invId, opts = {}){
       acts.insertBefore(brk, acts.firstChild);
     }
 
-    if(inv.sku_id){
+    if(inv.sku_id && can('items.edit')){
       const edit = document.createElement('button');
       edit.className = 'ui-btn';
       edit.textContent = 'Edit item master';

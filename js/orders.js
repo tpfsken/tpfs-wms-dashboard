@@ -88,7 +88,8 @@ function ordRenderBulk(rows){
   host.hidden = n === 0;
   host.innerHTML = n ? `<span class="ord-bulk-count">${esc(n)} selected</span>
     <button type="button" class="ui-btn js-ord-bulk-clear">Clear</button>
-    <button type="button" class="ui-btn ui-btn-danger js-ord-bulk-ext">Close as shipped externally</button>` : '';
+    <button type="button" class="ui-btn ui-btn-danger js-ord-bulk-ext" data-perm="orders.edit">Close as shipped externally</button>` : '';
+  if(typeof applyPermGates === 'function') applyPermGates(host);   // orders.edit
   if(!n) return;
   host.querySelector('.js-ord-bulk-clear').addEventListener('click', uiBusyHandler(() => { _ordSel.clear(); loadOrders(); }));
   host.querySelector('.js-ord-bulk-ext').addEventListener('click', uiBusyHandler(() => ordBulkCloseExternally(rows)));
@@ -142,7 +143,7 @@ function initOrdersFilterBar(){
     search: { placeholder: 'Search order #, ext #, or customer…' },
     statuses: ORD_STATUS_OPTIONS,
     extras: [{ id: 'Source', placeholder: 'All sources', options: ORD_SOURCE_OPTIONS }],
-    actions: `<button class="ui-btn ui-btn-primary ops-only" onclick="uiRun(this, () => showNewOrderModal())">New order</button>` +
+    actions: `<button class="ui-btn ui-btn-primary ops-only" data-perm="orders.edit" onclick="uiRun(this, () => showNewOrderModal())">New order</button>` +
              `<button class="ui-btn ui-btn-primary portal-only" onclick="navigateTo('portalNewOrder')">New order</button>`,
     onChange: () => loadOrders(),
   });
@@ -265,7 +266,7 @@ async function openOrderDetail(id){
   // (Both endpoints reject SHIPPED anyway; this keeps the UI honest.)
   const isShipped = d.status === 'SHIPPED';
   document.querySelectorAll('.js-ord-edit-btn, .js-ord-delete-btn').forEach(b => {
-    b.style.display = isShipped ? 'none' : '';
+    b.style.display = (isShipped || !can('orders.edit')) ? 'none' : '';
   });
 
   document.getElementById('ordInfoGrid').innerHTML = uiMeta([
@@ -312,9 +313,9 @@ async function openOrderDetail(id){
     //   DESTRUCTIVE — Unallocate Order. Smaller, amber-styled, separated
     //               by a divider so ops doesn't bump into it accidentally.
 
-    const canShip = ['PACKING', 'STAGED'].includes(d.status);
+    const canShip = ['PACKING', 'STAGED'].includes(d.status) && can('packing.ship');
     const hasPickedAlloc = (d.allocations || []).some(a => a.status === 'PICKED');
-    const canUnallocateAll = ['ALLOCATED', 'PICKING'].includes(d.status) && !hasPickedAlloc;
+    const canUnallocateAll = ['ALLOCATED', 'PICKING'].includes(d.status) && !hasPickedAlloc && can('orders.allocate');
 
     const labelFor = (t) => {
       if (t === 'CANCELLED') return 'Cancel order';
@@ -329,7 +330,8 @@ async function openOrderDetail(id){
     // Forward state transitions (the main "next step" — at most one is
     // typically the dominant choice; we render them all but mark the
     // most-forward one as primary if there are multiple).
-    const allowed = tr?.allowed || [];
+    // Status transitions are PATCH /orders/:id/status (orders.edit); Allocate is orders.allocate.
+    const allowed = (tr?.allowed || []).filter(t => t === 'ALLOCATED' ? can('orders.allocate') : can('orders.edit'));
     const blockForward = shortLines.length > 0;
     const exempt = new Set(['CANCELLED', 'NEW', 'ALLOCATED']);
     const forwardOrder = ['ALLOCATED', 'PICKING', 'PACKING', 'STAGED'];
@@ -456,7 +458,7 @@ async function openOrderDetail(id){
         { key: 'quantity', label: 'Qty', num: true },
         { key: 'status', label: 'Status', render: a => uiChip(a.status || 'PENDING') },
         { key: '_act', label: '', render: a => {
-            if (!canEdit) return '';
+            if (!canEdit || !can('orders.allocate')) return '';
             if (a.status === 'PENDING') return `<button class="ui-btn js-unallocate-btn" data-alloc-id="${esc(a.id)}">↺ Unallocate</button>`;
             if (a.status === 'PICKED')  return `<button class="ui-btn js-unpick-btn" data-alloc-id="${esc(a.id)}">↺ Unpick</button>`;
             return '';

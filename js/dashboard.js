@@ -59,8 +59,9 @@ async function loadDashboard(){
     _dashBusy = false;
   }
   // Per-client SLA rollup — separate request so the main dashboard
-  // doesn't slow down if this is heavy.
-  loadClientsPerformance();
+  // doesn't slow down if this is heavy. dashboard.management: the card is
+  // [data-perm] in index.html, so floor never sees it and never fetches it.
+  if(typeof can !== 'function' || can('dashboard.management')) loadClientsPerformance();
 }
 
 // Render the "Performance by Client" panel — one row per active

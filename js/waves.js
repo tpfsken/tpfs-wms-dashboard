@@ -17,6 +17,7 @@ async function loadWaves(){
     </div>
     <div id="wavesTable"></div>`;
   host.querySelector('.js-wave-new').addEventListener('click', uiBusyHandler(waveNew));
+  if(!can('waves.manage')) host.querySelector('.js-wave-new').classList.add('perm-denied');
   const d = await apiGet('/waves');
   const rows = d?.rows || [];
   const el = host.querySelector('#wavesTable');
