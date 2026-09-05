@@ -38,6 +38,26 @@ let INB_LIMIT  = 50;
 let INB_OFFSET = 0;
 let INB_SORT   = '';     // blank = the API's work-first default ordering
 let INB_DIR    = 'asc';
+let INB_FILTER_SIG = '';  // client|search|status — a change resets to page 1
+
+// Page header — the shared filter bar (js/ui.js). Built at DOM-ready by app.js.
+const INB_STATUS_OPTIONS = [
+  { value: '', label: 'All statuses' },
+  { value: 'draft', label: 'Draft' }, { value: 'confirmed', label: 'Confirmed' },
+  { value: 'in_transit', label: 'In transit' }, { value: 'receiving', label: 'Receiving' },
+  { value: 'partially_received', label: 'Partially received' }, { value: 'received', label: 'Received' },
+  { value: 'closed', label: 'Closed' }, { value: 'cancelled', label: 'Cancelled' },
+];
+function initInboundFilterBar(){
+  uiFilterBar('inbFilterBar', {
+    key: 'inb', page: 'inbound',
+    title: 'Receiving', subtitle: 'Purchase orders and inbound',
+    search: { placeholder: 'Search receipt #, customer PO, or supplier…' },
+    statuses: INB_STATUS_OPTIONS,
+    actions: `<button class="ui-btn ui-btn-primary" onclick="uiRun(this, () => showNewPoModal())">New PO</button>`,
+    onChange: () => loadInbound(),
+  });
+}
 
 function inbSetSort(key, dir){
   INB_SORT = key; INB_DIR = dir; INB_OFFSET = 0;
@@ -53,8 +73,18 @@ async function loadInbound(){
   document.getElementById('inbDetailView').style.display = 'none';
   document.getElementById('inbListView').style.display = 'block';
 
+  const s  = (document.getElementById('inbSearch')?.value || '').trim();
+  const st = cbVal('inbStatusFilterWrap');
+  const cl = cbVal('inbClientFilterWrap');     // session-wide client (shared filter bar)
+  const sig = `${cl}|${s}|${st}`;
+  if(sig !== INB_FILTER_SIG){ INB_FILTER_SIG = sig; INB_OFFSET = 0; }
+
+  // Server-paged list: every filter goes to /inbound/receipts as a query param.
   const qs = new URLSearchParams({ limit: INB_LIMIT, offset: INB_OFFSET });
   if(INB_SORT){ qs.set('sortBy', INB_SORT); qs.set('sortDir', INB_DIR); }
+  if(cl) qs.set('clientId', cl);
+  if(s)  qs.set('search', s);
+  if(st) qs.set('status', st);
 
   uiTableLoading('inbListWrap', INB_COLS);
   const d = await apiGet(`/inbound/receipts?${qs.toString()}`);
@@ -73,7 +103,7 @@ async function loadInbound(){
     sortable: true, sortKey: INB_SORT, sortDir: INB_DIR,
     onSort: inbSetSort,          // server-side — sorting one page would lie
     onRowClick: r => openPoDetail(r.id),
-    empty: 'No purchase orders yet.',
+    empty: (s || st || cl) ? 'No purchase orders match that filter.' : 'No purchase orders yet.',
   });
 
   uiPager('inbPager', {

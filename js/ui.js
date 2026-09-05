@@ -595,3 +595,115 @@ function uiTabs(container, tabs, { active, onChange }) {
 function uiEmpty(msg) { return `<div class="ui-empty">${esc(msg || 'Nothing here yet.')}</div>`; }
 function uiSpinner(label) { return `<div class="ui-loading"><span class="ui-spin"></span>${esc(label || 'Loading…')}</div>`; }
 function uiError(msg) { return `<div class="ui-error">⚠ ${esc(msg || 'Something went wrong')}</div>`; }
+
+/* ---------------------------------------------------------------------------
+ * FILTER BAR — the list-page header: title, Client, [page controls], search,
+ * Status, [extra combos], [page tools], Refresh, primary action(s).
+ *
+ *   uiFilterBar('invFilterBar', {
+ *     key: 'inv', page: 'inventory', title, subtitle,
+ *     leading: html,                        // e.g. the portal "← Home" button
+ *     client: true,                         // Client combo (ops-only); false to omit
+ *     controls: html,                       // right after Client (Inventory: Show inactive)
+ *     search: { placeholder },              // debounced 400ms -> onChange
+ *     statuses: [{value,label}],            // Status combo
+ *     extras: [{ id:'Source', placeholder, options }],   // more combos after Status
+ *     tools: html,                          // after the combos (Inventory: Find unit)
+ *     actions: html,                        // primary button(s) after Refresh
+ *     onChange(), onRefresh(),
+ *   });
+ *
+ * Element ids follow ONE convention so page loaders read them directly:
+ *   `${key}ClientFilterWrap`, `${key}Search`, `${key}StatusFilterWrap`,
+ *   `${key}${Extra.id}FilterWrap`.
+ * The selected client is one value for the whole session (sessionStorage
+ * tpfs_filter_client): pick a client on Inventory and Orders / Receiving open
+ * on the same client. Client options arrive later through
+ * uiFilterBarClientOptions(key|null, clients) — the bar never calls /clients
+ * itself (a portal user would 403), so it can be built before either boot path.
+ * ------------------------------------------------------------------------- */
+const FB_CLIENT_KEY = 'tpfs_filter_client';
+const _fbBars = {};            // key -> cfg
+const _fbClientLabels = {};    // client id -> label, so a stale selection still reads as a name
+
+function uiFilterClientGet(){ try { return sessionStorage.getItem(FB_CLIENT_KEY) || ''; } catch(_) { return ''; } }
+function uiFilterClientSet(v){ try { if(v) sessionStorage.setItem(FB_CLIENT_KEY, v); else sessionStorage.removeItem(FB_CLIENT_KEY); } catch(_) {} }
+
+function uiFilterBar(hostId, cfg){
+  const host = typeof hostId === 'string' ? document.getElementById(hostId) : hostId;
+  if(!host) return null;
+  const { key, title, subtitle = '', leading = '', controls = '', tools = '', actions = '', search = null, statuses = null, extras = [] } = cfg;
+  const onChange = cfg.onChange || (() => {});
+  _fbBars[key] = cfg;
+  host.classList.add('page-header', 'ui-filterbar');
+  host.innerHTML = `
+    ${leading}
+    <div><div class="page-title">${esc(title || '')}</div>${subtitle ? `<div class="page-subtitle">${esc(subtitle)}</div>` : ''}</div>
+    <div class="fb-spacer"></div>
+    ${cfg.client === false ? '' : `<div class="cb-wrap ops-only fb-client" id="${esc(key)}ClientFilterWrap"></div>`}
+    ${controls}
+    ${search ? `<input type="search" class="ui-input fb-search" id="${esc(key)}Search" name="${esc(key)}-search" placeholder="${esc(search.placeholder || 'Search…')}" aria-label="${esc(search.placeholder || 'Search')}" autocomplete="off" spellcheck="false">` : ''}
+    ${statuses ? `<div class="cb-wrap fb-status" id="${esc(key)}StatusFilterWrap"></div>` : ''}
+    ${extras.map(x => `<div class="cb-wrap fb-extra" id="${esc(key)}${esc(x.id)}FilterWrap"></div>`).join('')}
+    ${tools}
+    <button type="button" class="ui-btn fb-refresh">Refresh</button>
+    ${actions}`;
+  if(cfg.client !== false){
+    // Placeholder-only until uiFilterBarClientOptions() brings the real list.
+    initCombo(`${key}ClientFilterWrap`, [{ value: '', label: 'All clients' }],
+      { placeholder: 'All clients', onChange: (v, label) => _fbClientChanged(key, v, label) });
+  }
+  if(statuses) initCombo(`${key}StatusFilterWrap`, statuses, { placeholder: (statuses[0] && statuses[0].label) || 'All statuses', onChange: () => onChange() });
+  for(const x of extras){
+    initCombo(`${key}${x.id}FilterWrap`, x.options, { placeholder: x.placeholder || (x.options[0] && x.options[0].label) || 'All', onChange: () => onChange() });
+  }
+  if(search) host.querySelector(`#${CSS.escape(key + 'Search')}`).addEventListener('input', debounce(() => onChange(), 400));
+  host.querySelector('.fb-refresh').addEventListener('click', uiBusyHandler(() => (cfg.onRefresh || onChange)()));
+  return {
+    values(){
+      const out = {
+        client: cbVal(`${key}ClientFilterWrap`),
+        search: (document.getElementById(`${key}Search`)?.value || '').trim(),
+        status: cbVal(`${key}StatusFilterWrap`),
+      };
+      for(const x of extras) out[x.id.toLowerCase()] = cbVal(`${key}${x.id}FilterWrap`);
+      return out;
+    },
+  };
+}
+
+// One client for the session: store it, mirror it into every other bar, reload this page.
+function _fbClientChanged(key, v, label){
+  uiFilterClientSet(v);
+  if(v && label) _fbClientLabels[v] = label;
+  for(const k of Object.keys(_fbBars)){
+    if(k === key || _fbBars[k].client === false) continue;
+    if(_cbState[`${k}ClientFilterWrap`]) cbSet(`${k}ClientFilterWrap`, v, v ? (label || _fbClientLabels[v] || v) : '');
+  }
+  (_fbBars[key].onChange || (() => {}))();
+}
+
+/**
+ * Give one bar (key) or every bar (null) its client list. The session's
+ * selected client is re-applied; if it was not selectable before (options
+ * had not arrived) and that page is on screen, the page reloads so the list
+ * matches the filter it now shows.
+ */
+function uiFilterBarClientOptions(key, clients){
+  const options = [{ value: '', label: 'All clients' }].concat((clients || []).map(c => ({
+    value: String(c.id),
+    label: `${c.code} — ${c.name}${(c.status && c.status !== 'active') ? ' (' + c.status + ')' : ''}`,
+  })));
+  for(const o of options) if(o.value) _fbClientLabels[o.value] = o.label;
+  const stored = uiFilterClientGet();
+  for(const k of (key ? [key] : Object.keys(_fbBars))){
+    const cfg = _fbBars[k];
+    if(!cfg || cfg.client === false || !document.getElementById(`${k}ClientFilterWrap`)) continue;
+    const before = cbVal(`${k}ClientFilterWrap`);
+    const opts = options.slice();
+    // A client outside this list (inactive, or hidden by "Show inactive" being off) stays selectable by name.
+    if(stored && !opts.some(o => o.value === stored)) opts.push({ value: stored, label: _fbClientLabels[stored] || stored });
+    initCombo(`${k}ClientFilterWrap`, opts, { placeholder: 'All clients', value: stored, onChange: (v, l) => _fbClientChanged(k, v, l) });
+    if(stored !== before && cfg.page && document.getElementById('page-' + cfg.page)?.classList.contains('active')) (cfg.onChange || (() => {}))();
+  }
+}

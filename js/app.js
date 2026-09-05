@@ -186,32 +186,10 @@ function boot(){
   // Topbar 90-day cert expiry ribbon — fires once on boot, links to Users
   // page (admin/supervisor) or just informs the user otherwise.
   refreshCertExpiryRibbon();
-  // Init page-level filter combos on boot so they exist when pages load
-  initCombo('invStatusFilterWrap', [
-    {value:'',label:'All statuses'},
-    {value:'available',label:'Available'},
-    {value:'allocated',label:'Allocated'},
-    {value:'damaged',label:'Damaged'},
-  ], {placeholder:'All statuses', onChange:() => loadInventory()});
 
-  // Inventory Client filter — populates after clientsCache loads on first
-  // visit to a client-aware page; load it now so the combo is ready.
-  loadCC().then(() => {
-    initCombo('invClientFilterWrap',
-      [{value:'', label:'All clients'}].concat(
-        clientsCache.map(c => ({value:String(c.id), label:`${c.code} — ${c.name}`}))
-      ),
-      {placeholder:'All clients', onChange:() => loadInventory()}
-    );
-  });
-
-  initCombo('ordStatusFilterWrap', [
-    {value:'',label:'All statuses'},
-    {value:'NEW',label:'New'},{value:'ALLOCATED',label:'Allocated'},
-    {value:'PICKING',label:'Picking'},{value:'PICKED',label:'Picked'},
-    {value:'PACKING',label:'Packing'},{value:'PACKED',label:'Packed'},
-    {value:'SHIPPED',label:'Shipped'},{value:'SHIPPED_EXTERNALLY',label:'Shipped externally'},{value:'CANCELLED',label:'Cancelled'},
-  ], {placeholder:'All statuses', onChange:() => loadOrders()});
+  // Client options for the shared filter bars (Inventory / Orders / Receiving).
+  // The bars themselves are built at DOM-ready; only ops may call /clients.
+  loadCC().then(() => uiFilterBarClientOptions(null, clientsCache));
 
   initCombo('intakeStatusFilterWrap', INTAKE_STATUSES,
     {placeholder:'All statuses', onChange:() => loadIntake()});
@@ -237,6 +215,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // List-page headers — one shared filter bar (js/ui.js uiFilterBar). Built
+  // before either boot path so portal users get them too; the Client combo is
+  // ops-only and gets its options in boot().
+  initInventoryFilterBar();
+  initOrdersFilterBar();
+  initInboundFilterBar();
+
   // Login
   document.getElementById('loginBtn').addEventListener('click', uiBusyHandler(doLogin));
   ['loginPassword','loginEmail'].forEach(id => {
@@ -261,9 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('.collapse-btn')?.addEventListener('click', () =>
     document.getElementById('shell').classList.toggle('collapsed'));
 
-  // Search debounces
-  document.getElementById('invSearch')?.addEventListener('input', debounce(loadInventory, 400));
-  document.getElementById('ordSearch')?.addEventListener('input', debounce(loadOrders, 400));
+  // (Inventory / Orders / Receiving search debounces are wired by uiFilterBar.)
 
   // Topbar global search was removed — each page has its own scoped search
   // (Inventory: SKU/lot, Orders: order #, Reports: SKU/lot/LP).

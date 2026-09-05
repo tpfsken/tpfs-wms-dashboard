@@ -94,13 +94,39 @@ function invSetPage(limit, offset){
   document.getElementById('invListWrap')?.scrollIntoView({ block: 'start' });
 }
 
+// Page header — the shared filter bar (js/ui.js). Built at DOM-ready by app.js.
+const INV_STATUS_OPTIONS = [
+  { value: '', label: 'All statuses' },
+  { value: 'available', label: 'Available' },
+  { value: 'allocated', label: 'Allocated' },
+  { value: 'damaged', label: 'Damaged' },
+];
+function initInventoryFilterBar(){
+  uiFilterBar('invFilterBar', {
+    key: 'inv', page: 'inventory',
+    title: 'Inventory',
+    subtitle: 'On-hand by SKU, lot, and location · add new items from the client\'s Item Master tab',
+    leading: `<button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button>`,
+    controls: `<label class="ui-check ops-only inv-show-inactive"><input type="checkbox" id="invShowInactive" onchange="uiRun(this, () => invToggleInactiveClients(this))"> Show inactive</label>`,
+    search: { placeholder: 'Search SKU, lot, LP, or location…' },
+    statuses: INV_STATUS_OPTIONS,
+    // Jump-to-unit is an ACTION (Enter opens the unit's LP), not a list filter.
+    // It carries every "leave me alone" hint a browser or password manager
+    // honours; the real fix for the saved-email autofill is on the login form.
+    tools: `<input type="search" class="ui-input inv-find-unit ops-only" id="invFindUnit" name="unit-lookup"
+              placeholder="Jump to unit code…" aria-label="Jump to a unit by its code (press Enter)"
+              title="Type or scan a unit code and press Enter to open its LP"
+              autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-form-type="other"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();uiRun(this, () => invFindUnit(this.value));}">`,
+    actions: `<button class="ui-btn ui-btn-primary ops-only" onclick="uiRun(this, () => showCaseBreakModal())">Case break</button>`,
+    onChange: () => loadInventory(),
+  });
+}
+
 // Client filter: active clients by default; "Show inactive" rebuilds the combo from /clients?all=1
 async function invToggleInactiveClients(cb){
   const list = cb.checked ? (await apiGet('/clients?all=1')) || [] : clientsCache;
-  const cur = (_cbState['invClientFilterWrap']?.selected?.value) || '';
-  initCombo('invClientFilterWrap',
-    [{ value: '', label: 'All clients' }].concat(list.map(c => ({ value: String(c.id), label: `${c.code} — ${c.name}${(c.status && c.status !== 'active') ? ' (' + c.status + ')' : ''}` }))),
-    { placeholder: 'All clients', value: cur, onChange: () => loadInventory() });
+  uiFilterBarClientOptions('inv', list);   // keeps the session's selected client
 }
 
 async function loadInventory(){

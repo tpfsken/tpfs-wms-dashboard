@@ -233,3 +233,10 @@ Rules:
    with `uiFieldError()` for validation — never a `prompt()` chain.
 9. `esc()` discipline is unchanged and applies inside anything you pass to
    these components as HTML.
+10. **List-page headers** through `uiFilterBar()` (Inventory, Orders,
+    Receiving): title, Client (ops-only, ONE selection for the whole session
+    via `tpfs_filter_client`), search, Status, page-specific combos, Refresh,
+    then the page's primary action. Element ids follow the bar's convention
+    (`${key}ClientFilterWrap`, `${key}Search`, `${key}StatusFilterWrap`) so
+    loaders read them with `cbVal()`. Server-paged lists send every filter as
+    a query param — never filter one page client-side.

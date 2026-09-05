@@ -117,23 +117,59 @@ async function ordBulkCloseExternally(rows){
 }
 function __ordSel(){ return _ordSel; }
 
+// Page header — the shared filter bar (js/ui.js). Built at DOM-ready by app.js.
+const ORD_STATUS_OPTIONS = [
+  { value: '', label: 'All statuses' },
+  { value: 'NEW', label: 'New' }, { value: 'ALLOCATED', label: 'Allocated' },
+  { value: 'PICKING', label: 'Picking' }, { value: 'PICKED', label: 'Picked' },
+  { value: 'PACKING', label: 'Packing' }, { value: 'PACKED', label: 'Packed' }, { value: 'STAGED', label: 'Staged' },
+  { value: 'SHIPPED', label: 'Shipped' }, { value: 'SHIPPED_EXTERNALLY', label: 'Shipped externally' },
+  { value: 'BACKORDERED', label: 'Backordered' }, { value: 'CANCELLED', label: 'Cancelled' },
+];
+// orders.source values (migration 080 CHECK): manual | intake | portal | shipstation.
+const ORD_SOURCE_OPTIONS = [
+  { value: '', label: 'All sources' },
+  { value: 'shipstation', label: 'ShipStation' },
+  { value: 'manual', label: 'Manual' },
+  { value: 'intake', label: 'Intake' },
+  { value: 'portal', label: 'Portal' },
+];
+function initOrdersFilterBar(){
+  uiFilterBar('ordFilterBar', {
+    key: 'ord', page: 'orders',
+    title: 'Orders', subtitle: 'Outbound order management',
+    leading: `<button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button>`,
+    search: { placeholder: 'Search order #, ext #, or customer…' },
+    statuses: ORD_STATUS_OPTIONS,
+    extras: [{ id: 'Source', placeholder: 'All sources', options: ORD_SOURCE_OPTIONS }],
+    actions: `<button class="ui-btn ui-btn-primary ops-only" onclick="uiRun(this, () => showNewOrderModal())">New order</button>` +
+             `<button class="ui-btn ui-btn-primary portal-only" onclick="navigateTo('portalNewOrder')">New order</button>`,
+    onChange: () => loadOrders(),
+  });
+}
+
 async function loadOrders(){
   document.getElementById('ordDetailView').style.display = 'none';
   document.getElementById('ordListView').style.display = 'block';
 
-  const s  = document.getElementById('ordSearch')?.value || '';
-  const st = (_cbState['ordStatusFilterWrap']?.selected?.value) || '';
+  const s   = document.getElementById('ordSearch')?.value || '';
+  const st  = cbVal('ordStatusFilterWrap');
+  const cl  = cbVal('ordClientFilterWrap');     // session-wide client (shared filter bar)
+  const src = cbVal('ordSourceFilterWrap');
 
-  // Changing the search or status filter puts you back on page 1 — otherwise
-  // you'd land on page 4 of a 2-page result and see an empty table.
-  const sig = `${s}|${st}`;
+  // Changing any filter puts you back on page 1 — otherwise you'd land on
+  // page 4 of a 2-page result and see an empty table.
+  const sig = `${s}|${st}|${cl}|${src}`;
   if(sig !== ORD_FILTER_SIG){ ORD_FILTER_SIG = sig; ORD_OFFSET = 0; _ordSel.clear(); }
 
+  // Server-paged list: every filter goes to /orders as a query param.
   const qs = new URLSearchParams({
     limit: ORD_LIMIT, offset: ORD_OFFSET, sortBy: ORD_SORT, sortDir: ORD_DIR,
   });
-  if(st) qs.set('status', st);
-  if(s)  qs.set('search', s);
+  if(st)  qs.set('status', st);
+  if(s)   qs.set('search', s);
+  if(cl)  qs.set('clientId', cl);
+  if(src) qs.set('source', src);
 
   uiTableLoading('ordListWrap', ORD_COLS);
   const d = await apiGet(`/orders?${qs.toString()}`);
@@ -153,7 +189,7 @@ async function loadOrders(){
     sortable: true, sortKey: ORD_SORT, sortDir: ORD_DIR,
     onSort: ordSetSort,             // server-side: refetch, don't sort the page
     onRowClick: o => openOrderDetail(o.id),
-    empty: s || st ? 'No orders match that filter.' : 'No orders yet.',
+    empty: (s || st || cl || src) ? 'No orders match that filter.' : 'No orders yet.',
   });
   ordWireSelection(rows);
 

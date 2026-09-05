@@ -122,7 +122,8 @@
   </div>
 
   <div class="page" id="page-inventory">
-    <div class="page-header"><button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button><div><div class="page-title">Inventory</div><div class="page-subtitle">On-hand by SKU, lot, and location · add new items from the client's Item Master tab</div></div><div style="flex:1"></div><div class="cb-wrap ops-only" style="max-width:200px;" id="invClientFilterWrap"></div><label class="ui-check ops-only inv-show-inactive"><input type="checkbox" id="invShowInactive" onchange="uiRun(this, () => invToggleInactiveClients(this))"> Show inactive</label><input type="text" class="ui-input" id="invSearch" placeholder="Search SKU, lot, LP, or location…" style="max-width:240px;"><input type="search" class="ui-input inv-find-unit ops-only" id="invFindUnit" placeholder="Find unit (UID)" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();uiRun(this, () => invFindUnit(this.value));}"><div class="cb-wrap" style="max-width:160px;" id="invStatusFilterWrap"></div><button class="ui-btn" onclick="uiRun(this, () => loadInventory())">Refresh</button><button class="ui-btn ui-btn-primary ops-only" onclick="uiRun(this, () => showCaseBreakModal())">Case break</button></div>
+    <!-- Header is built by initInventoryFilterBar() (js/inventory.js) through the shared uiFilterBar -->
+    <div class="page-header" id="invFilterBar"></div>
     <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
       <div style="flex:1;overflow:auto;" id="invListWrap"></div>
       <div id="invPager"></div>
@@ -140,7 +141,8 @@
   </div>
 
   <div class="page" id="page-orders">
-    <div class="page-header"><button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button><div><div class="page-title">Orders</div><div class="page-subtitle">Outbound order management</div></div><div style="flex:1"></div><input type="text" class="ui-input" id="ordSearch" placeholder="Search order #…" style="max-width:240px;"><div class="cb-wrap" style="max-width:160px;" id="ordStatusFilterWrap"></div><button class="ui-btn" onclick="uiRun(this, () => loadOrders())">Refresh</button><button class="ui-btn ui-btn-primary ops-only" onclick="uiRun(this, () => showNewOrderModal())">New order</button><button class="ui-btn ui-btn-primary portal-only" onclick="navigateTo('portalNewOrder')">New order</button></div>
+    <!-- Header is built by initOrdersFilterBar() (js/orders.js) through the shared uiFilterBar -->
+    <div class="page-header" id="ordFilterBar"></div>
     <div id="ordListView">
       <div class="card">
         <div class="ord-bulk-bar" id="ordBulkBar" hidden></div>
@@ -241,7 +243,8 @@
 
   <div class="page" id="page-inbound">
     <div id="inbListView">
-      <div class="page-header"><div><div class="page-title">Receiving</div><div class="page-subtitle">Purchase orders and inbound</div></div><div style="flex:1"></div><button class="ui-btn" onclick="uiRun(this, () => loadInbound())">Refresh</button><button class="ui-btn ui-btn-primary" onclick="uiRun(this, () => showNewPoModal())">New PO</button></div>
+      <!-- Header is built by initInboundFilterBar() (js/inbound.js) through the shared uiFilterBar -->
+      <div class="page-header" id="inbFilterBar"></div>
       <div class="card">
         <div style="overflow:auto;" id="inbListWrap"></div>
         <div id="inbPager"></div>
@@ -1276,8 +1279,12 @@
 <div id="loginOverlay" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;">
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:48px;width:420px;">
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:32px;"><div style="width:44px;height:44px;background:var(--blue);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#fff;">T</div><div><div style="font-weight:700;font-size:18px;">TPFS WMS</div><div style="font-size:12px;color:var(--muted);">Warehouse Management System</div></div></div>
-    <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="loginEmail" type="email" placeholder="name@company.com"></div>
-    <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="loginPassword" type="password" placeholder="••••••••"></div>
+    <!-- autocomplete hints keep the browser's saved-login autofill ON these two
+         fields. Without them Chrome guessed the "username" field itself and,
+         with this overlay hidden, landed the saved email in the last visible
+         text box before the password — the Inventory header's Find-unit input. -->
+    <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="loginEmail" name="email" type="email" autocomplete="username" placeholder="name@company.com"></div>
+    <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="••••••••"></div>
     <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;font-size:15px;margin-top:8px;" id="loginBtn">Sign In</button>
     <div id="loginError" style="color:var(--red);font-size:13px;margin-top:12px;"></div>
     <div style="text-align:center;margin-top:16px;">

@@ -52,23 +52,9 @@ function bootPortal() {
   if (bannerName) bannerName.textContent = clientLabel;
   if (bannerSub && U && U.fullName) bannerSub.textContent = `Customer Portal · ${U.fullName}`;
 
-  // Stub the page-level filter combos the shared ops pages read on every load.
-  // The wraps are .ops-only (hidden) in portal mode, but the JS still reads
-  // _cbState[id].
-  initCombo('invStatusFilterWrap', [
-    { value: '', label: 'All statuses' },
-    { value: 'available', label: 'Available' },
-    { value: 'allocated', label: 'Allocated' },
-    { value: 'damaged', label: 'Damaged' },
-  ], { placeholder: 'All statuses', onChange: () => loadInventory() });
-
-  initCombo('ordStatusFilterWrap', [
-    { value: '', label: 'All statuses' },
-    { value: 'NEW', label: 'New' }, { value: 'ALLOCATED', label: 'Allocated' },
-    { value: 'PICKING', label: 'Picking' }, { value: 'PICKED', label: 'Picked' },
-    { value: 'PACKING', label: 'Packing' }, { value: 'PACKED', label: 'Packed' },
-    { value: 'SHIPPED', label: 'Shipped' }, { value: 'SHIPPED_EXTERNALLY', label: 'Shipped externally' }, { value: 'CANCELLED', label: 'Cancelled' },
-  ], { placeholder: 'All statuses', onChange: () => loadOrders() });
+  // The Inventory / Orders filter bars (status combos included) are built at
+  // DOM-ready by uiFilterBar for both modes; the Client combo is .ops-only and
+  // stays on its "All clients" placeholder here, so nothing to stub.
 
   // Pre-stub the Billing client filter so loadBilling() skips its first-run
   // init — that branch calls loadCC() -> GET /clients, which is requireOps and
