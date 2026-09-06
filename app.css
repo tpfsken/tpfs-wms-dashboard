@@ -1634,3 +1634,5 @@ tr.ii-row-error td{background:var(--st-danger-bg);}
 .ec-drift{padding:10px 16px;}
 .ec-recent{padding:0 16px 12px;}
 .ec-recent summary{cursor:pointer;font-size:12px;color:var(--muted);margin-bottom:6px;}
+.ec-unmatched{padding:0 16px 8px;}
+.ec-check{border-bottom:1px solid var(--border);}
