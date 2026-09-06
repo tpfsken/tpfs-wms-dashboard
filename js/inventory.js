@@ -1299,7 +1299,7 @@ async function renderHandlingUnits(){
         ${(hu._identifiers || []).filter(x => x.source === 'manual').map(x => `<span class="ui-chip ui-chip-neutral hu-code">${esc(x.type)} · <span class="ui-mono">${esc(x.value)}</span> <button type="button" class="hu-code-rm js-hu-code-rm" data-idx="${esc(i)}" data-ident="${esc(x.id)}" aria-label="Remove">✕</button></span>`).join('')}
         ${hu._id ? `<span class="hu-code-add">
             <select class="form-input js-hu-code-type" data-idx="${esc(i)}">
-              <option value="carton_barcode">case code</option><option value="alias">alt</option><option value="customer_barcode">customer barcode</option><option value="customer_sku">customer SKU</option><option value="gtin">GTIN</option>
+              <option value="carton_barcode">case code</option><option value="alias">alt</option><option value="customer_barcode">client barcode</option><option value="customer_sku">client SKU</option><option value="gtin">GTIN</option>
             </select>
             <input class="form-input ui-mono js-hu-code-val" data-idx="${esc(i)}" placeholder="code">
             <button type="button" class="btn btn-ghost js-hu-code-add" data-idx="${esc(i)}">+ Add</button>
@@ -1477,10 +1477,10 @@ const IDN_TYPE_OPTIONS = [
   { value: 'upc',              label: 'UPC' },
   { value: 'gtin',             label: 'GTIN / EAN' },
   { value: 'asin',             label: 'ASIN' },
-  { value: 'customer_sku',     label: 'Customer SKU' },
+  { value: 'customer_sku',     label: 'Client SKU' },
   { value: 'carton_barcode',   label: 'Carton barcode' },
   { value: 'alias',            label: 'Alias' },
-  { value: 'customer_barcode', label: 'Customer barcode' },
+  { value: 'customer_barcode', label: 'Client barcode' },
   { value: 'internal_sku',     label: 'SKU code' },
 ];
 const IDN_PRIMARY_TYPES = ['upc', 'gtin', 'asin'];

@@ -141,7 +141,9 @@ error-pattern) were applied 2026-09-06; the workbook's **applied** column
 records the result per row (applied / kept / skipped / human, with the reason).
 Rows marked **human** need a decision nobody could make from the code: the
 item identifier types "Customer SKU" / "Customer barcode" (whose code is it?)
-and "customer POs" among order attachments.
+and "customer POs" among order attachments. Decided 2026-09-06: the identifier
+types are now "Client SKU" / "Client barcode" (labels only, keys unchanged) and
+"customer POs" stays.
 
 The full list with file, location, current text, problem, proposed text and
 tooltip is in `docs/COPY-AUDIT.xlsx` (sheets: Flagged, All strings,
