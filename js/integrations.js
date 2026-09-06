@@ -21,6 +21,7 @@ async function igFetch(method, p, body){
 }
 const igWhen = (v) => v ? esc(String(v).slice(0, 16).replace('T', ' ')) : '<span class="ui-muted">never</span>';
 const igStatusChip = (s) => s === 'ok' ? uiChip('ACTIVE', 'OK') : s === 'failed' ? uiChip('FAILED', 'FAILED') : s === 'skipped' ? uiChip('DRAFT', 'SKIPPED') : uiChip('DRAFT', String(s || '').toUpperCase());
+const IG_CHANNEL_ADAPTERS = new Set(['shopify', 'walmart', 'sftp_csv']);
 const igCat = { channel: 'Sales channel', shipping: 'Shipping', edi: 'EDI', erp: 'Accounting / ERP', generic: 'Generic' };
 
 async function integrationsMount(){
@@ -176,6 +177,11 @@ async function igOpen(id){
     panel.innerHTML = '<div class="ui-label">ShipStation</div><div id="ssiBody" class="sp-host"></div>';
     ssiMount();
   }
+  // channel / file adapters: the same panel the client sees in the portal (js/portalIntegrations.js), with ops controls
+  else if(IG_CHANNEL_ADAPTERS.has(r.adapterKey) && typeof piOpsPanel === 'function'){
+    panel.innerHTML = '<div id="igChannel" class="sp-host"></div>';
+    piOpsPanel(r.id, panel.querySelector('#igChannel'));
+  }
 }
 function igRenderRuns(rows){
   const el = document.getElementById('igRuns');
@@ -198,8 +204,9 @@ function igCounts(c){
 }
 async function igRenderMappings(r){
   const el = document.getElementById('igMappings');
-  const kinds = r.mappingKinds || [];
+  let kinds = r.mappingKinds || [];
   if(!el || !kinds.length || r.adapterKey === 'shipstation') { if(el) el.innerHTML = ''; return; }   // ShipStation's maps live in its own panel
+  if(IG_CHANNEL_ADAPTERS.has(r.adapterKey)) kinds = kinds.filter(k => k !== 'service');   // the shipping-method map lives in the channel panel
   el.innerHTML = kinds.map(k => `<div class="ui-label">${esc(k === 'sku' ? 'Item mapping' : k === 'store' ? 'Store → client' : k === 'carrier' ? 'Carrier mapping' : 'Service mapping')}</div><div id="igMap-${esc(k)}"></div>`).join('');
   for(const k of kinds){
     const host = el.querySelector(`#igMap-${k}`);

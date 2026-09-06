@@ -77,7 +77,9 @@ function bootPortal() {
   initCombo('billClientFilterWrap', [{ value: '', label: 'My account' }],
     { placeholder: 'My Account' });
 
-  navigateTo('portalHome');
+  // Back from Shopify's install screen (/?integrations=shopify&…): land on the Integrations page, which reads the query.
+  let _ret = null; try { _ret = new URLSearchParams(location.search).get('integrations'); } catch(_) {}
+  navigateTo(_ret ? 'portalIntegrations' : 'portalHome');
 }
 
 /** End the preview: revoke the token server-side, then close the tab (or fall back to the login screen). */
@@ -117,6 +119,8 @@ const PORTAL_CARDS = [
     desc: 'Who at your company can sign in, and what they can do.' },
   { id: 'portalApi', perm: 'portal.api_keys', title: 'API & webhooks',
     desc: 'Keys for your own systems and signed event notifications to your URLs.' },
+  { id: 'portalIntegrations', perm: 'portal.integrations', title: 'Integrations',
+    desc: 'Connect your Shopify store, Walmart Marketplace or an SFTP file drop — orders in, shipments and stock out.' },
 ];
 
 async function loadPortalHome() {
