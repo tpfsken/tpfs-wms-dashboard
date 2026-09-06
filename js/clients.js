@@ -151,10 +151,11 @@ const CLI_TABS = [
   { id: 'performance', label: 'Performance' },
   { id: 'scanning',    label: 'Scanning' },
   { id: 'portal',      label: 'Portal access' },
+  { id: 'api',         label: 'API & webhooks' },
 ];
 
 function wireClientTabs(){
-  uiTabs('cliTabs', CLI_TABS.filter(t => (t.id !== 'ratecard' || can('billing.view')) && (t.id !== 'portal' || can('clients.portal_access'))), { active: 'profile', onChange: switchClientTab });   // rate card = billing data; portal access = admin switch
+  uiTabs('cliTabs', CLI_TABS.filter(t => (t.id !== 'ratecard' || can('billing.view')) && (t.id !== 'portal' || can('clients.portal_access')) && (t.id !== 'api' || can('clients.api_manage'))), { active: 'profile', onChange: switchClientTab });   // rate card = billing data; portal access = admin switch
 
   // KPI tab buttons (Save / Reset to defaults). Idempotent.
   const saveBtn = document.getElementById('cliKpiSaveBtn');
@@ -180,6 +181,7 @@ function switchClientTab(tab){
   else if(tab === 'performance') loadClientPerformanceTab();
   else if(tab === 'scanning')    spMountClientTab();
   else if(tab === 'portal')      loadClientPortalTab();
+  else if(tab === 'api')         loadClientApiTab();     // js/apiAccess.js
 }
 
 // ----- PROFILE TAB -----

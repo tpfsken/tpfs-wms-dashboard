@@ -526,7 +526,7 @@ function loadSettingsPage() {
   if (can('billing.rate_cards')) loadChargeCodesTab();
   if (typeof spMountTemplates === 'function' && can('settings.scan_view')) spMountTemplates();   // js/scanProfiles.js
   if (typeof mgMount === 'function' && can('integrations.excalibur')) { mgLoadLocations().finally(mgMount); }  // js/migration.js — mount even if /locations fails
-  if (typeof ssiMount === 'function' && can('integrations.shipstation')) ssiMount();   // js/shipstation.js
+  if (typeof integrationsMount === 'function' && (can('integrations.sync') || can('integrations.manage'))) integrationsMount();   // js/integrations.js — the ShipStation panel (js/shipstation.js) opens inside it
   if (typeof pkgMount === 'function' && can('packing.pack')) pkgMount();   // js/packaging.js — Settings → Packaging (box catalog)
   if (typeof loadRolesCard === 'function' && can('settings.roles')) loadRolesCard();   // js/roles.js — admin only
 }

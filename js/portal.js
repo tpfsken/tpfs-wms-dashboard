@@ -115,6 +115,8 @@ const PORTAL_CARDS = [
     desc: 'Activity, receiving, shipments and full lot traceability.' },
   { id: 'portalUsers', perm: 'portal.users.manage', title: 'Users',
     desc: 'Who at your company can sign in, and what they can do.' },
+  { id: 'portalApi', perm: 'portal.api_keys', title: 'API & webhooks',
+    desc: 'Keys for your own systems and signed event notifications to your URLs.' },
 ];
 
 async function loadPortalHome() {

@@ -58,7 +58,7 @@
     </div>
   </div>
   <div class="side-footer">
-    <div class="nav-item ops-only" data-page="settings" data-perm="settings.pin|settings.packaging|settings.scan_view|settings.roles|integrations.shipstation|integrations.excalibur|billing.rate_cards" title="Warehouse settings + billable service catalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span class="nav-label">Settings</span></div>
+    <div class="nav-item ops-only" data-page="settings" data-perm="settings.pin|settings.packaging|settings.scan_view|settings.roles|integrations.shipstation|integrations.sync|integrations.manage|integrations.excalibur|billing.rate_cards" title="Warehouse settings + billable service catalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span class="nav-label">Settings</span></div>
     <button class="collapse-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 18l-6-6 6-6"/></svg><span class="nav-label">Collapse</span></button>
     <div class="side-user" id="sideUserLine" title="Signed in as"></div>
     <div class="nav-item ops-only js-change-pw" title="Change your own password"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg><span class="nav-label">Change password</span></div>
@@ -808,6 +808,9 @@
           <div id="cliPerformanceBody" style="padding:20px;"></div>
         </div>
       </div>
+      <div class="cli-panel" data-tab="api" style="display:none;">
+        <div id="cliApiBody" class="sp-host"></div>
+      </div>
       <div class="cli-panel" data-tab="portal" style="display:none;">
         <div class="card">
           <div class="card-head"><div class="card-title">Portal access</div><div style="flex:1"></div><button class="btn btn-ghost" onclick="uiRun(this, () => loadClientPortalTab())">Refresh</button></div>
@@ -873,12 +876,12 @@
       <div style="padding:14px 20px;font-size:13px;color:var(--text2);">Gates pick-mismatch overrides and destructive order edits.</div>
     </div>
 
-    <div class="card" style="margin-bottom:16px;" data-perm="integrations.shipstation">
+    <div class="card" style="margin-bottom:16px;" data-perm="integrations.sync|integrations.manage">
       <div class="card-head">
-        <div class="card-title" title="The shipping system is ShipStation.">Integrations — ShipStation</div>
+        <div class="card-title">Integrations</div>
         <div style="flex:1"></div>
       </div>
-      <div id="ssiBody" class="sp-host"></div>
+      <div id="integrationsBody" class="sp-host"></div>
     </div>
 
     <div class="card" style="margin-bottom:16px;" data-perm="settings.packaging">
@@ -1295,6 +1298,17 @@
   </div>
 </div>
 
+<div class="page" id="page-portalApi">
+  <div class="page-header">
+    <div><div class="page-title">API &amp; webhooks</div><div class="page-subtitle">Keys for your systems and the events we send to your URLs</div></div>
+    <div style="flex:1"></div>
+    <button class="ui-btn" onclick="navigateTo('portalHome')">← Home</button>
+  </div>
+  <div class="card">
+    <div id="portalApiBody"></div>
+  </div>
+</div>
+
 </div><!-- /main -->
 </div><!-- /shell -->
 
@@ -1580,6 +1594,8 @@
 <script src="js/ship.js"></script>
 <script src="js/migration.js"></script>
 <script src="js/shipstation.js"></script>
+<script src="js/integrations.js"></script>
+<script src="js/apiAccess.js"></script>
 <script src="js/packaging.js"></script>
 <script src="js/waves.js"></script>
   <script src="js/units.js"></script>
