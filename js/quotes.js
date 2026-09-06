@@ -40,7 +40,7 @@ function qtRenderModeBanner(mode) {
   if (!host) return;
   if (mode === 'test') {
     host.innerHTML = `<div class="ui-banner ui-banner-warn">
-      <strong>TEST RATES — do not send to a customer.</strong>
+      <strong>TEST RATES — do not send to a client.</strong>
       The shipping key is an EasyPost sandbox key; every price on this screen is synthetic.
       Saved quotes and PDFs are watermarked accordingly.
     </div>`;
@@ -59,7 +59,7 @@ function qtRenderForm() {
 
   host.innerHTML = `
     <div class="ui-field-row">
-      ${uiField({ id: 'qtCustomer', label: 'Customer', value: '', placeholder: 'Name on the quote (prospect or client)' })}
+      ${uiField({ id: 'qtClient or prospect', label: 'Customer', value: '', placeholder: 'Name on the quote (prospect or client)' })}
       ${uiField({ id: 'qtMarkup', label: 'Markup %', type: 'number', value: '', placeholder: '0', hint: 'Applied to every line at purchase price' })}
     </div>
 

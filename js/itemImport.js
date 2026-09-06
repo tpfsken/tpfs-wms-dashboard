@@ -265,8 +265,8 @@ function _iiStepValidate(body){
     <div class="roles-toolbar">
       <div class="ii-mode">
         <span class="ui-label">Items that already exist:</span>
-        <label class="ui-check"><input type="radio" name="iiMode" value="update" ${_ii.mode === 'update' ? 'checked' : ''}> update mapped fields</label>
-        <label class="ui-check"><input type="radio" name="iiMode" value="skip" ${_ii.mode === 'skip' ? 'checked' : ''}> skip them</label>
+        <label class="ui-check"><input type="radio" name="iiMode" value="update" ${_ii.mode === 'update' ? 'checked' : ''}> Update mapped fields</label>
+        <label class="ui-check"><input type="radio" name="iiMode" value="skip" ${_ii.mode === 'skip' ? 'checked' : ''}> Skip them</label>
       </div>
       <span style="flex:1"></span>
       <label class="ui-check"><input type="checkbox" id="iiErrOnly"> Show errors only</label>
@@ -325,7 +325,7 @@ function _iiStepCommit(body){
       <div class="ii-counts">${_iiCountChips(c, [['create', 'new items', 'ok'], ['update', `existing items ${_ii.mode === 'update' ? 'updated' : 'skipped'}`, _ii.mode === 'update' ? 'info' : 'neutral'], ['skip', 'skipped', 'neutral'], ['error', 'rows left out', 'danger']])}</div>
       <div class="ii-mode" style="margin:12px 0;">
         <span class="ui-label">Existing items:</span>
-        <label class="ui-check"><input type="radio" name="iiMode2" value="update" ${_ii.mode === 'update' ? 'checked' : ''}> update mapped fields (blank cells leave a field unchanged)</label>
+        <label class="ui-check"><input type="radio" name="iiMode2" value="update" ${_ii.mode === 'update' ? 'checked' : ''}> Update mapped fields (blank cells leave a field unchanged)</label>
         <label class="ui-check"><input type="radio" name="iiMode2" value="skip" ${_ii.mode === 'skip' ? 'checked' : ''}> skip them</label>
       </div>
       <div class="ui-hint">Each row is written on its own: a row that fails is listed in the error file and does not stop the others. Hazmat, HTS and country-of-origin changes on existing items are recorded in the compliance audit.</div>

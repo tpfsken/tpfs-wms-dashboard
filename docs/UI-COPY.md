@@ -135,10 +135,13 @@ follows the same names.
 | tone | 2 | first-person copy |
 | **Total flagged** | **723** | of 3,282 strings extracted |
 
-Batch 1 (internal-name, branding, tone, developer-term, API error-pattern) was
-applied 2026-09-06; the workbook's **applied** column records the result per row
-(applied / kept / skipped, with the reason). Batches 2 (terminology,
-capitalization, terminology-review, dashboard error-pattern) are pending.
+Batch 1 (internal-name, branding, tone, developer-term, API error-pattern) and
+batch 2 (terminology, capitalization, terminology-review, dashboard
+error-pattern) were applied 2026-09-06; the workbook's **applied** column
+records the result per row (applied / kept / skipped / human, with the reason).
+Rows marked **human** need a decision nobody could make from the code: the
+item identifier types "Customer SKU" / "Customer barcode" (whose code is it?)
+and "customer POs" among order attachments.
 
 The full list with file, location, current text, problem, proposed text and
 tooltip is in `docs/COPY-AUDIT.xlsx` (sheets: Flagged, All strings,

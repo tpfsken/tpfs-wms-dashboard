@@ -16,8 +16,8 @@ let _reportsClient = '';       // selected client id, '' = all clients
 const REPORTS_CATALOG = [
   {
     id:    'item-history',
-    title: 'Item history and LP trace',
-    desc:  'Search by SKU or lot, then follow the licence-plate family — receiving, picks, shipments, full timeline. Used for recall.',
+    title: 'Item history and license plate trace',
+    desc:  'Search by item or lot, then follow the license-plate family — receiving, picks, shipments, full timeline. Used for recall.',
     phase: '9.16 / 9.17',
     open:  () => openItemHistoryReport(),
     status:'live',
@@ -266,7 +266,7 @@ async function runGenericReport(){
   _reportParams = collectReportParams();
 
   const missing = _reportDef.params.filter(p => p.required && !_reportParams[p.key]);
-  if(missing.length) return uiToast(`${missing.map(m => m.label).join(' and ')} required`, 'error');
+  if(missing.length) return uiToast(`Enter a value for ${missing.map(m => m.label).join(' and ')}.`, 'error');
 
   const cols = rpColumns();
   uiTableLoading('genericReportWrap', cols);
@@ -455,8 +455,8 @@ async function openItemHistoryReport(){
   document.getElementById('reportsIndexView').style.display = 'none';
   document.getElementById('reportsContent').style.display = 'block';
   document.getElementById('genericReportView').style.display = 'none';
-  document.getElementById('reportsCurrentTitle').textContent = 'Item History';
-  document.getElementById('reportsCurrentSub').textContent   = 'Item history → LP traceability';
+  document.getElementById('reportsCurrentTitle').textContent = 'Item history';
+  document.getElementById('reportsCurrentSub').textContent   = 'Item history → license plate traceability';
 
   document.getElementById('itemHistoryView').style.display = 'block';
   document.getElementById('traceView').style.display = 'none';
@@ -495,7 +495,7 @@ async function openItemHistoryReport(){
 }
 
 const IH_COLS = [
-  { key: '_sku', label: 'SKU', sortValue: r => r.sku_code, render: r =>
+  { key: '_sku', label: 'Item', sortValue: r => r.sku_code, render: r =>
       `<div>${uiId(r.sku_code)}</div><div class="ui-hint">${esc(r.sku_name || '')}</div>` },
   { key: 'client_code', label: 'Client', mono: true },
   { key: '_lot', label: 'Lot', sortValue: r => r.lot_number, render: r => {
@@ -591,7 +591,7 @@ async function openTraceFromItem(ctx){
 
   document.getElementById('traceResults').style.display = 'none';
   document.getElementById('traceEmptyState').style.display = 'block';
-  document.getElementById('traceEmptyState').textContent = 'Loading LP trace…';
+  document.getElementById('traceEmptyState').textContent = 'Loading license plate trace…';
   document.getElementById('traceError').textContent = '';
 
   // If we have a specific lot, use it. Otherwise fall back to LP search by SKU
@@ -625,7 +625,7 @@ async function runManualTrace(){
   const lp = document.getElementById('manualLpInput').value.trim();
   const err = document.getElementById('traceError');
   err.textContent = '';
-  if(!lp){ err.textContent = 'Enter an LP number'; return; }
+  if(!lp){ err.textContent = 'Enter a license plate number'; return; }
 
   document.getElementById('traceResults').style.display = 'none';
   document.getElementById('traceEmptyState').style.display = 'block';
@@ -637,7 +637,7 @@ async function runManualTrace(){
   if(!data){ err.textContent = 'Trace failed'; return; }
   _traceData = data;
   _traceContext = { skuCode: 'Manual LP search', skuName: '', lotNumber: '' };
-  document.getElementById('traceContextLabel').textContent = `Manual LP search: ${lp}`;
+  document.getElementById('traceContextLabel').textContent = `Manual license plate search: ${lp}`;
   renderTrace();
 }
 
@@ -651,7 +651,7 @@ function renderTrace(){
   if(!hasFamily && !hasAllocs){
     results.style.display = 'none';
     empty.style.display = 'block';
-    empty.textContent = 'No LPs or allocations found.';
+    empty.textContent = 'No license plates or allocations found.';
     return;
   }
 

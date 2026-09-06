@@ -65,7 +65,7 @@ function bootPortal() {
   const bannerName = document.getElementById('portalBannerName');
   const bannerSub  = document.getElementById('portalBannerSub');
   if (bannerName) bannerName.textContent = clientLabel;
-  if (bannerSub && U && U.fullName) bannerSub.textContent = `Customer Portal · ${U.fullName}`;
+  if (bannerSub && U && U.fullName) bannerSub.textContent = `Client portal · ${U.fullName}`;
 
   // The Inventory / Orders filter bars (status combos included) are built at
   // DOM-ready by uiFilterBar for both modes; the Client combo is .ops-only and
@@ -74,7 +74,7 @@ function bootPortal() {
   // Pre-stub the Billing client filter so loadBilling() skips its first-run
   // init — that branch calls loadCC() -> GET /clients, which is requireOps and
   // would 403 a portal user.
-  initCombo('billClientFilterWrap', [{ value: '', label: 'My Account' }],
+  initCombo('billClientFilterWrap', [{ value: '', label: 'My account' }],
     { placeholder: 'My Account' });
 
   navigateTo('portalHome');
@@ -102,11 +102,11 @@ function portalPreviewLeave() { if (!window.closed) location.href = location.pat
 // applyPermGates, both at first render and again once /auth/me has answered.
 const PORTAL_CARDS = [
   { id: 'portalNewOrder', perm: 'portal.orders.create', title: 'Place an order',
-    desc: 'Manual outbound order — choose SKUs, quantities and a ship-to.' },
+    desc: 'Manual outbound order — choose items, quantities and a ship-to.' },
   { id: 'portalIntake', perm: 'portal.orders.create', title: 'Upload documents',
     desc: 'Drop a PDF (PO, BOL, ASN, packing slip). It is read automatically and turned into an order.' },
   { id: 'inventory', perm: 'portal.inventory.view', title: 'Inventory',
-    desc: 'On-hand SKUs, lots and licence plates held at the warehouse.' },
+    desc: 'On-hand items, lots and license plates held at the warehouse.' },
   { id: 'orders', perm: 'portal.orders.view', title: 'Orders',
     desc: 'Status of every order placed — open, picking, shipped.' },
   { id: 'billing', perm: 'portal.invoices.view', title: 'Billing',
@@ -320,7 +320,7 @@ const searchPortalSkus = debounce(async function () {
   div.querySelectorAll('.js-pno-sku').forEach(row =>
     row.addEventListener('click', uiBusyHandler(() => {
       try { expandPortalSkuLots(row, JSON.parse(row.dataset.payload)); }
-      catch (e) { uiToast('Could not read that SKU row', 'error'); }
+      catch (e) { uiToast('Could not read that item row', 'error'); }
     })));
 }, 250);
 
@@ -344,7 +344,7 @@ async function expandPortalSkuLots(skuRow, sku) {
     `/inventory?limit=200&status=available&skuCode=${encodeURIComponent('%' + sku.sku_code + '%')}`);
   // Match on sku_code (sku_id representation varies) and require positive qty.
   const rows = (d?.rows || d || []).filter(r => r.sku_code === sku.sku_code && Number(r.quantity) > 0);
-  if (!rows.length) { lots.innerHTML = uiEmpty('No available inventory for this SKU.'); return; }
+  if (!rows.length) { lots.innerHTML = uiEmpty('No available inventory for this item.'); return; }
 
   uiTable(lots, {
     columns: [
@@ -386,7 +386,7 @@ function addPortalNewOrderLine(p) {
 }
 
 const PNO_LINE_COLS = [
-  { key: 'sku_code', label: 'SKU', mono: true },
+  { key: 'sku_code', label: 'Item', mono: true },
   { key: 'sku_name', label: 'Description' },
   { key: '_lot', label: 'Lot', render: l => l.lot_number
       ? uiId(l.lot_number) : '<span class="ui-muted">—</span>' },
@@ -418,7 +418,7 @@ function renderPortalNewOrderLines() {
   const host = document.getElementById('pnoLinesWrap');
   uiTable(host, {
     columns: PNO_LINE_COLS, rows: _portalNewOrderLines, rowKey: '_key',
-    empty: 'No lines yet — search a SKU above, then pick the lot you want.',
+    empty: 'No lines yet — search an item above, then pick the lot you want.',
   });
 
   host.querySelectorAll('.js-pno-qty').forEach(inp =>
@@ -486,7 +486,7 @@ async function uploadPortalNewOrderAttachments(orderId) {
       if (!r.ok) { failed++; uiToast(`${file.name} did not upload — you can add it later`, 'error'); }
     } catch (e) {
       failed++;
-      uiToast(`${file.name} did not upload — network error`, 'error');
+      uiToast(`${file.name} did not upload — network error. Try again.`, 'error');
     }
   }
   return failed;
@@ -511,7 +511,7 @@ async function submitPortalNewOrder() {
     document.getElementById(bad).focus();
     return uiToast('Check the highlighted fields', 'error');
   }
-  if (!_portalNewOrderLines.length) return uiToast('Add at least one SKU', 'error');
+  if (!_portalNewOrderLines.length) return uiToast('Add at least one item', 'error');
   const badQty = _portalNewOrderLines.find(l => !l.qty || l.qty <= 0);
   if (badQty) return uiToast(`Quantity must be greater than 0 for ${badQty.sku_code}`, 'error');
 

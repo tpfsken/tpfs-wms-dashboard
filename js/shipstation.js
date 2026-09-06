@@ -61,7 +61,7 @@ async function ssiLoad(){
   const last = _ssi.runs[0];
   document.getElementById('ssiLast').innerHTML = last
     ? `${uiChip(last.status === 'ok' ? 'ACTIVE' : last.status === 'failed' ? 'FAILED' : 'DRAFT', last.status.toUpperCase())} <span class="ui-muted">${esc(String(last.started_at || '').slice(0, 16).replace('T', ' '))} · ${esc(last.trigger)}</span>
-       ${last.counts ? `<div class="ui-hint">seen ${esc(last.counts.ordersSeen ?? 0)} · created ${esc(last.counts.created ?? 0)} · updated ${esc(last.counts.updated ?? 0)} · label-printed ${esc(last.counts.labelPrinted ?? 0)} · waves ${esc(last.counts.waves ?? 0)} · allocated ${esc(last.counts.allocated ?? 0)}${last.counts.errors ? ` · <span class="ui-err-text">errors ${esc(last.counts.errors)}</span>` : ''}</div>` : ''}${last.error ? `<div class="ui-err-text">${esc(last.error)}</div>` : ''}`
+       ${last.counts ? `<div class="ui-hint">seen ${esc(last.counts.ordersSeen ?? 0)} · created ${esc(last.counts.created ?? 0)} · updated ${esc(last.counts.updated ?? 0)} · label-printed ${esc(last.counts.labelPrinted ?? 0)} · waves ${esc(last.counts.waves ?? 0)} · allocated ${esc(last.counts.allocated ?? 0)}${last.counts.errors ? ` · <span class="ui-err-text">Errors: ${esc(last.counts.errors)}</span>` : ''}</div>` : ''}${last.error ? `<div class="ui-err-text">${esc(last.error)}</div>` : ''}`
     : '<span class="ui-muted">never</span>';
   ssiRenderStores(); ssiRenderSvc(); ssiRenderReview(); ssiRenderRuns();
 }

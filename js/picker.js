@@ -254,14 +254,14 @@ function renderCurrentPick(){
     </div>
 
     <div style="background:#2a2a2a;border-radius:14px;padding:18px;margin-bottom:14px;">
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.7;font-weight:600;">SKU</div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.7;font-weight:600;">Item</div>
       <div style="font-size:24px;font-weight:700;font-family:ui-monospace,Menlo,monospace;color:#7eb6ff;margin-top:4px;">${esc(a.sku_code || '—')}</div>
       <div style="font-size:16px;opacity:.85;margin-top:6px;line-height:1.3;">${esc(a.sku_name || '')}</div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
       <div style="background:#2a2a2a;border-radius:14px;padding:16px;">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.7;font-weight:600;">License Plate</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.7;font-weight:600;">License plate</div>
         <div style="font-size:18px;font-weight:700;font-family:ui-monospace,Menlo,monospace;color:#fff;margin-top:4px;word-break:break-all;">${esc(a.lp_number || '—')}</div>
       </div>
       <div style="background:#2a2a2a;border-radius:14px;padding:16px;">
@@ -336,7 +336,7 @@ function renderAllDone(){
 
   // Shared button helpers — keeps the cards consistent
   const refreshBtn = `<button onclick="uiRun(this, () => reloadMobilePicker())" style="background:#2c7be5;color:#fff;border:none;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">↻ Refresh</button>`;
-  const exitBtn    = `<button onclick="exitMobilePicker()" style="background:#444;color:#fff;border:none;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Exit Picker</button>`;
+  const exitBtn    = `<button onclick="exitMobilePicker()" style="background:#444;color:#fff;border:none;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Exit picker</button>`;
   const orderLine  = `<div style="font-size:13px;opacity:.7;margin-bottom:20px;">Order <strong>${esc(orderNum)}</strong> · status <strong>${esc(status)}</strong></div>`;
 
   let body;
@@ -345,7 +345,7 @@ function renderAllDone(){
     body = `
       <div style="text-align:center;padding:32px 16px;">
         <div style="font-size:64px;line-height:1;margin-bottom:14px;">—</div>
-        <div style="font-size:22px;font-weight:700;margin-bottom:8px;">No Order Lines</div>
+        <div style="font-size:22px;font-weight:700;margin-bottom:8px;">No order lines</div>
         ${orderLine}
         <div style="font-size:13px;opacity:.75;margin-bottom:18px;line-height:1.5;">
           This order has no lines yet. Add lines on the desktop, then re-open here.
@@ -357,7 +357,7 @@ function renderAllDone(){
     body = `
       <div style="text-align:center;padding:32px 16px;">
         <div style="font-size:64px;line-height:1;margin-bottom:14px;">⏸</div>
-        <div style="font-size:22px;font-weight:700;margin-bottom:8px;">Not Allocated Yet</div>
+        <div style="font-size:22px;font-weight:700;margin-bottom:8px;">Not allocated yet</div>
         ${orderLine}
         <div style="font-size:13px;opacity:.75;margin-bottom:18px;line-height:1.5;">
           ${esc(lines.length)} line${lines.length === 1 ? '' : 's'} on this order, but nothing's been allocated to inventory yet. Allocate from desktop first, then ↻ Refresh here.
@@ -369,7 +369,7 @@ function renderAllDone(){
     body = `
       <div style="text-align:center;padding:32px 16px;">
         <div style="font-size:64px;line-height:1;margin-bottom:14px;">↺</div>
-        <div style="font-size:22px;font-weight:700;margin-bottom:8px;">Allocations Cancelled</div>
+        <div style="font-size:22px;font-weight:700;margin-bottom:8px;">Allocations cancelled</div>
         ${orderLine}
         <div style="font-size:13px;opacity:.75;margin-bottom:18px;line-height:1.5;">
           ${esc(counts.cancelled)} prior allocation${counts.cancelled === 1 ? '' : 's'} ${counts.cancelled === 1 ? 'was' : 'were'} cancelled (likely via Unallocate Order). Re-allocate from desktop, then ↻ Refresh.
@@ -383,7 +383,7 @@ function renderAllDone(){
     body = `
       <div style="text-align:center;padding:24px 16px;">
         <div style="font-size:64px;line-height:1;margin-bottom:14px;">⏸</div>
-        <div style="font-size:22px;font-weight:700;margin-bottom:6px;">Waiting on Allocation</div>
+        <div style="font-size:22px;font-weight:700;margin-bottom:6px;">Waiting on allocation</div>
         <div style="font-size:13px;opacity:.75;margin-bottom:16px;line-height:1.5;">
           You picked everything that was allocated, but ${shortLines.length} line${shortLines.length === 1 ? '' : 's'} still need allocation by ops (${totalShortUnits} unit${totalShortUnits === 1 ? '' : 's'} short).
         </div>
@@ -436,7 +436,7 @@ function renderAllDone(){
     body = `
       <div style="text-align:center;padding:32px 16px;">
         <div style="font-size:64px;line-height:1;margin-bottom:14px;">⚠</div>
-        <div style="font-size:22px;font-weight:700;margin-bottom:8px;">Unexpected State</div>
+        <div style="font-size:22px;font-weight:700;margin-bottom:8px;">Unexpected state</div>
         ${orderLine}
         <div style="background:#2a2a2a;border-radius:10px;padding:12px;margin-bottom:18px;font-size:11px;color:#9ad;text-align:left;">
           <div style="font-size:10px;text-transform:uppercase;opacity:.6;margin-bottom:4px;">Diagnostic</div>
@@ -495,7 +495,7 @@ function renderPostPickComplete(){
   document.getElementById('pickerBody').innerHTML = `
     <div style="text-align:center;padding:32px 16px;">
       <div style="font-size:80px;line-height:1;margin-bottom:14px;">✓</div>
-      <div style="font-size:26px;font-weight:700;margin-bottom:8px;">Picking Complete</div>
+      <div style="font-size:26px;font-weight:700;margin-bottom:8px;">Picking complete</div>
       <div style="font-size:14px;opacity:.85;margin-bottom:24px;line-height:1.5;">
         Order <strong>${esc(completedNum)}</strong> is now in <strong>PACKING</strong>.<br>
         What's next?
@@ -578,7 +578,7 @@ async function verifyCurrentPickPhoto(file){
       banner.innerHTML = `<div>Verification failed: ${esc(d.error || 'unknown error')}</div>`;
       vbtn.disabled = false;
       vbtn.style.opacity = '';
-      vbtn.textContent = 'Retry Photo';
+      vbtn.textContent = 'Retry photo';
       return;
     }
 
@@ -591,7 +591,7 @@ async function verifyCurrentPickPhoto(file){
     renderVerifyBanner(d.extracted || {});
     vbtn.disabled = false;
     vbtn.style.opacity = '';
-    vbtn.textContent = 'Retake Photo';
+    vbtn.textContent = 'Retake photo';
   } catch(e){
     banner.style.background = '#5a2c2c';
     banner.style.color = '#ffb3b3';
@@ -786,10 +786,10 @@ function showPickerOverrideModal(qty, defaultCat){
     heading.textContent = '⚠ Override AI Verification';
     intro.textContent = 'Claude flagged this as the wrong product. To override, choose a reason and describe what you saw.';
   } else if(_pickerLastMatch == null){
-    heading.textContent = 'Supervisor Approval Required';
+    heading.textContent = 'Supervisor approval required';
     intro.textContent = 'No AI photo verification was done for this pick. Supervisor approval is required to confirm without a verified photo.';
   } else {
-    heading.textContent = '⚠ Approval Required';
+    heading.textContent = '⚠ Approval required';
     intro.textContent = 'AI couldn\'t verify the photo (label damaged or unreadable). Supervisor approval is required to confirm anyway.';
   }
 

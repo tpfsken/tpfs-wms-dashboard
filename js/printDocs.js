@@ -218,8 +218,8 @@ function renderPickSlip(order) {
             <th style="width:30px;">✓</th>
             <th style="width:36px;">#</th>
             <th>Location</th>
-            <th>License Plate</th>
-            <th>SKU</th>
+            <th>License plate</th>
+            <th>Item</th>
             <th>Description</th>
             <th>Lot</th>
             <th>Expiry</th>
@@ -280,12 +280,12 @@ function renderPickSlip(order) {
         ${_fmtAddr(order)}
       </div>
       <div class="meta-block">
-        <h2>Order Info</h2>
+        <h2>Order info</h2>
         <div><strong>Customer:</strong> ${_esc(order.customer_name || '—')}</div>
         <div><strong>Channel:</strong> ${_esc(order.channel || '—')}</div>
         <div><strong>Carrier:</strong> ${_esc(order.carrier_code || '—')} / ${_esc(order.ship_method || '—')}</div>
-        <div><strong>Required Ship Date:</strong> ${order.required_ship_date ? _esc(new Date(order.required_ship_date).toLocaleDateString()) : '—'}</div>
-        <div><strong>Total Units:</strong> ${_esc(totalUnits.toLocaleString())} across ${_esc(itemsCount)} ${_esc(itemsLabel)}${itemsCount === 1 ? '' : 's'}</div>
+        <div><strong>Required ship date:</strong> ${order.required_ship_date ? _esc(new Date(order.required_ship_date).toLocaleDateString()) : '—'}</div>
+        <div><strong>Total units:</strong> ${_esc(totalUnits.toLocaleString())} across ${_esc(itemsCount)} ${_esc(itemsLabel)}${itemsCount === 1 ? '' : 's'}</div>
       </div>
     </div>
     ${linesHtml}
@@ -296,7 +296,7 @@ function renderPickSlip(order) {
       </div>
       <div>
         <div class="sig-line"></div>
-        <div class="small">Time Completed</div>
+        <div class="small">Time completed</div>
       </div>
     </div>
   `;
@@ -352,18 +352,18 @@ function renderPackingSlip(order) {
   const ship = order.shipments && order.shipments[0];
 
   const body = `
-    <h1>Packing Slip</h1>
+    <h1>Packing slip</h1>
     <div class="row-meta">
-      <div><strong>Order Number</strong>${_esc(order.order_number || '')}</div>
+      <div><strong>Order number</strong>${_esc(order.order_number || '')}</div>
       ${order.external_order_number ? `<div><strong>Customer PO</strong>${_esc(order.external_order_number)}</div>` : ''}
-      <div><strong>Order Date</strong>${_esc(new Date(order.created_at).toLocaleDateString())}</div>
-      <div><strong>Ship Date</strong>${order.shipped_at ? _esc(new Date(order.shipped_at).toLocaleDateString()) : '—'}</div>
+      <div><strong>Order date</strong>${_esc(new Date(order.created_at).toLocaleDateString())}</div>
+      <div><strong>Ship date</strong>${order.shipped_at ? _esc(new Date(order.shipped_at).toLocaleDateString()) : '—'}</div>
       ${ship?.tracking_number ? `<div><strong>Tracking</strong>${_esc(ship.tracking_number)}</div>` : ''}
       ${order.carrier_code ? `<div><strong>Carrier</strong>${_esc(order.carrier_code)}</div>` : ''}
     </div>
     <div class="meta-grid">
       <div class="meta-block">
-        <h2>Ship From</h2>
+        <h2>Ship from</h2>
         <strong>${_esc(wh.name || order.warehouse_name || '')}</strong><br>
         ${_fmtAddr(wh)}
       </div>
@@ -377,7 +377,7 @@ function renderPackingSlip(order) {
     ${linesHtml}
     <div class="row-meta" style="margin-top:14px;">
       <div><strong>Total Units</strong>${_esc(totalUnits.toLocaleString())}</div>
-      <div><strong>Total Lines</strong>${_esc(lines.length)}</div>
+      <div><strong>Total lines</strong>${_esc(lines.length)}</div>
     </div>
     ${order.notes ? `<div style="margin-top:12px;border-top:1px solid #555;padding-top:10px;font-size:11px;"><strong>Notes:</strong> ${_esc(order.notes)}</div>` : ''}
     <div class="small" style="margin-top:24px;text-align:center;color:#444;">

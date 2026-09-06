@@ -260,7 +260,7 @@ async function loadFloorInbound(){
       </div>`;
   }).join('') + `
     <div style="margin-top:14px;padding:14px;background:var(--bg);border-radius:10px;font-size:13px;color:var(--text2);text-align:center;">
-      Full receive flow (tap a receipt → scan LP / qty / location) is coming next. For now use the desktop Receiving page to add lines.
+      Full receive flow (tap a receipt → scan license plate / quantity / location) is coming next. For now use the desktop Receiving page to add lines.
     </div>`;
 }
 
@@ -276,7 +276,7 @@ function loadFloorMove(){
       <div style="font-size:48px;margin-bottom:14px;">—</div>
       <div style="font-size:16px;font-weight:600;margin-bottom:8px;">Move Inventory — coming next</div>
       <div style="font-size:13px;color:var(--text2);line-height:1.5;">
-        Scan an LP, scan a destination location, tap Move. Updates location on the LP and the inventory row in one shot. Will land in the next push.
+        Scan a license plate, scan a destination location, tap Move. Updates location on the license plate and the inventory row in one shot. Will land in the next push.
       </div>
     </div>`;
 }

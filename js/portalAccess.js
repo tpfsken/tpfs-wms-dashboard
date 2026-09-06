@@ -134,7 +134,7 @@ async function saveClientPortalTab(){
 let _puData = { rows: [], roles: [] };
 
 const PU_COLS = [
-  { key: 'fullName', label: 'Name', render: u => `${esc(u.fullName || '')}${u.self ? ' <span class="idn-tag">you</span>' : ''}${u.mustChangePassword ? '<div class="ui-hint">temp password — must change at next login</div>' : ''}` },
+  { key: 'fullName', label: 'Name', render: u => `${esc(u.fullName || '')}${u.self ? ' <span class="idn-tag">you</span>' : ''}${u.mustChangePassword ? '<div class="ui-hint">Temporary password — must be changed at next sign-in</div>' : ''}` },
   { key: 'email', label: 'Email', mono: true },
   { key: 'roleName', label: 'Role', render: u => `<span class="ui-chip ui-chip-ok">${esc(u.roleName || u.role)}</span>` },
   { key: '_status', label: 'Status', sortValue: u => u.isActive ? 0 : 1, render: u => u.isActive ? uiChip('ACTIVE', 'active') : uiChip('INACTIVE', 'inactive') },

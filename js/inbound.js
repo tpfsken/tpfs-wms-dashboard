@@ -15,7 +15,7 @@ let poLines = [];      // new-PO modal: pending lines
 const INB_COLS = [
   { key: 'po_number', label: 'Receipt #', mono: true },
   // The customer's own number — the one they'll quote at you on the phone.
-  { key: 'external_po', label: 'Customer PO', sortable: false, render: r => r.external_po
+  { key: 'external_po', label: 'Client PO', sortable: false, render: r => r.external_po
       ? uiId(r.external_po) : '<span class="ui-muted">—</span>' },
   { key: 'client_name', label: 'Client' },
   { key: 'supplier_name', label: 'Supplier' },
@@ -52,9 +52,9 @@ function initInboundFilterBar(){
   uiFilterBar('inbFilterBar', {
     key: 'inb', page: 'inbound',
     title: 'Receiving', subtitle: 'Purchase orders and inbound',
-    search: { placeholder: 'Search receipt #, customer PO, or supplier…' },
+    search: { placeholder: 'Search receipt #, client PO or supplier…' },
     statuses: INB_STATUS_OPTIONS,
-    actions: `<button class="ui-btn ui-btn-primary" data-perm="receiving.receive" onclick="uiRun(this, () => showNewPoModal())">New PO</button>`,
+    actions: `<button class="ui-btn ui-btn-primary" data-perm="receiving.receive" onclick="uiRun(this, () => showNewPoModal())">New receipt</button>`,
     onChange: () => loadInbound(),
   });
 }
@@ -88,7 +88,7 @@ async function loadInbound(){
 
   uiTableLoading('inbListWrap', INB_COLS);
   const d = await apiGet(`/inbound/receipts?${qs.toString()}`);
-  if(d === null) return uiTableError('inbListWrap', INB_COLS, 'Could not load purchase orders', loadInbound);
+  if(d === null) return uiTableError('inbListWrap', INB_COLS, 'Could not load receipts', loadInbound);
 
   const rows  = d.rows || d || [];
   const total = Number(d.total ?? rows.length);
@@ -114,7 +114,7 @@ async function loadInbound(){
 
 const PO_LINE_COLS = [
   { key: 'line_number', label: 'Line', num: true },
-  { key: 'sku_code', label: 'SKU', mono: true },
+  { key: 'sku_code', label: 'Item', mono: true },
   { key: 'sku_name', label: 'Description' },
   { key: 'uom', label: 'UOM' },
   { key: '_lot', label: 'Lot', render: ln => ln.lot_number
@@ -153,7 +153,7 @@ async function openPoDetail(id){
   document.getElementById('inbDetailView').style.display = 'block';
 
   const d = await apiGet(`/inbound/receipts/${id}`);
-  if(!d){ uiToast('Could not load that PO', 'error'); closePoDetail(); return; }
+  if(!d){ uiToast('Could not load that receipt', 'error'); closePoDetail(); return; }
   CPD = d;
 
   document.getElementById('poDetailTitle').innerHTML =
@@ -173,7 +173,7 @@ async function openPoDetail(id){
   ]);
 
   uiTable('poLinesWrap', {
-    columns: PO_LINE_COLS, rows: d.lines || [], rowKey: 'id', empty: 'No lines on this PO.',
+    columns: PO_LINE_COLS, rows: d.lines || [], rowKey: 'id', empty: 'No lines on this receipt.',
   });
 
   const recv = !['received', 'closed', 'cancelled'].includes(d.status);
@@ -220,7 +220,7 @@ async function openPoDetail(id){
       }).join('');
       loadLocs(ur.length);
     } else {
-      rl.innerHTML = uiEmpty('Every line is fully received — complete the PO.');
+      rl.innerHTML = uiEmpty('Every line is fully received — complete the receipt.');
       document.getElementById('completePoBtn').style.display = 'inline-flex';
     }
   }
@@ -229,7 +229,7 @@ async function openPoDetail(id){
   document.getElementById('recHistBadge').textContent = hist.length;
   uiTable('recHistWrap', {
     columns: REC_HIST_COLS, rows: hist, rowKey: 'id',
-    empty: 'Nothing received against this PO yet.',
+    empty: 'Nothing received against this receipt yet.',
   });
 }
 
@@ -378,7 +378,7 @@ async function completePo(){
   const short = (CPD?.lines || []).filter(ln => (ln.expected_qty || 0) > (ln.received_qty || 0));
   if(short.length){
     const ok = await uiConfirm({
-      title: 'Complete a short PO?',
+      title: 'Complete a short receipt?',
       body: `<strong>${esc(short.length)} line(s)</strong> are still outstanding:<br>` +
             short.map(l => `${esc(l.sku_code)} — ${esc((l.expected_qty || 0) - (l.received_qty || 0))} short`).join('<br>') +
             '<br><br>Completing closes the PO. The shortfall stays on the record as never received.',
@@ -392,10 +392,10 @@ async function completePo(){
     });
     const d = await r.json();
     if(!r.ok) return uiToast(d.error || 'Could not complete the PO', 'error');
-    uiToast(`PO ${d.status} — ${d.total_received} of ${d.total_expected} received`);
+    uiToast(`Receipt ${d.status} — ${d.total_received} of ${d.total_expected} received`);
     openPoDetail(CPI);
   } catch(e){
-    uiToast('Network error — the PO was not completed', 'error');
+    uiToast('Network error — the receipt was not completed', 'error');
   }
 }
 
@@ -415,7 +415,7 @@ async function showNewPoModal(){
   poLines = [];
 
   PO_M = uiModal({
-    title: 'New purchase order',
+    title: 'New receipt',
     width: 800,
     body: `
       <!-- Our receipt number is NOT a field. It is assigned by the sequence on
@@ -443,17 +443,17 @@ async function showNewPoModal(){
 
       <div class="eo-section">
         <div class="no-section-head">
-          <div class="ui-label">PO lines</div>
+          <div class="ui-label">Receipt lines</div>
           <span class="ui-hint" id="npLinesCount"></span>
           <div style="flex:1"></div>
-          <input type="text" class="ui-input no-search" id="npSkuSearch" placeholder="Search SKUs…">
+          <input type="text" class="ui-input no-search" id="npSkuSearch" placeholder="Search items…">
         </div>
         <div id="npSkuResults" class="no-results"></div>
         <div id="npLinesWrap"></div>
       </div>`,
     actions: [
       { label: 'Cancel' },
-      { label: 'Create PO', primary: true, onClick: submitNewPo },
+      { label: 'Create receipt', primary: true, onClick: submitNewPo },
     ],
     onClose: () => { PO_M = null; },
   });
@@ -489,7 +489,7 @@ async function searchPoSkus(){
   if(!div) return;
   if(!cid){
     // Used to fail silently — the box just did nothing with no client picked.
-    div.innerHTML = uiEmpty('Pick a client first — SKUs are scoped to the client.');
+    div.innerHTML = uiEmpty('Pick a client first — items are scoped to the client.');
     div.style.display = 'block';
     return;
   }
@@ -513,7 +513,7 @@ async function searchPoSkus(){
 
 function addPL(id, code, name, uom){
   if(poLines.find(l => l.skuId === id)){
-    return uiToast(`${code} is already on this PO`, 'error');   // was a silent no-op
+    return uiToast(`${code} is already on this receipt`, 'error');   // was a silent no-op
   }
   poLines.push({ skuId: id, code, name, uom, qty: 1, lot: '', expiry: '' });
   renderPL();
@@ -548,7 +548,7 @@ function renderPL(){
 
   uiTable(host, {
     columns: PL_COLS, rows: poLines, rowKey: 'skuId',
-    empty: 'No lines yet — search a SKU above.',
+    empty: 'No lines yet — search an item above.',
   });
 
   const find = (k) => poLines.find(l => String(l.skuId) === String(k));
@@ -599,7 +599,7 @@ async function submitNewPo(m){
     uiToast(`${d.po_number} created`);
     loadInbound();
   } catch(e){
-    uiToast('Network error — the PO was not created', 'error');
+    uiToast('Network error — the receipt was not created', 'error');
     return false;
   }
 }

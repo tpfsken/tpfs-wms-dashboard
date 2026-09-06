@@ -15,7 +15,7 @@
 // `key` on a sortable column is the API's sortBy value — it must exist in the
 // INVENTORY_SORTS whitelist in the API's queries/inventory.js.
 const ONHAND_COLS = [
-  { key: 'sku_code', label: 'SKU', render: r => {
+  { key: 'sku_code', label: 'Item', render: r => {
       const sev = severityChip(r, { size: 'sm' });
       return `${uiId(r.sku_code || '')}${sev ? ' ' + sev : ''}`;
     } },
@@ -108,14 +108,14 @@ function initInventoryFilterBar(){
     subtitle: 'On-hand by SKU, lot, and location · add new items from the client\'s Item Master tab',
     leading: `<button class="ui-btn portal-only" onclick="navigateTo('portalHome')">← Home</button>`,
     controls: `<label class="ui-check ops-only inv-show-inactive"><input type="checkbox" id="invShowInactive" onchange="uiRun(this, () => invToggleInactiveClients(this))"> Show inactive</label>`,
-    search: { placeholder: 'Search SKU, lot, LP, or location…' },
+    search: { placeholder: 'Search item, lot, license plate or location…' },
     statuses: INV_STATUS_OPTIONS,
     // Jump-to-unit is an ACTION (Enter opens the unit's LP), not a list filter.
     // It carries every "leave me alone" hint a browser or password manager
     // honours; the real fix for the saved-email autofill is on the login form.
     tools: `<input type="search" class="ui-input inv-find-unit ops-only" id="invFindUnit" name="unit-lookup"
               placeholder="Jump to unit code…" aria-label="Jump to a unit by its code (press Enter)"
-              title="Type or scan a unit code and press Enter to open its LP"
+              title="Type or scan a unit code and press Enter to open its license plate"
               autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-form-type="other"
               onkeydown="if(event.key==='Enter'){event.preventDefault();uiRun(this, () => invFindUnit(this.value));}">`,
     actions: `<button class="ui-btn ui-btn-primary ops-only" data-perm="inventory.case_break" onclick="uiRun(this, () => showCaseBreakModal())">Case break</button>`,
@@ -200,12 +200,12 @@ async function showCaseBreakModal(){
     width: 680,
     body: `
       <div class="ui-dialog-body" style="margin-bottom:14px;">
-        Break cases into eaches. Find the case LP, say how many cases to break, and pick the
+        Break cases into eaches. Find the case license plate, say how many cases to break, and pick the
         target pick-face location. The case pack quantity comes from the SKU configuration.
       </div>
       <div class="ui-field" data-field="cbLpSearch">
         <label class="ui-label" for="cbLpSearch">License plate</label>
-        <input type="text" class="ui-input" id="cbLpSearch" placeholder="Type an LP number…" autocomplete="off">
+        <input type="text" class="ui-input" id="cbLpSearch" placeholder="Type a license plate number…" autocomplete="off">
         <div class="ui-field-err" style="display:none;"></div>
       </div>
       <div id="cbLpResults" class="cb-results"></div>
@@ -279,7 +279,7 @@ const searchCBLps = debounce(async function(){
   });
 
   if(!matches.length){
-    div.innerHTML = uiEmpty(`No available case LPs matching “${s}”`);
+    div.innerHTML = uiEmpty(`No available case license plates matching “${s}”`);
     return;
   }
 
@@ -300,7 +300,7 @@ const searchCBLps = debounce(async function(){
   div.querySelectorAll('.js-cb-lp-row').forEach(row =>
     row.addEventListener('click', () => {
       try { selectCBLp(JSON.parse(row.dataset.payload)); }
-      catch(e){ uiToast('Could not read that LP row', 'error'); }
+      catch(e){ uiToast('Could not read that license plate row', 'error'); }
     }));
 }, 300);
 
@@ -325,7 +325,7 @@ function selectCBLp(r){
       { k: 'Lot', v: r.lot_number ? uiId(r.lot_number) : '<span class="ui-muted">—</span>' },
       { k: 'Location', v: r.location_code ? uiId(r.location_code) : '<span class="ui-muted">—</span>' },
       { k: 'SKU type', v: esc(r.sku_type || r.uom || 'CASE') },
-      { k: 'Each SKU', v: '<span class="ui-muted">resolved from the SKU config</span>' },
+      { k: 'Each SKU', v: '<span class="ui-muted">resolved from the item settings</span>' },
     ])}`;
 
   const qty = document.getElementById('cbQty');
@@ -340,7 +340,7 @@ function updateCBPreview(){
   const max = Number(cbSelectedLp.quantity);
   const preview = document.getElementById('cbPreview');
   if(qty > max){
-    preview.innerHTML = `<span class="ui-err-text">Only ${esc(max)} case${max === 1 ? '' : 's'} on this LP</span>`;
+    preview.innerHTML = `<span class="ui-err-text">Only ${esc(max)} case${max === 1 ? '' : 's'} on this license plate</span>`;
     return;
   }
   if(qty <= 0){ preview.textContent = 'Enter at least 1 case'; return; }
@@ -350,20 +350,20 @@ function updateCBPreview(){
 
 // uiModal action — returning false keeps the modal open.
 async function submitCaseBreak(m){
-  if(!cbSelectedLp){ uiToast('Find and select a case LP first', 'error'); return false; }
+  if(!cbSelectedLp){ uiToast('Find and select a case license plate first', 'error'); return false; }
   const qty   = parseInt(document.getElementById('cbQty').value) || 0;
   const locId = cbVal('cbLocationWrap');
 
   uiFieldError(m.el, 'cbQty', qty > 0 ? '' : 'Enter at least 1 case');
   uiFieldError(m.el, 'cbLocationWrap', locId ? '' : 'Pick a target location');
   if(qty > Number(cbSelectedLp.quantity)){
-    uiFieldError(m.el, 'cbQty', `Only ${cbSelectedLp.quantity} cases on this LP`);
+    uiFieldError(m.el, 'cbQty', `Only ${cbSelectedLp.quantity} cases on this license plate`);
     return false;
   }
   if(qty <= 0 || !locId) return false;
 
   const lpId = cbSelectedLp.lp_id || cbSelectedLp.id;
-  if(!lpId){ uiToast('That row has no LP id — it can\'t be case-broken', 'error'); return false; }
+  if(!lpId){ uiToast('That row has no license plate ID, so it can\'t be case-broken', 'error'); return false; }
 
   const r = await fetch(`${API}/inventory/case-break`, {
     method:'POST',
@@ -504,7 +504,7 @@ function itemFormBody(){
           <span class="ui-hint">The case level above the each. Leave blank if the item is never handled by the case.</span>
         </div>
         <div class="idn-case-row">
-          ${uiField({ id: 'itemCaseSku', label: 'Case SKU', placeholder: 'ACM-1234-CS' })}
+          ${uiField({ id: 'itemCaseSku', label: 'Case SKU code', placeholder: 'ACM-1234-CS' })}
           ${uiField({ id: 'itemCaseUnits', label: 'Units per case', type: 'number', placeholder: '12' })}
           ${uiField({ id: 'itemCaseBarcode', label: 'Case barcode', placeholder: '10012345678902', hint: '14 digits is kept as a GTIN-14; anything else as a carton code.' })}
         </div>
@@ -1264,7 +1264,7 @@ async function renderHandlingUnits(){
           <div class="cb-wrap" id="huType_${esc(i)}"></div>
         </div>
         <div style="flex:1;min-width:200px;">
-          <label class="form-label">SKU Code *</label>
+          <label class="form-label">SKU code *</label>
           <input class="form-input js-hu-code" data-idx="${esc(i)}" value="${esc(hu.sku_code || '')}" placeholder="auto-filled from base code">
         </div>
         <div style="width:110px;">
@@ -1683,7 +1683,7 @@ async function renderIdentifiersCard(skuId, hostId){
   };
   uiTable(host, {
     columns: [
-      { key: 'sku_type', label: 'Level', render: l => `<span class="idn-level">${esc(l.sku_type || '')}</span>${l.id === skuId ? ' <span class="idn-tag">this LP</span>' : ''}` },
+      { key: 'sku_type', label: 'Level', render: l => `<span class="idn-level">${esc(l.sku_type || '')}</span>${l.id === skuId ? ' <span class="idn-tag">this license plate</span>' : ''}` },
       { key: 'sku_code', label: 'SKU code', mono: true },
       { key: '_pack', label: 'Pack', num: true, render: pack },
       { key: '_codes', label: 'Barcodes', render: codes },
@@ -1814,7 +1814,7 @@ async function openSdsDocument(docId, filename){
 // =============================================================================
 // SDS INTELLIGENCE — new per-field pipeline. Versions the SDS doc, runs
 // Claude with per-field confidence + verbatim source citations, auto-
-// applies high-conf fields to the SKU master, queues review items for
+// applies high-conf fields to the item master, queues review items for
 // the compliance page. Edit mode only (needs an existing sku_id).
 // =============================================================================
 async function runSdsIntelExtract(skuId, file){
@@ -1929,7 +1929,7 @@ function renderSdsExtractResult(ext, doc){
   const reasonText = ext.reason
     ? esc(ext.reason)
     : (band === 'auto_applied'
-        ? 'High-confidence fields written directly to the SKU master. Review the audit log on the SKU detail page if you want to see what changed.'
+        ? 'High-confidence fields written directly to the item master. Review the audit log on the SKU detail page if you want to see what changed.'
         : band === 'rejected'
           ? 'Some required hazmat fields were missing or below 75% confidence. Reviewer must fix before this SKU can be considered compliant.'
           : 'Some fields landed below the 95% auto-apply threshold or contained changes vs. previously approved values.');
@@ -2018,7 +2018,7 @@ function renderItemPendingDocs(){
       <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
         <div style="width:38px;height:38px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--blue);">${esc(ext.slice(0,4))}</div>
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name)} ${tagged ? '<span class="chip chip-warning" style="font-size:10px;">SDS</span>' : ''} <span style="color:var(--muted);font-weight:400;">· uploads on Save</span></div>
+          <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name)} ${tagged ? '<span class="chip chip-warning" style="font-size:10px;">SDS</span>' : ''} <span style="color:var(--muted);font-weight:400;">· Uploads on Save</span></div>
           <div style="font-size:11px;color:var(--text2);">${esc(sizeLabel)} · ${esc(f.type || 'unknown')}</div>
         </div>
         <button class="btn btn-ghost js-item-pend-rm" data-idx="${esc(i)}" style="padding:3px 10px;font-size:12px;color:var(--red);">✕</button>
@@ -2175,7 +2175,7 @@ async function uploadItemAttachments(skuId, files){
 
 // =============================================================================
 // INVENTORY DETAIL MODAL — drill-down from a row click. Renders the full
-// origin trail for an inventory entry: SKU master, lot, license-plate
+// origin trail for an inventory entry: item master, lot, license-plate
 // family (parent / children if case-broken), inbound origin (PO + supplier
 // + receiver), and any current allocations holding the LP.
 // =============================================================================
@@ -2378,7 +2378,7 @@ async function openInventoryDetail(invId, opts = {}){
     <div class="card inv-sec">
       <div class="card-head">
         <div class="card-title">Identifiers &amp; pack levels</div>
-        <div class="ui-hint" style="margin-left:8px;">barcodes on each handling level</div>
+        <div class="ui-hint" style="margin-left:8px;">Barcodes on each handling level</div>
       </div>
       <div id="invIdnWrap">${uiSpinner('Loading…')}</div>
     </div>` : '';
@@ -2400,7 +2400,7 @@ async function openInventoryDetail(invId, opts = {}){
       </div>
     </div>` : '';
 
-  // ---- LP family (case-break lineage) ----
+  // ---- License plate family (case-break lineage) ----
   const family = (d.parent_lp || d.child_lps?.length) ? `
     <div class="card inv-sec">
       <div class="card-head"><div class="card-title">LP family</div></div>
@@ -2416,7 +2416,7 @@ async function openInventoryDetail(invId, opts = {}){
       </div>
     </div>` : '';
 
-  // ---- Inbound origin ----
+  // ---- Receipt origin ----
   const inbound = d.inbound ? `
     <div class="card inv-sec">
       <div class="card-head"><div class="card-title">Inbound origin</div></div>
@@ -2435,7 +2435,7 @@ async function openInventoryDetail(invId, opts = {}){
     </div>` : `
     <div class="card inv-sec">
       <div class="card-head"><div class="card-title">Inbound origin</div></div>
-      <div class="inv-sec-body">${uiEmpty('No receiving record for this LP — entered directly, or it predates this WMS.')}</div>
+      <div class="inv-sec-body">${uiEmpty('No receiving record for this license plate — entered directly, or it predates this WMS.')}</div>
     </div>`;
 
   // ---- COA (lot documents) ----
@@ -2457,7 +2457,7 @@ async function openInventoryDetail(invId, opts = {}){
     <div class="card inv-sec">
       <div class="card-head">
         <div class="card-title">Current allocations</div>
-        <div class="ui-hint" style="margin-left:8px;">orders holding this LP</div>
+        <div class="ui-hint" style="margin-left:8px;">orders holding this license plate</div>
       </div>
       <div id="invAllocWrap"></div>
     </div>` : '';

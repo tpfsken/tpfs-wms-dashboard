@@ -228,7 +228,7 @@ function renderClientProfileTab(){
         { k: 'Emergency contact', v: esc(hc.emergency_contact || '—') },
         { k: 'Notes', v: esc(hc.notes || '—') },
       ]) +
-      `<div class="ui-hint" style="margin-top:12px;">Per-item hazmat fields (UN #, hazard class, packing group, ground-only) are set on each SKU. Items under this client require them.</div>`;
+      `<div class="ui-hint" style="margin-top:12px;">Per-item hazmat fields (UN #, hazard class, packing group, ground-only) are set on each item. Items under this client require them.</div>`;
   } else {
     hazPanel.style.display = 'none';
   }
@@ -338,12 +338,12 @@ function openClientFormModal(client){
       </div>
       ${uiFieldSelect({ id: 'cfInvoiceMode', label: 'Invoice detail',
           options: [
-            { value: 'DETAILED', label: 'Detailed — one line per LP' },
+            { value: 'DETAILED', label: 'Detailed — one line per license plate' },
             { value: 'SUMMARY',  label: 'Summary — grouped by charge code' },
           ], value: client?.invoice_detail_mode || 'DETAILED' })}
 
       <div class="eo-section">
-        <div class="ui-label">Account rules</div>
+        <div class="ui-label">Client rules</div>
         <div class="item-checks">
           <label class="ui-check ui-check-warn">
             <input type="checkbox" id="cfHazmat" ${client?.hazmat_enabled ? 'checked' : ''}> ⚠ Hazmat client
@@ -357,7 +357,7 @@ function openClientFormModal(client){
             { value: 'tap',  label: 'Tap — GO TO the bin, picker taps I\'M HERE' },
             { value: 'scan', label: 'Scan — the bin label must be scanned first' },
           ], value: pr.location_mode || 'tap',
-          hint: 'In tap mode every unit or carton scan is still checked against the location it is recorded in. Plain SKU / UPC labels carry no location, so they are not location-checked in tap mode.' })}
+          hint: 'In tap mode every unit or carton scan is still checked against the location it is recorded in. Plain item or UPC barcode labels carry no location, so they are not location-checked in tap mode.' })}
         ${uiFieldSelect({ id: 'cfUnitControl', label: 'Unit control', options: [
             { value: 'none',     label: 'None — count by item scans' },
             { value: 'optional', label: 'Optional — units may be received' },
@@ -374,10 +374,10 @@ function openClientFormModal(client){
         ${uiFieldSelect({ id: 'cfDefaultBox', label: 'Default box (label at pack)', options: [{ value: '', label: 'None — the packer scans the box' }], value: (client?.ship_rules && client.ship_rules.default_box_id) || '', hint: 'Offered as "Use <box>" at Pack & Ship. Boxes live under Settings → Packaging.' })}
         <div class="item-checks">
           <label class="ui-check"><input type="checkbox" id="cfAllowCustomDims" ${(client?.ship_rules && client.ship_rules.allow_custom_dims === false) ? '' : 'checked'}> Allow typed dims at Pack & Ship (instead of scanning a box)</label>
-          <label class="ui-check"><input type="checkbox" id="cfShipsAsIs" ${client?.ships_as_is_default ? 'checked' : ''}> Items ship as-is by default (each SKU can override)</label>
+          <label class="ui-check"><input type="checkbox" id="cfShipsAsIs" ${client?.ships_as_is_default ? 'checked' : ''}> Items ship as-is by default (each item can override)</label>
           <label class="ui-check"><input type="checkbox" id="cfRequireLabelScan" ${(client?.ship_rules && client.ship_rules.require_label_scan === false) ? '' : 'checked'}> Require the label scan at ship (every box's label is scanned at the bench before Ship)</label>
           <label class="ui-check"><input type="checkbox" id="cfItemScan" ${pr.require_item_scan === false ? '' : 'checked'}> Require item scans (off = tap-to-count)</label>
-          <label class="ui-check"><input type="checkbox" id="cfCartonConfirm" ${pr.allow_carton_confirm ? 'checked' : ''}> Allow carton confirm (scan an LP to count its units)</label>
+          <label class="ui-check"><input type="checkbox" id="cfCartonConfirm" ${pr.allow_carton_confirm ? 'checked' : ''}> Allow carton confirm (scan a license plate to count its units)</label>
         </div>
         <div id="cfHazmatBlock" class="item-hazmat" style="display:${client?.hazmat_enabled ? '' : 'none'};">
           ${uiField({ id: 'cfHazEmergency', label: 'Emergency contact',
@@ -428,7 +428,7 @@ async function submitClientForm(m){
     const n = Number(skus?.total ?? (Array.isArray(skus) ? skus.length : 0));
     const ok = await uiConfirm({
       title: 'Make lot tracking mandatory?',
-      body: `Every SKU under <strong>${esc(_currentClient.name || code)}</strong>` +
+      body: `Every item under <strong>${esc(_currentClient.name || code)}</strong>` +
             (n ? ` — <strong>${esc(n)}</strong> item(s)` : '') +
             ` will be backfilled to lot-tracked, and new items can't opt out.<br><br>` +
             `Receiving will then require a lot number on every inbound line for this client.`,
@@ -837,7 +837,7 @@ function renderSlaRulesBody(){
           <th style="width:22%;">Rule</th>
           <th style="width:14%;">Value</th>
           <th style="width:10%;">Unit</th>
-          <th style="width:18%;">Exception Charge</th>
+          <th style="width:18%;">Exception charge</th>
           <th style="width:14%;" class="right">Charge $</th>
           <th>Notes</th>
           <th style="width:140px;text-align:right;">Actions</th>
@@ -999,7 +999,7 @@ async function loadClientItemsTab(){
 const CLI_ITEM_LIMIT = 500;   // what the endpoint will return in one call
 
 const CLI_ITEM_COLS = [
-  { key: 'sku_code', label: 'SKU', mono: true },
+  { key: 'sku_code', label: 'Item', mono: true },
   { key: '_name', label: 'Description', sortValue: r => r.name, render: r =>
       `<div>${esc(r.name || '')}</div>` +
       (r.special_handling_instructions

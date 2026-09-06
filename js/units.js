@@ -107,11 +107,11 @@ async function invFindUnit(raw){
   const r = await fetch(`${API}/units/lookup?uid=${encodeURIComponent(uid)}`, { headers: { Authorization: `Bearer ${T}` } });
   const d = await r.json().catch(() => ({}));
   if(!r.ok){ uiToast(d.error || 'Unit not found', 'error'); return false; }
-  if(!d.lpId){ uiToast(`${d.uid} is ${UNIT_STATUS_LABEL[d.status] || d.status} and not on an LP${d.orderNumber ? ' (order ' + d.orderNumber + ')' : ''}`, 'warning'); return openUnitHistory(d.id); }
+  if(!d.lpId){ uiToast(`${d.uid} is ${UNIT_STATUS_LABEL[d.status] || d.status} and not on a license plate${d.orderNumber ? ' (order ' + d.orderNumber + ')' : ''}`, 'warning'); return openUnitHistory(d.id); }
   const inv = await apiGet(`/inventory?search=${encodeURIComponent(d.lpNumber || '')}&limit=50`);
   const rows = inv?.rows || inv?.data || inv || [];
   const row = rows.find(x => x.lp_id === d.lpId) || rows[0];
-  if(!row){ uiToast(`${d.uid} is on ${d.lpNumber} but that LP has no inventory record`, 'warning'); return openUnitHistory(d.id); }
+  if(!row){ uiToast(`${d.uid} is on ${d.lpNumber} but that license plate has no inventory record`, 'warning'); return openUnitHistory(d.id); }
   uiToast(`${d.uid} — ${d.lpNumber}${d.cartonCode ? ' (' + d.cartonCode + ')' : ''} @ ${d.locationCode || '?'}`, 'success');
   return openInventoryDetail(row.id, { highlightUid: d.uid });
 }

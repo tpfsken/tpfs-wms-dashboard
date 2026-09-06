@@ -160,9 +160,9 @@ function renderKPIs(k){
     uiTile({ label: 'Orders today', value: k.ordersToday?.value ?? 0 }) +
     uiTile({ label: 'Shipped', value: k.shipped?.value ?? 0 }) +
     uiTile({ label: 'In progress', value: k.inProgress?.value ?? 0 }) +
-    uiTile({ label: 'Total SKUs', value: k.totalSKUs?.value ?? 0 }) +
+    uiTile({ label: 'Total items', value: k.totalSKUs?.value ?? 0 }) +
     uiTile({ label: 'Total units', value: (k.totalUnits?.value ?? 0).toLocaleString() }) +
-    uiTile({ label: 'Licence plates', value: k.licensePlates?.active ?? 0,
+    uiTile({ label: 'License plates', value: k.licensePlates?.active ?? 0,
              sub: `${k.licensePlates?.original ?? 0} original · ${k.licensePlates?.child ?? 0} child` }));
 }
 
@@ -247,7 +247,7 @@ function renderDock(s){
 function renderDI(items){
   uiTable('inventoryList', {
     columns: [
-      { key: '_sku', label: 'SKU', render: r =>
+      { key: '_sku', label: 'Item', render: r =>
           `<div>${uiId(r.sku_code || '')}</div><div class="ui-hint">${esc(r.client_name || '')}</div>` },
       { key: 'qty_total', label: 'On hand', num: true },
       { key: 'qty_allocated', label: 'Allocated', num: true },

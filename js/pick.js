@@ -327,7 +327,7 @@ function fpOpenException(){
           uiFieldError(api.el, 'fpExNote', '');
           uiFieldError(api.el, 'fpExQty', '');
           if(type !== 'short' && !note){ uiFieldError(api.el, 'fpExNote', 'Required'); return false; }
-          if(type === 'short' && qty === ''){ uiFieldError(api.el, 'fpExQty', 'Required for Short'); return false; }
+          if(type === 'short' && qty === ''){ uiFieldError(api.el, 'fpExQty', 'Required for short'); return false; }
           const fd = new FormData();
           fd.append('type', type);
           if(qty !== '') fd.append('qty', qty);

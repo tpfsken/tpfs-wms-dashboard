@@ -519,7 +519,7 @@ async function approveIntakeDoc(){
       if(d.error && d.error.includes('Unknown SKU code')){
         const codes = d.error.replace(/.*: /, '').replace(/\..*$/, '').split(',').map(s => s.trim()).filter(Boolean);
         _intakeMissingSkus = codes;
-        uiToast(`${codes.length} SKU(s) don't exist yet: ${codes.join(', ')} — create them to continue`, 'error');
+        uiToast(`${codes.length} item(s) don't exist yet: ${codes.join(', ')} — create them to continue`, 'error');
         promptCreateNextMissingSku();
         return;
       }

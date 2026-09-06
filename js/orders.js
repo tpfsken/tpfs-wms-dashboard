@@ -396,7 +396,7 @@ async function openOrderDetail(id){
         const allocCount = (d.allocations || []).filter(a => a.status === 'PENDING').length;
         showDestructiveEdit({
           title: '↺ Unallocate Entire Order',
-          description: `Release all <strong>${allocCount}</strong> allocation${allocCount === 1 ? '' : 's'} on order <strong>${esc(d.order_number || '')}</strong> back to inventory and demote the order to <strong>NEW</strong>?<br><br>This is the right move when you need to <em>edit lines</em> (change qty, swap lots, add/remove SKUs) on an already-allocated order. After unallocating you can edit freely, then click Allocate again to re-allocate fresh.<br><br><span style="color:var(--amber);">Inventory returns to available at the same lot/LP/location it came from. The cancelled allocations stay in history with reason and your name.</span>`,
+          description: `Release all <strong>${allocCount}</strong> allocation${allocCount === 1 ? '' : 's'} on order <strong>${esc(d.order_number || '')}</strong> back to inventory and demote the order to <strong>NEW</strong>?<br><br>This is the right move when you need to <em>edit lines</em> (change qty, swap lots, add/remove SKUs) on an already-allocated order. After unallocating you can edit freely, then click Allocate again to re-allocate fresh.<br><br><span style="color:var(--amber);">Inventory returns to available at the same lot / license plate / location it came from. The cancelled allocations stay in history with reason and your name.</span>`,
           url: `${API}/orders/${d.id}/unallocate-all`,
         });
       })
@@ -897,7 +897,7 @@ async function showAllocPanel(id){
         <div class="alloc-line-tools">
           <span class="ui-hint">Sorted ${esc(pm)}</span>
           <input type="text" class="ui-input js-alloc-search" id="als_${i}" data-idx="${i}"
-                 placeholder="Filter by lot # or LP #…">
+                 placeholder="Filter by lot # or license plate #…">
         </div>
         <table class="ui-table">
           <thead><tr>
@@ -982,7 +982,7 @@ async function submitAllocation(){
       if(q <= 0) continue;
       if(q > inv[j].available_qty){
         return uiToast(
-          `${line?.sku_code || 'Line'}: can't allocate ${q} — only ${inv[j].available_qty} available`, 'error');
+          `${line?.sku_code || 'Line'}: cannot allocate ${q}. Only ${inv[j].available_qty} available.`, 'error');
       }
       lt += q;
       allocs.push({
@@ -1011,7 +1011,7 @@ async function submitAllocation(){
             : '<span class="ui-chip ui-chip-danger">short</span>'}</td></tr>`).join('');
     const ok = await uiConfirm({
       title: 'Allocation doesn\'t match the order',
-      body: `<table class="ui-table"><thead><tr><th>SKU</th><th class="right">Ordered</th>
+      body: `<table class="ui-table"><thead><tr><th>Item</th><th class="right">Ordered</th>
              <th class="right">Allocating</th><th>—</th></tr></thead><tbody>${rows}</tbody></table>
              <p>Short lines leave the order un-shippable until the rest is allocated.
              Over-allocated lines ship more than the customer ordered.</p>`,
@@ -1098,7 +1098,7 @@ async function showNewOrderModal(){
           <div class="ui-label">Order lines</div>
           <span class="ui-hint" id="noLinesCount"></span>
           <div style="flex:1"></div>
-          <input type="text" class="ui-input no-search" id="noSkuSearch" placeholder="Search or click to browse SKUs…">
+          <input type="text" class="ui-input no-search" id="noSkuSearch" placeholder="Search or click to browse items…">
         </div>
         <div id="noSkuResults" class="no-results"></div>
         <div id="noLinesWrap"></div>
@@ -1182,7 +1182,7 @@ async function searchOrderSkus(){
   if(!cid){
     // Used to fail silently — ops would click the box, get nothing, and not
     // know why. Say what's missing.
-    div.innerHTML = uiEmpty('Pick a client first — SKUs are scoped to the client.');
+    div.innerHTML = uiEmpty('Pick a client first — items are scoped to the client.');
     div.style.display = 'block';
     return;
   }
@@ -1287,7 +1287,7 @@ async function expandSkuLots(el, skuId, skuCode, skuName, uom, totalAvail, lotFi
     ? allRows.filter(r => (r.lot_number || '').toLowerCase().includes(lf))
     : allRows;
 
-  if(!rows.length){ lotsDiv.innerHTML = uiEmpty('No available inventory for this SKU.'); return; }
+  if(!rows.length){ lotsDiv.innerHTML = uiEmpty('No available inventory for this item.'); return; }
 
   uiTable(lotsDiv, {
     columns: [
@@ -1367,7 +1367,7 @@ function renderOL(){
 
   uiTable(host, {
     columns: NO_LINE_COLS, rows: orderLines, rowKey: '_key',
-    empty: 'No lines yet — search a SKU above, then pick the lot you want.',
+    empty: 'No lines yet — search an item above, then pick the lot you want.',
   });
 
   host.querySelectorAll('.js-ol-qty').forEach(inp =>
@@ -1512,7 +1512,7 @@ async function loadOrderAttachments(orderId){
           }
           done++;
         } catch(e){
-          uiToast(`${f.name} — network error`, 'error');
+          uiToast(`${f.name} — network error. Check the connection and try again.`, 'error');
         }
       }
       if(done) uiToast(`${done} file${done === 1 ? '' : 's'} attached`);
@@ -1859,7 +1859,7 @@ async function searchEditOrderSkus(term){
   const list = await apiGet(url);
   const rows = Array.isArray(list) ? list : (list?.rows || list?.data || []);
   results.style.display = 'block';
-  if(!rows.length){ results.innerHTML = uiEmpty('No matching SKUs'); return; }
+  if(!rows.length){ results.innerHTML = uiEmpty('No matching items'); return; }
 
   results.innerHTML = rows.map(r => `
     <div class="eo-sku-pick js-eo-sku-pick" data-sku-id="${esc(r.id)}" data-sku-code="${esc(r.sku_code)}"
@@ -1888,7 +1888,7 @@ async function addNewOrderLine(){
   const qty   = Number(document.getElementById('eoNewQty').value);
   const uom   = document.getElementById('eoNewUom').value.trim() || 'EACH';
 
-  if(!skuId) return uiToast('Pick a SKU first', 'error');
+  if(!skuId) return uiToast('Pick an item first', 'error');
   if(!qty || qty <= 0) return uiToast('Quantity must be greater than 0', 'error');
 
   let pin = null;

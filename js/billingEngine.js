@@ -24,7 +24,7 @@ function loadBillingSection() {
   if (host) host.style.display = isPortal ? 'none' : '';
   if (isPortal) { beShowTab('charges'); return; }
   uiTabs('billTabs', [
-    { id: 'runs', label: 'Accrual Runs' },
+    { id: 'runs', label: 'Accrual runs' },
     { id: 'charges', label: 'Charges' },
   ], { active: BE_TAB || 'runs', onChange: beShowTab });
   beShowTab(BE_TAB || 'runs');
@@ -149,7 +149,7 @@ async function openAccrualReview(id) {
     uiTile({ label: 'Total — period', value: sum.total_amount || 0, money: true }) +
     uiTile({ label: 'Charges', value: sum.charges_written ?? 0 }) +
     uiTile({ label: 'Skipped (posted)', value: sum.skipped_posted ?? 0 }) +
-    uiTile({ label: 'Ageless LPs', value: sum.ageless_skipped_lps ?? 0,
+    uiTile({ label: 'Ageless license plates', value: sum.ageless_skipped_lps ?? 0,
              tone: (sum.ageless_skipped_lps > 0 ? 'warn' : null) }) +
     uiTile({ label: 'No-dims rows', value: sum.no_dims_skipped ?? 0,
              tone: (sum.no_dims_skipped > 0 ? 'warn' : null) });
@@ -170,7 +170,7 @@ async function openAccrualReview(id) {
   } else {
     up.className = 'card be-unbilled';
     up.innerHTML = `
-      <div class="card-head"><div class="card-title" style="color:var(--st-danger);">⚠ Unbilled occupancies — ${esc(sum.unpriced_count)} LP(s) occupy space with NO matching rate line</div></div>
+      <div class="card-head"><div class="card-title" style="color:var(--st-danger);">⚠ Unbilled occupancies — ${esc(sum.unpriced_count)} license plate(s) occupy space with NO matching rate line</div></div>
       <div style="overflow:auto;max-height:240px;" id="beUnbilledTable"></div>`;
     uiTable('beUnbilledTable', {
       columns: [

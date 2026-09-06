@@ -125,7 +125,7 @@ const CMP_HIST_COLS = [
   { key: '_when', label: 'Extracted', sortable: false, render: r =>
       `<div>${uiId(fmtTimeShort(r.started_at))}</div>` +
       `<div class="ui-hint">${esc(cmpTimeAgo(r.started_at))}</div>` },
-  { key: '_sku', label: 'SKU', sortable: false, render: r =>
+  { key: '_sku', label: 'Item', sortable: false, render: r =>
       `<div>${uiId(r.sku_code || '')}</div>` +
       `<div class="ui-hint">${esc(r.sku_name || '')}</div>` },
   { key: '_client', label: 'Client', sortable: false, render: r => esc(r.client_name || '') },
@@ -247,7 +247,7 @@ async function cmpOpenReviewer(extractionId){
   document.getElementById('cmpAcceptAllGreenBtn').onclick = uiBusyHandler(() => cmpAcceptAllGreen(data));
 
   // Withdraw button — only enabled if NO field has been applied yet.
-  // Once a field is applied, the SKU master has been touched and pulling
+  // Once a field is applied, the item master has been touched and pulling
   // the SDS doesn't undo that. Refuse and tell the user why.
   const wBtn = document.getElementById('cmpWithdrawBtn');
   if(wBtn){
@@ -256,12 +256,12 @@ async function cmpOpenReviewer(extractionId){
       wBtn.disabled = true;
       wBtn.style.opacity = '0.5';
       wBtn.style.cursor = 'not-allowed';
-      wBtn.title = 'Cannot withdraw — fields from this extraction have already been applied to the SKU master. Manually correct the SKU instead.';
+      wBtn.title = 'Cannot withdraw — fields from this extraction have already been applied to the item master. Manually correct the SKU instead.';
     } else {
       wBtn.disabled = false;
       wBtn.style.opacity = '';
       wBtn.style.cursor = '';
-      wBtn.title = 'Wrong file uploaded? Withdraw this SDS before any field is applied to the SKU master. Soft delete — record stays for audit but the doc is removed from the queue and the prior version (if any) is restored.';
+      wBtn.title = 'Wrong file uploaded? Withdraw this SDS before any field is applied to the item master. Soft delete — record stays for audit but the doc is removed from the queue and the prior version (if any) is restored.';
     }
   }
 
@@ -446,7 +446,7 @@ async function cmpReviewField(fieldId, action){
 }
 
 /* Editing a field here overrides what Claude read out of the SDS and writes it
- * to the SKU master — a UN number or hazard class typed here ends up on
+ * to the item master — a UN number or hazard class typed here ends up on
  * shipping paperwork. It was a browser prompt(). It's a real form now, showing
  * the field, what Claude found, and the source quote to check against. */
 async function cmpEditField(fieldId){
@@ -464,7 +464,7 @@ async function cmpEditField(fieldId){
       (f.source_quote
         ? `<div class="ui-banner ui-banner-info" style="white-space:pre-wrap;">“${esc(f.source_quote)}”</div>` : '') +
       uiField({ id: 'cmpEditVal', label: 'Value', value: cur,
-                hint: 'This overrides the extraction and is written to the SKU master.' }),
+                hint: 'This overrides the extraction and is written to the item master.' }),
     actions: [
       { label: 'Cancel' },
       { label: 'Save correction', primary: true, onClick: async (m) => {
@@ -499,7 +499,7 @@ async function cmpAcceptAllGreen(data){
 
   const ok = await uiConfirm({
     title: `Accept ${greens.length} high-confidence field(s)?`,
-    body: `These scored ≥95% and are written straight to the SKU master:<br><br>` +
+    body: `These scored ≥95% and are written straight to the item master:<br><br>` +
           greens.slice(0, 10).map(f => `<strong>${esc(f.field_key)}</strong> — ${esc(f.value)}`).join('<br>') +
           (greens.length > 10 ? `<br><em>…and ${greens.length - 10} more</em>` : ''),
     confirmLabel: `Accept ${greens.length}`,
@@ -526,9 +526,9 @@ async function cmpAcceptAllGreen(data){
   }
 
   if(failed.length){
-    uiToast(`${done} accepted, ${failed.length} FAILED: ${failed.join(', ')} — review them individually`, 'error', 10000);
+    uiToast(`${done} accepted, ${failed.length} failed: ${failed.join(', ')}. Review them individually.`, 'error', 10000);
   } else {
-    uiToast(`${done} field(s) accepted and written to the SKU master`);
+    uiToast(`${done} field(s) accepted and written to the item master`);
   }
   if(_cmpCurrentExtraction?.id) cmpOpenReviewer(_cmpCurrentExtraction.id);
 }

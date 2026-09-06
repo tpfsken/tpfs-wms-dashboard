@@ -578,7 +578,7 @@ function uiMeta(pairs) {
 /* ---------------------------------------------------------------------------
  * TABS — the one tab system (replaces .cli-tab, .bill-tab, .cmp-tab in the
  * screen batches).
- *   uiTabs('hostEl', [{id:'runs',label:'Accrual Runs'},...], { active:'runs',
+ *   uiTabs('hostEl', [{id:'runs',label:'Accrual runs'},...], { active:'runs',
  *     onChange: id => {...} });
  * ------------------------------------------------------------------------- */
 function uiTabs(container, tabs, { active, onChange }) {

@@ -245,7 +245,7 @@ function spOpenEditor(st, row){
 
   if(!isClient){
     const clients = (typeof clientsCache !== 'undefined' && clientsCache) ? clientsCache : [];
-    initCombo('spTesterClientWrap', clients.map(c => ({ value: c.id, label: `${c.code} — ${c.name}` })), { placeholder: 'Optional — needed to resolve SKUs / LPs' });
+    initCombo('spTesterClientWrap', clients.map(c => ({ value: c.id, label: `${c.code} — ${c.name}` })), { placeholder: 'Optional — needed to resolve items and license plates' });
   }
 
   if(st.tester) st.tester.destroy();
