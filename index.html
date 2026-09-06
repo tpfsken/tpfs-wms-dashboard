@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Warehouse Management System</title>
+<title>ShipFlow</title>
 
 <!-- PWA: manifest + theme color + iOS standalone hints -->
 <link rel="manifest" href="/manifest.json">
@@ -24,8 +24,8 @@
 <div class="shell" id="shell">
 <nav class="sidebar">
   <div class="side-header">
-    <div class="side-logo">T</div>
-    <div class="side-brand" id="sideBrand">WMS<small id="sideBrandTenant">Warehouse Management</small></div>
+    <div class="side-logo"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="1" y="1" width="22" height="22" rx="6" fill="currentColor" opacity=".16"/><path d="M6 15.5h3M6 12h6M6 8.5h9" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M15 12.5l3 3 3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M18 8v7" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></div>
+    <div class="side-brand" id="sideBrand"><span class="js-brand-product">ShipFlow</span><small id="sideBrandTenant">3PL TechFlow</small></div>
   </div>
   <div class="side-nav">
     <div class="nav-ops-only">
@@ -62,6 +62,7 @@
     <div class="nav-item ops-only" data-page="settings" data-perm="settings.pin|settings.packaging|settings.scan_view|settings.roles|integrations.shipstation|integrations.sync|integrations.manage|integrations.excalibur|billing.rate_cards" title="Warehouse settings + billable service catalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span class="nav-label">Settings</span></div>
     <button class="collapse-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 18l-6-6 6-6"/></svg><span class="nav-label">Collapse</span></button>
     <div class="side-user" id="sideUserLine" title="Signed in as"></div>
+    <div class="side-suite"><span class="js-brand-suite">ShipFlow · part of the 3PL TechFlow suite</span><br><span class="js-brand-copyright">© 3PL TechFlow</span></div>
     <div class="nav-item ops-only js-change-pw" title="Change your own password"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg><span class="nav-label">Change password</span></div>
     <div class="nav-item js-signout" style="margin-top:4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="nav-label">Sign out</span></div>
   </div>
@@ -1355,7 +1356,13 @@
 <!-- LOGIN OVERLAY -->
 <div id="loginOverlay" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;">
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:48px;width:420px;">
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:32px;"><div style="width:44px;height:44px;background:var(--blue);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#fff;">T</div><div><div style="font-weight:700;font-size:18px;">WMS</div><div style="font-size:12px;color:var(--muted);">Warehouse Management System</div></div></div>
+    <div class="login-brand">
+      <div class="login-mark"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="1" y="1" width="22" height="22" rx="6" fill="currentColor" opacity=".16"/><path d="M6 15.5h3M6 12h6M6 8.5h9" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M15 12.5l3 3 3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M18 8v7" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></div>
+      <div>
+        <div class="login-title js-brand-product">ShipFlow</div>
+        <a class="login-tagline js-brand-tagline" href="https://3pltechflow.com" target="_blank" rel="noopener">Rate it. Ship it. Prove it.</a>
+      </div>
+    </div>
     <!-- autocomplete hints keep the browser's saved-login autofill ON these two
          fields. Without them Chrome guessed the "username" field itself and,
          with this overlay hidden, landed the saved email in the last visible
@@ -1367,6 +1374,7 @@
     <div style="text-align:center;margin-top:16px;">
       <button type="button" id="loginForgotBtn" class="btn-link">Forgot password?</button>
     </div>
+    <div class="login-footer"><span class="js-brand-suite">ShipFlow · part of the 3PL TechFlow suite</span><br><span class="js-brand-copyright">© 3PL TechFlow</span></div>
   </div>
 </div>
 

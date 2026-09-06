@@ -1,5 +1,5 @@
 // =============================================================================
-// SERVICE WORKER — TPFS WMS PWA
+// SERVICE WORKER — ShipFlow PWA
 // =============================================================================
 // Strategy:
 //   - Static shell (HTML/CSS/JS/icons) → cache-first, network fallback.
@@ -12,7 +12,9 @@
 // old cache is purged on activate.
 // =============================================================================
 
-const CACHE_NAME = 'tpfs-wms-shell-v118';
+const CACHE_NAME = 'tpfs-wms-shell-v119';   // prefix is the installed cache namespace — keep it
+// API hosts are never cached (network only). The legacy host stays until the cut-over week ends.
+const API_HOSTS = ['api.3pltechflow.com', 'tpfs-wms-api-production.up.railway.app'];
 // Every <script> in index.html must be listed here. ui.js in particular:
 // without it the cached shell loads and then every screen dies offline,
 // because the whole design system is missing.
@@ -92,7 +94,7 @@ self.addEventListener('fetch', event => {
   // API requests — network first. Don't cache so pickers always see
   // current state. If the network is dead we fall back to whatever is
   // cached (rare for API GETs — usually nothing).
-  if (url.pathname.startsWith('/api/') || url.hostname.includes('railway.app')) {
+  if (url.pathname.startsWith('/api/') || API_HOSTS.includes(url.hostname)) {
     event.respondWith(
       fetch(req).catch(() => caches.match(req))
     );

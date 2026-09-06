@@ -95,7 +95,7 @@ async function openAddUserModal(){
     width: 560,
     body: `
       ${uiField({ id: 'nuName', label: 'Full name *', placeholder: 'e.g. Maria Lopez' })}
-      ${uiField({ id: 'nuEmail', label: 'Email (login) *', type: 'email', placeholder: 'maria@tpfswarehouse.com', hint: 'Floor staff without email: any unique address works as a login name, e.g. maria@floor.local' })}
+      ${uiField({ id: 'nuEmail', label: 'Email (login) *', type: 'email', placeholder: 'maria@example.com', hint: 'Floor staff without email: any unique address works as a login name, e.g. maria@floor.local' })}
       <div class="ui-field" data-field="nuRoleWrap">
         <label class="ui-label">Role *</label>
         <div class="cb-wrap" id="nuRoleWrap"></div>

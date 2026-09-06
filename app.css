@@ -1636,3 +1636,16 @@ tr.ii-row-error td{background:var(--st-danger-bg);}
 .ec-recent summary{cursor:pointer;font-size:12px;color:var(--muted);margin-bottom:6px;}
 .ec-unmatched{padding:0 16px 8px;}
 .ec-check{border-bottom:1px solid var(--border);}
+
+/* ---- Brand (js/util.js BRAND, applyBrand) ----------------------------------- */
+.brand-mark{width:22px;height:22px;color:#fff;display:block}
+.side-logo .brand-mark{width:22px;height:22px}
+.login-brand{display:flex;align-items:center;gap:14px;margin-bottom:28px}
+.login-mark{width:44px;height:44px;background:var(--blue);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.login-mark .brand-mark{width:26px;height:26px}
+.login-title{font-size:22px;font-weight:700;line-height:1.1}
+.login-tagline{display:block;font-size:12px;color:var(--muted);text-decoration:none;margin-top:4px}
+.login-tagline:hover{color:var(--blue);text-decoration:underline}
+.login-footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--border);font-size:11px;line-height:1.5;color:var(--muted);text-align:center}
+.side-suite{padding:8px 14px 4px;font-size:10px;line-height:1.4;color:var(--muted)}
+#shell.collapsed .side-suite{display:none}

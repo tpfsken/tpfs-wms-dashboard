@@ -2,7 +2,8 @@
 // APP — API base, auth, navigation, modals, boot
 // =============================================================================
 
-const API = 'https://tpfs-wms-api-production.up.railway.app/api';
+// Hostnames are configuration (see also BRAND in js/util.js and API_HOSTS in sw.js).
+const API = 'https://api.3pltechflow.com/api';
 
 // "View portal as client" (js/portalAccess.js) opens this page in a new tab
 // with ?portalPreview=1 and leaves the preview token in a one-shot
@@ -264,6 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initInboundFilterBar();
 
   // Login
+  if(typeof applyBrand === 'function') applyBrand('');   // product name, tagline link and footers before sign-in
   document.getElementById('loginBtn').addEventListener('click', uiBusyHandler(doLogin));
   ['loginPassword','loginEmail'].forEach(id => {
     document.getElementById(id).addEventListener('keydown', e => {

@@ -1,14 +1,17 @@
 {
-  "name": "Warehouse Management System",
-  "short_name": "WMS",
-  "description": "Warehouse Management System — picker, inventory, orders",
+  "name": "ShipFlow",
+  "short_name": "ShipFlow",
+  "description": "ShipFlow by 3PL TechFlow — receiving, inventory, orders, picking and shipping",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#1a1a1a",
   "theme_color": "#2c7be5",
-  "categories": ["productivity", "business"],
+  "categories": [
+    "productivity",
+    "business"
+  ],
   "icons": [
     {
       "src": "/icons/icon.svg",
@@ -23,7 +26,12 @@
       "short_name": "Pick",
       "description": "Open the mobile picker",
       "url": "/?view=orders",
-      "icons": [{ "src": "/icons/icon.svg", "sizes": "any" }]
+      "icons": [
+        {
+          "src": "/icons/icon.svg",
+          "sizes": "any"
+        }
+      ]
     }
   ]
 }

@@ -1,4 +1,4 @@
-# UI copy guide — TPFS WMS dashboard
+# UI copy guide — ShipFlow dashboard
 
 Adopted 2026-09-06 from the read-only audit in `docs/COPY-AUDIT.xlsx` (3,282
 user-facing strings extracted from `index.html`, `js/*.js`, the API's error
@@ -115,10 +115,11 @@ system" / "the label provider" and the vendor sits in a `title` tooltip.
 ## 5b. Branding
 
 The product name and the tenant's name are configuration. `BRAND` in
-`js/util.js` holds the product name ("WMS" / "Warehouse Management System");
+`js/util.js` holds the product name ("ShipFlow"), the company ("3PL TechFlow"), the tagline and the company URL;
 `GET /auth/me` returns `tenantName` from the tenants table and `applyBrand()`
-paints it on the tab title ("{tenant} · WMS") and under the sidebar brand after
-sign-in. Before sign-in the screen shows the product name only. `manifest.json`
+paints it on the tab title ("{tenant} · ShipFlow") and under the sidebar brand after
+sign-in. Before sign-in the screen shows the product name, the tagline (a link to
+the company site) and the suite footer ("ShipFlow · part of the 3PL TechFlow suite"). `manifest.json`
 follows the same names.
 
 ## 6. Audit summary (2026-09-06)

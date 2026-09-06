@@ -2,15 +2,28 @@
 // UTIL — escape, format helpers, common state
 // =============================================================================
 
-// Product / tenant branding. The product name is configuration, never a copy
-// literal; the tenant's own name arrives with /auth/me (tenantName) and is
-// painted by applyBrand() on the tab title and the sidebar.
-const BRAND = { product: 'WMS', long: 'Warehouse Management System' };
+// Product / company branding. Names, tagline and hostnames are configuration,
+// never copy literals; the tenant's own name arrives with /auth/me (tenantName).
+// applyBrand() paints: the tab title ("{tenant} · ShipFlow"), the sidebar brand
+// block (product, tenant under it), the sign-in tagline link, the suite footers.
+const BRAND = {
+  product: 'ShipFlow',
+  company: '3PL TechFlow',
+  companyUrl: 'https://3pltechflow.com',
+  tagline: 'Rate it. Ship it. Prove it.',
+  suiteLine: 'ShipFlow · part of the 3PL TechFlow suite',
+  copyright: '© 3PL TechFlow',
+  long: 'ShipFlow',
+};
 function applyBrand(tenantName){
   const t = tenantName ? String(tenantName) : '';
   document.title = t ? `${t} · ${BRAND.product}` : BRAND.long;
+  document.querySelectorAll('.js-brand-product').forEach(el => { el.textContent = BRAND.product; });
   const small = document.getElementById('sideBrandTenant');
-  if(small) small.textContent = t || 'Warehouse Management';
+  if(small) small.textContent = t || BRAND.company;
+  document.querySelectorAll('.js-brand-tagline').forEach(a => { a.textContent = BRAND.tagline; a.href = BRAND.companyUrl; });
+  document.querySelectorAll('.js-brand-suite').forEach(el => { el.textContent = BRAND.suiteLine; });
+  document.querySelectorAll('.js-brand-copyright').forEach(el => { el.textContent = BRAND.copyright; });
 }
 
 // Escape ANY value before injecting into innerHTML. Always call this on

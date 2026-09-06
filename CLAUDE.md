@@ -1,6 +1,6 @@
 # TPFS WMS — Conventions
 
-This is a static SPA deployed to Netlify. The backend is a Railway-hosted Node API at `https://tpfs-wms-api-production.up.railway.app/api`. Read the master build doc for product scope; this file is just rules for how the code in this folder is written.
+This is a static SPA deployed to Netlify. The backend is a Railway-hosted Node API at `https://api.3pltechflow.com/api` (the old `tpfs-wms-api-production.up.railway.app` host answers until the cut-over week ends; `API` in js/app.js is the one place the dashboard names it). Read the master build doc for product scope; this file is just rules for how the code in this folder is written.
 
 ## File layout
 
