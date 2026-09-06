@@ -54,7 +54,7 @@ async function waveOpen(id){
   uiTable(m.el.querySelector('#waveOrders'), {
     columns: [
       { key: 'order_number', label: 'Order', mono: true },
-      { key: 'external_order_number', label: 'Label batch #', mono: true },
+      { key: 'external_order_number', label: 'External order #', mono: true },
       { key: 'client_code', label: 'Client' },
       { key: 'status', label: 'Status', render: r => uiChip(r.status) },
       { key: 'customer_name', label: 'Customer' },
