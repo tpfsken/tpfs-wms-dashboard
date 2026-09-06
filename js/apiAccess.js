@@ -72,7 +72,7 @@ function aaRenderKeys(){
   uiTable(el, {
     columns: [
       { key: 'name', label: 'Name', render: k => `<div><strong>${esc(k.name)}</strong></div><div class="ui-hint">${esc(k.createdByName ? 'by ' + k.createdByName : '')}</div>` },
-      { key: 'prefix', label: 'Key', render: k => `${uiId(k.prefix + '_…')}` },
+      { key: 'prefix', label: 'Key prefix', render: k => `${uiId(k.prefix)}<div class="ui-hint">prefix only — the full key was shown once, at creation</div>` },
       { key: 'scopes', label: 'Scopes', render: k => (k.scopes || []).map(s => `<span class="ui-chip">${esc(s)}</span>`).join(' ') },
       { key: 'status', label: 'Status', render: k => k.status === 'active' ? uiChip('ACTIVE', 'ACTIVE') : k.status === 'expired' ? uiChip('DRAFT', 'EXPIRED') : uiChip('CANCELLED', 'REVOKED') },
       { key: 'lastUsedAt', label: 'Last used', render: k => aaWhen(k.lastUsedAt) },
@@ -117,7 +117,7 @@ function aaShowKeyOnce(k){
   const m = uiModal({
     title: 'Your new API key',
     width: 620,
-    body: `<div class="ui-banner ui-banner-warn">Copy this key now. It is shown only once — the WMS stores a hash, not the key.</div>
+    body: `<div class="ui-banner ui-banner-warn">Copy this key now. It is shown only once — the WMS stores a hash, not the key. The list will show only the prefix (${esc(k.prefix)}), which is not usable on its own.</div>
       ${uiMeta([{ k: 'Name', v: esc(k.name) }, { k: 'Scopes', v: (k.scopes || []).map(s => `<span class="ui-chip">${esc(s)}</span>`).join(' ') }])}
       <div class="ui-field"><label class="ui-label">Key</label><input class="ui-input" id="aaPlainKey" readonly value="${esc(k.key)}" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"></div>
       <div class="usr-actions"><button type="button" class="ui-btn ui-btn-primary js-aa-copy">Copy key</button><span class="ui-hint" id="aaCopied"></span></div>
