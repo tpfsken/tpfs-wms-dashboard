@@ -539,7 +539,7 @@ async function cmpAcceptAllGreen(data){
 
 async function cmpLoadPdf(extractionId){
   if(typeof pdfjsLib === 'undefined'){
-    document.getElementById('cmpPdfPageInfo').textContent = 'pdf.js failed to load';
+    document.getElementById('cmpPdfPageInfo').textContent = 'The PDF viewer failed to load.';
     return;
   }
   const sdsDocId = _cmpCurrentExtraction?.sds_document_id;

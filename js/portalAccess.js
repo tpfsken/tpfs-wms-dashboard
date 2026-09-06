@@ -53,7 +53,7 @@ function renderClientPortalTab(){
   const dirtyCount = Object.keys(_paDirty).length;
   const users = `${d.portalUserCount} portal user${d.portalUserCount === 1 ? '' : 's'}${d.portalUserCount ? ` (${d.portalActiveUserCount} active)` : ''}`;
   host.innerHTML = `
-    ${!d.migrated ? '<div class="ui-banner ui-banner-warn">Portal features are not configurable until migration 095 (client_portal_features) has been applied. The defaults apply until then.</div>' : ''}
+    ${!d.migrated ? '<div class="ui-banner ui-banner-warn">Portal features are not available yet — the database update (095) has not been applied.</div>' : ''}
     ${d.client.status !== 'active' ? `<div class="ui-banner ui-banner-danger">This client is ${esc(d.client.status)} — portal logins are refused regardless of these switches.</div>` : ''}
     <div class="roles-toolbar">
       <span class="ui-hint">What ${esc(d.client.code)} may use in the portal. A feature that is off here is off for every portal user of this client, whatever their portal role. ${esc(users)}.</span>

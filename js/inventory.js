@@ -550,7 +550,7 @@ function itemFormBody(){
         <button type="button" class="ui-btn" id="itemSdsReuseBtn" style="display:none;">Re-read attached SDS</button>
         <button type="button" class="ui-btn" onclick="document.getElementById('itemSdsExtractInput').click()">Upload SDS to auto-fill</button>
         <button type="button" class="ui-btn" id="itemSdsIntelBtn" style="display:none;"
-                title="Per-field SDS Intelligence: versions the SDS, per-field confidence, audit log, queues review items">Full SDS intelligence</button>
+                title="Per-field SDS extraction: versions the SDS, per-field confidence, audit log, queues review items">Full SDS intelligence</button>
         <input type="file" id="itemSdsExtractInput" accept="application/pdf,.pdf" style="display:none;">
         <input type="file" id="itemSdsIntelInput" accept="application/pdf,.pdf" style="display:none;">
       </div>

@@ -64,6 +64,7 @@ async function loadMe(){
       try { sessionStorage.setItem('tpfs_user', JSON.stringify(U)); } catch(_) {}
     }
     document.body.dataset.role = ME.role || '';
+    if(typeof applyBrand === 'function') applyBrand(ME.tenantName);
     if(U) U.roleName = ME.roleName || ME.role;
     const line = document.getElementById('sideUserLine');
     if(line) line.textContent = `${U?.fullName || U?.email || ''} · ${ME.roleName || ME.role || ''}`;

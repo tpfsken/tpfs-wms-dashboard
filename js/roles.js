@@ -42,7 +42,7 @@ function renderRolesGrid(){
   const host = document.getElementById('rolesBody');
   const g = _rolesGrid;
   if(!g.migrated){
-    host.innerHTML = `<div class="ui-banner ui-banner-warn">Roles are not configurable until migrations 093/094 (users.role / roles / role_permissions) have been applied to the database. Everyone runs on the defaults until then.</div>`;
+    host.innerHTML = `<div class="ui-banner ui-banner-warn">Roles are not available yet — the database updates (093/094) have not been applied.</div>`;
     return;
   }
   const cols = (g.roles || []).filter(r => r.base_role !== 'portal');   // admin first, then supervisor, floor, customs

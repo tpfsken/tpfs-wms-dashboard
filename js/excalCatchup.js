@@ -52,7 +52,7 @@ function _ecLinesSummary(o){
 function renderClientCatchupCard(){
   const d = _ecData; const host = document.getElementById('cliCatchupBody'); const count = document.getElementById('cliCatchupCount');
   if(!host || !d) return;
-  if(count) count.textContent = `${d.unkeyed} un-keyed shipment${d.unkeyed === 1 ? '' : 's'} · ${d.units} unit${d.units === 1 ? '' : 's'} · since ${d.client.wentLiveAt ? fmtTimeShort(d.client.wentLiveAt) : 'go-live'} · Excalibur client ${d.client.excaliburCode}`;
+  if(count) count.textContent = `${d.unkeyed} un-keyed shipment${d.unkeyed === 1 ? '' : 's'} · ${d.units} unit${d.units === 1 ? '' : 's'} · since ${d.client.wentLiveAt ? fmtTimeShort(d.client.wentLiveAt) : 'go-live'} · legacy-system client ${d.client.excaliburCode}`;
   const sel = _ecSelected.size;
   const lc = d.client.lastCheck;
   const fields = d.client.matchFields || ['HeaderReference'];
@@ -65,7 +65,7 @@ function renderClientCatchupCard(){
       <button type="button" class="ui-btn ui-btn-primary js-ec-check">Check now</button>
     </div>
     <div class="roles-toolbar">
-      <span class="ui-hint">Shipments the WMS completed since ${esc(d.client.code)} went live with no matching posted shipment in Excalibur. Auto-match removes them as Excalibur catches up; tick and press Mark keyed for anything keyed by hand.</span>
+      <span class="ui-hint" title="The legacy system is Excalibur.">Shipments the WMS completed since ${esc(d.client.code)} went live with no matching posted shipment in the legacy system. Auto-match removes them as the legacy system catches up; tick and press Mark keyed for anything keyed by hand.</span>
       <span style="flex:1"></span>
       <button type="button" class="ui-btn js-ec-export" ${d.unkeyed ? '' : 'disabled'}>Export CSV</button>
       <button type="button" class="ui-btn js-ec-mark" ${sel ? '' : 'disabled'}>Mark keyed${sel ? ` (${sel})` : ''}</button>
@@ -83,7 +83,7 @@ function renderClientCatchupCard(){
           <td class="ui-hint">${esc(_ecLinesSummary(o))}</td>
         </tr>`).join('')}</tbody>
       </table>
-    </div>` : uiEmpty('Everything shipped since go-live has been keyed into Excalibur.')}
+    </div>` : uiEmpty('Everything shipped since go-live has been keyed into the legacy system.')}
     <div class="ec-drift">${_ecDriftLine(d)}</div>
     ${d.unmatched && d.unmatched.length ? `<div class="ec-unmatched">
       <div class="ii-history-title">In Excalibur, not in WMS (${esc(d.unmatchedTotal || d.unmatched.length)})</div>
@@ -113,8 +113,8 @@ function renderClientCatchupCard(){
 function _ecDriftLine(d){
   const dr = d.drift;
   if(!dr) return '';
-  if(!dr.available) return `<span class="ui-hint">Excalibur drift unavailable — ${esc(dr.reason || 'no live comparison')}.</span>`;
-  if(dr.explained) return `<span class="ui-chip ui-chip-ok">Drift explained</span> <span class="ui-hint">Excalibur holds ${esc(dr.excaliburQty)} units vs ${esc(dr.wmsQty)} in the WMS; the difference is exactly the ${esc(d.units)} units shipped but not keyed yet.</span>`;
+  if(!dr.available) return `<span class="ui-hint" title="The legacy system is Excalibur.">Legacy-system drift unavailable — ${esc(dr.reason || 'no live comparison')}.</span>`;
+  if(dr.explained) return `<span class="ui-chip ui-chip-ok">Drift explained</span> <span class="ui-hint" title="The legacy system is Excalibur.">The legacy system holds ${esc(dr.excaliburQty)} units vs ${esc(dr.wmsQty)} in the WMS; the difference is exactly the ${esc(d.units)} units shipped but not keyed yet.</span>`;
   const bad = (dr.bySku || []).filter(r => !r.explained).slice(0, 6);
   return `<div class="ui-banner ui-banner-warn"><strong>Drift does not match the un-keyed shipments</strong> for ${esc(dr.unexplained)} SKU${dr.unexplained === 1 ? '' : 's'}: ${bad.map(r => `${esc(r.sku)} (Excalibur − WMS = ${esc(r.gap)}, un-keyed ${esc(r.unkeyed)})`).join('; ')}${dr.unexplained > bad.length ? '; …' : ''}. Something besides keying is off — check adjustments or receipts in Excalibur.</div>`;
 }
@@ -124,15 +124,15 @@ async function checkCatchupNow(){
   const r = await _ecFetch(`/clients/${d.client.id}/excalibur-catchup/check`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   const res = await r.json().catch(() => ({}));
   if(!r.ok){ if(res.code === 'PERMISSION_DENIED') permDeniedToast(res); else uiToast(res.error || 'Check failed', 'error'); return false; }
-  if(res.available === false){ uiToast(`Excalibur could not be read — ${res.reason || 'unavailable'}`, 'error', 6000); return false; }
-  uiToast(`Checked Excalibur: ${res.fetched} posted shipment${res.fetched === 1 ? '' : 's'}, ${res.matched} newly matched, ${res.unmatched.length} not in the WMS`);
+  if(res.available === false){ uiToast(`The legacy system could not be read — ${res.reason || 'unavailable'}`, 'error', 6000); return false; }
+  uiToast(`Checked the legacy system: ${res.fetched} posted shipment${res.fetched === 1 ? '' : 's'}, ${res.matched} newly matched, ${res.unmatched.length} not in the WMS`);
   await loadClientCatchupCard();
   if(typeof loadCatchupTile === 'function') loadCatchupTile();
 }
 
 async function markCatchupKeyed(){
   const d = _ecData; if(!d || !_ecSelected.size) return false;
-  const docNo = await uiPrompt({ title: `Mark ${_ecSelected.size} shipment${_ecSelected.size === 1 ? '' : 's'} as keyed in Excalibur`, label: 'Excalibur document # (optional)', value: '', confirmLabel: 'Mark keyed' });
+  const docNo = await uiPrompt({ title: `Mark ${_ecSelected.size} shipment${_ecSelected.size === 1 ? '' : 's'} as keyed in the legacy system`, label: 'Legacy-system document # (optional)', value: '', confirmLabel: 'Mark keyed' });
   if(docNo == null) return false;
   const r = await _ecFetch(`/clients/${d.client.id}/excalibur-catchup/mark`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_ids: [..._ecSelected], excalibur_doc_no: String(docNo).trim() || undefined }) });
   const res = await r.json().catch(() => ({}));

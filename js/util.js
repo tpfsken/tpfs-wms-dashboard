@@ -2,6 +2,17 @@
 // UTIL — escape, format helpers, common state
 // =============================================================================
 
+// Product / tenant branding. The product name is configuration, never a copy
+// literal; the tenant's own name arrives with /auth/me (tenantName) and is
+// painted by applyBrand() on the tab title and the sidebar.
+const BRAND = { product: 'WMS', long: 'Warehouse Management System' };
+function applyBrand(tenantName){
+  const t = tenantName ? String(tenantName) : '';
+  document.title = t ? `${t} · ${BRAND.product}` : BRAND.long;
+  const small = document.getElementById('sideBrandTenant');
+  if(small) small.textContent = t || 'Warehouse Management';
+}
+
 // Escape ANY value before injecting into innerHTML. Always call this on
 // untrusted/API data. For attribute values, this also handles ' and ".
 function esc(s){

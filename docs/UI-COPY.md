@@ -14,11 +14,11 @@ names and API field names are not copy and keep their own names.
 
 | Concept | Canonical term | Replaces (count in the audit) | Notes |
 | --- | --- | --- | --- |
-| A thing the warehouse stores for a client | **item** | SKU (74), SKUs (11), product (7), part (1); "item" already 72 | "SKU code" stays as the name of the identifier field; the thing itself is an item. Plural "items". |
-| The company the warehouse works for | **client** | account (18 / 5 — when it means the company), customer (30 / 1 — when it means the company) | "customer" is kept for the party an order ships **to** (`customer_name`, ship-to). "account" is kept for a login. Never "tenant" in copy. |
-| Goods arriving | **receipt** | PO (31), POs (1), purchase order (2 / 1), ASN (4), inbound (3), receiving (11 — as a noun for the document) | The page that lists them is **Receiving** (verb form, a place); each document is a receipt. Use "supplier reference" for the client's PO number. |
-| Goods leaving | **order** | fulfillment (1); shipment (19 / 9 — when it means the order) | An order has one or more **packages**. "Shipment" is reserved for the carrier's shipment / the label; do not use it for the order or for "shipped orders" — say "shipped orders". |
-| A tracked container of stock | **license plate** (abbrev. **LP** in tables only) | LP (50), LPs (9), licence plate(s) (3), pallet (4 — when it means the LP) | US spelling "license". "Pallet" is a physical pallet or the PALLET pack level, not the LP. |
+| A thing the warehouse stores for a client | **item** | SKU (74), SKUs (11), product (7), part (1); "item" already 72 | **Decided 2026-09-06:** Item is canonical. "SKU" survives only as the label of the code field ("SKU code"). Plural "items". |
+| The company the warehouse works for | **client** | account (18 / 5 — when it means the company) | **Decided 2026-09-06:** Client is the 3PL's customer. **Customer is a separate concept** — the order's ship-to party — and is not rewritten. "account" is kept for a login. Never "tenant" in copy. |
+| Goods arriving | **receipt** | PO (31), POs (1), purchase order (2 / 1), ASN (4), inbound (3), receiving (11 — as a noun for the document) | **Decided 2026-09-06:** Receipt is canonical. "PO" is used only for the client's purchase order number (the field on the receipt), never for the receipt itself. The page that lists them is **Receiving**. |
+| Goods leaving | **order** / **shipment** | fulfillment (1) | **Decided 2026-09-06:** Order is the document; **shipment** is the physical packages that left. Both are correct in their own sense — an order ships, and what left the dock is a shipment. Do not use "shipment" for an order that has not shipped. |
+| A tracked container of stock | **license plate** | LP (50), LPs (9), licence plate(s) (3), pallet (4 — when it means the LP) | **Decided 2026-09-06:** "License plate" in labels and sentences; **"LP" is allowed in column headers and scan prompts**. US spelling "license". "Pallet" is a physical pallet or the PALLET pack level, not the LP. |
 | Pack levels | **each / case / pallet** | eaches, inner pack | Match the `sku_type` values in lower case in prose, upper case only in code. |
 | The person picking / packing | **picker / packer** | user, operator | Role names (Admin, Supervisor, Floor) are capitalised only when naming the role. |
 | Barcodes | **barcode** | UPC / EAN / GTIN when generic | Use the specific name (UPC, EAN, GTIN-14) only when the format matters. |
@@ -103,6 +103,24 @@ it in a tooltip (`title` attribute) or a hint line. The audit workbook's
 **tooltip** column holds the proposed tooltip text for every string where a
 vendor name was removed from the visible copy.
 
+## 5a. Where the vendor name stays
+
+The vendor name stays where the vendor is the subject of the screen: the
+Migration page and the ShipStation integration card (their titles, hints and
+status lines), the "Excalibur catch-up" card title, and the order-source value
+"ShipStation" in the orders filter. Everywhere else — toasts, error messages,
+hints on generic pages — the copy says "the legacy system" / "the shipping
+system" / "the label provider" and the vendor sits in a `title` tooltip.
+
+## 5b. Branding
+
+The product name and the tenant's name are configuration. `BRAND` in
+`js/util.js` holds the product name ("WMS" / "Warehouse Management System");
+`GET /auth/me` returns `tenantName` from the tenants table and `applyBrand()`
+paints it on the tab title ("{tenant} · WMS") and under the sidebar brand after
+sign-in. Before sign-in the screen shows the product name only. `manifest.json`
+follows the same names.
+
 ## 6. Audit summary (2026-09-06)
 
 | Category | Count | What it means |
@@ -116,6 +134,11 @@ vendor name was removed from the visible copy.
 | branding | 2 | hardcoded product name |
 | tone | 2 | first-person copy |
 | **Total flagged** | **723** | of 3,282 strings extracted |
+
+Batch 1 (internal-name, branding, tone, developer-term, API error-pattern) was
+applied 2026-09-06; the workbook's **applied** column records the result per row
+(applied / kept / skipped, with the reason). Batches 2 (terminology,
+capitalization, terminology-review, dashboard error-pattern) are pending.
 
 The full list with file, location, current text, problem, proposed text and
 tooltip is in `docs/COPY-AUDIT.xlsx` (sheets: Flagged, All strings,

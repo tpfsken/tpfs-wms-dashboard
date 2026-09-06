@@ -269,7 +269,7 @@ async function cliBackToMirror(c){
   const r = await fetch(`${API}/clients/${c.id}/back-to-mirror`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ reason }) });
   const d = await r.json().catch(() => ({}));
   if(!r.ok) return uiToast(d.error || 'Could not switch back', 'error');
-  uiToast(`${c.code} is mirroring Excalibur again`, 'success');
+  uiToast(`${c.code} is mirroring the legacy system again`, 'success');
   await openClientDetail(c.id);
 }
 
@@ -364,7 +364,7 @@ function openClientFormModal(client){
             { value: 'required', label: 'Required — every pick and ship scans units' },
           ], value: client?.unit_control || 'none' })}
         ${uiFieldSelect({ id: 'cfLabelMode', label: 'Shipping labels', options: [
-            { value: 'label_first',   label: 'Label first — the office prints in ShipStation before picking (default)' },
+            { value: 'label_first',   label: 'Label first — the office prints in the shipping system before picking (default)' },
             { value: 'label_at_pack', label: 'Label at pack — the packer creates the label from the closed package' },
           ], value: client?.label_mode || 'label_first' })}
         ${uiFieldSelect({ id: 'cfShipReadyPack', label: 'Ship-ready packaging', options: [
@@ -829,7 +829,7 @@ function renderSlaRulesBody(){
 
   body.innerHTML = `
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">
-      Charges are billed when an order falls outside the SLA. They become billing_charges automatically (next phase) — for now they're recorded so the SLA doc shows the rate.
+      Charges are billed when an order falls outside the SLA. They become billing charges automatically (next phase) — for now they're recorded so the SLA doc shows the rate.
     </div>
     <table class="data-table" style="margin:0;">
       <thead>

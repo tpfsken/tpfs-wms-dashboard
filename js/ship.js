@@ -182,7 +182,7 @@ function fsRender(){
             <div class="fp-directive fp-directive-loc">
               <div class="fp-directive-label">SCAN SHIPPING LABEL</div>
               <div class="fp-directive-main">${esc(pkg.packageNumber)}</div>
-              <div class="ui-hint">Scan the label printed in ShipStation — it attaches to this box. Ship stays off until every box has a label.</div>
+              <div class="ui-hint" title="The shipping system is ShipStation.">Scan the label printed in the shipping system — it attaches to this box. Ship stays off until every box has a label.</div>
             </div>` : ''}
           ${pkg.status === 'closed' ? `
             <div class="fp-actions">
@@ -197,7 +197,7 @@ function fsRender(){
             <div class="fp-actions">
               ${pkg.labelProvider === 'shipstation'
                 ? `${pkg.hasPdf ? '<button type="button" class="ui-btn js-fs-reprint">Re-print</button>' : '<span class="ui-hint">Printed in ShipStation — re-print there</span>'}
-                   <button type="button" class="ui-btn js-fs-voidlabel" ${ssLocked ? 'disabled title="ShipStation write lock is on"' : ''}>Void label</button>${ssLocked ? '<div class="ui-hint fs-locked">ShipStation write lock is on — enable writes under Settings → Integrations</div>' : ''}`
+                   <button type="button" class="ui-btn js-fs-voidlabel" ${ssLocked ? 'disabled title="Writes to the shipping system are locked"' : ''}>Void label</button>${ssLocked ? '<div class="ui-hint fs-locked">Writes to the shipping system are locked — enable them under Settings → Integrations</div>' : ''}`
                 : '<button type="button" class="ui-btn js-fs-void">Void (refund label)</button>'}
             </div>` : ''}
         ` : (shipped ? '<div class="ui-hint">This order has shipped.</div>' : (v.order.allShipReady ? '<div class="ui-hint">Ship-ready order: scan the unit — it packs and closes its own box.</div>' : '<div class="ui-hint">Scan the first unit to start a package, or tap New package.</div>'))}
@@ -402,7 +402,7 @@ function fsClosePackage(){
   if(labelOnClose && o.shipstationWritesEnabled === false){ fsBanner(FS_LOCK_MSG, 'danger'); uiToast(FS_LOCK_MSG, 'error'); return; }
   uiModal({
     title: `Close ${pkg.packageNumber}`,
-    body: `${labelOnClose ? '<div class="ui-hint">Typed dims instead of a box scan. Closing buys the ShipStation label with these numbers.</div>' : ''}
+    body: `${labelOnClose ? '<div class="ui-hint" title="The shipping system is ShipStation.">Typed dims instead of a box scan. Closing buys the shipping system label with these numbers.</div>' : ''}
            ${uiField({ id: 'fsW', label: labelOnClose ? 'Gross weight (lbs)' : 'Weight (lbs)', type: 'number', value: pkg.grossLbs || pkg.weightLbs || '' })}
            <div class="ui-field-row sp-row-3">
              ${uiField({ id: 'fsL', label: 'Length (in)', type: 'number', value: pkg.lengthIn || '' })}
@@ -473,7 +473,7 @@ async function fsGetShipStationLabel(){
   const carriers = await apiGet('/shipstation/carriers');
   const rows = carriers?.rows || [];
   const m = uiModal({
-    title: `ShipStation label for ${pkg.packageNumber}`,
+    title: `Shipping-system label for ${pkg.packageNumber}`,
     body: `<div class="ui-hint">Default: the carrier/service mapped for "${esc(_fs.view.order.requestedService || 'no requested service')}". Override below if the packer needs a different service.</div>
            ${uiFieldSelect({ id: 'fsSsCarrier', label: 'Carrier (override)', options: [{ value: '', label: 'Use mapped service' }, ...rows.map(c => ({ value: c.code, label: `${c.name} (${c.code})` }))] })}
            ${uiFieldSelect({ id: 'fsSsService', label: 'Service (override)', options: [{ value: '', label: 'Use mapped service' }] })}`,
@@ -516,7 +516,7 @@ async function fsVoidLabel(){
   const r = await fetch(`${API}/packages/${pkg.id}/void-label`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${T}` }, body: JSON.stringify({ reason }) });
   const d = await r.json().catch(() => ({}));
   if(!r.ok){ uiToast(d.error || 'Void failed', 'error'); return; }
-  uiToast('Label voided in ShipStation', 'success');
+  uiToast('Label voided in the shipping system', 'success');
   await fsRefresh();
 }
 

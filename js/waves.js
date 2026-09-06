@@ -12,7 +12,7 @@ async function loadWaves(){
   if(!host) return;
   host.innerHTML = `
     <div class="sp-toolbar">
-      <div class="ui-hint">Each ShipStation label batch becomes a wave automatically. Build a manual wave from order numbers for anything unbatched.</div>
+      <div class="ui-hint" title="The shipping system is ShipStation.">Each label batch from the shipping system becomes a wave automatically. Build a manual wave from order numbers for anything unbatched.</div>
       <div class="sp-toolbar-actions"><button type="button" class="ui-btn ui-btn-primary js-wave-new">New manual wave</button></div>
     </div>
     <div id="wavesTable"></div>`;
@@ -54,7 +54,7 @@ async function waveOpen(id){
   uiTable(m.el.querySelector('#waveOrders'), {
     columns: [
       { key: 'order_number', label: 'Order', mono: true },
-      { key: 'external_order_number', label: 'ShipStation #', mono: true },
+      { key: 'external_order_number', label: 'Label batch #', mono: true },
       { key: 'client_code', label: 'Client' },
       { key: 'status', label: 'Status', render: r => uiChip(r.status) },
       { key: 'customer_name', label: 'Customer' },

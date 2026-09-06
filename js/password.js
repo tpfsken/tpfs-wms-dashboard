@@ -37,7 +37,7 @@ function pwOpenForgot() {
     width: 460,
     body: `
       <div class="ui-hint" style="margin-bottom:14px;">
-        Enter your email and we'll send you a link to set a new password.
+        Enter your email. A link to set a new password is sent to that address.
         The link expires in 60 minutes.
       </div>
       ${uiField({ id: 'pwFgEmail', label: 'Email', value: prefill, type: 'email', placeholder: 'name@company.com' })}

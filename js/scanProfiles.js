@@ -180,7 +180,7 @@ function spOpenEditor(st, row){
           </div>
         </div>
         <div class="ui-field-row">
-          ${uiField({ id: 'spRegex', label: 'Match: regex', value: mr.regex ?? '', placeholder: '^[A-Za-z0-9+/]+={0,2}$', hint: 'Every rule present must hold before the profile is tried.' })}
+          ${uiField({ id: 'spRegex', label: 'Match pattern (regular expression)', value: mr.regex ?? '', placeholder: '^[A-Za-z0-9+/]+={0,2}$', hint: 'Every rule present must hold before the profile is tried.' })}
           ${uiField({ id: 'spPrefix', label: 'Match: prefix', value: mr.prefix ?? '', placeholder: 'CLIENT-' })}
         </div>
         <div class="ui-field-row sp-row-3">
@@ -191,7 +191,7 @@ function spOpenEditor(st, row){
         <div class="ui-field-row sp-row-3">
           ${uiField({ id: 'spStripPrefix', label: 'Strip prefix', value: p.strip_prefix ?? '' })}
           ${uiField({ id: 'spStripSuffix', label: 'Strip suffix', value: p.strip_suffix ?? '' })}
-          ${uiField({ id: 'spDelimiter', label: 'Delimiter', value: p.delimiter ?? '', placeholder: '@  |  ,', hint: 'Blank = the whole payload is one field.' })}
+          ${uiField({ id: 'spDelimiter', label: 'Delimiter', value: p.delimiter ?? '', placeholder: '@  |  ,', hint: 'Leave blank to treat the whole scanned text as one field.' })}
         </div>
         <div class="ui-field">
           <label class="ui-label">Field map <span class="ui-muted">position (or GS1 AI) → field</span></label>

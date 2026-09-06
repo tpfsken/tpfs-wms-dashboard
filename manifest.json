@@ -1,6 +1,6 @@
 {
-  "name": "TPFS Warehouse",
-  "short_name": "TPFS WMS",
+  "name": "Warehouse Management System",
+  "short_name": "WMS",
   "description": "Warehouse Management System — picker, inventory, orders",
   "start_url": "/",
   "scope": "/",
